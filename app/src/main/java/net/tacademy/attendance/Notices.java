@@ -34,7 +34,12 @@ public final class Notices {
             .setContentTitle("17:50 퇴실 확인").setContentText("연결과 사이트 기록을 확인하고 있습니다")
             .setContentIntent(open(context)).setOngoing(true).build();
     }
-    public static void alert(Context context, String title, String detail) {
+    public static synchronized void setResultNotificationsEnabled(Context context, boolean enabled) {
+        new Prefs(context).resultNotificationsEnabled(enabled);
+        if (!enabled) context.getSystemService(NotificationManager.class).cancel(RESULT);
+    }
+    public static synchronized void alert(Context context, String title, String detail) {
+        if (!new Prefs(context).resultNotificationsEnabled()) return;
         channels(context);
         publish(context, RESULT, new Notification.Builder(context, "result").setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title).setContentText(detail).setStyle(new Notification.BigTextStyle().bigText(detail))

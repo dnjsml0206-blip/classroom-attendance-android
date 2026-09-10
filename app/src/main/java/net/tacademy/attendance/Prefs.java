@@ -18,6 +18,8 @@ public final class Prefs {
     public boolean enabled() { return raw.getBoolean("enabled", false); }
     public void enabled(boolean value) { raw.edit().putBoolean("enabled", value).apply(); }
     public boolean auto() { return raw.getBoolean("auto", false); }
+    public boolean resultNotificationsEnabled() { return raw.getBoolean("result_notifications", true); }
+    public void resultNotificationsEnabled(boolean value) { raw.edit().putBoolean("result_notifications", value).apply(); }
     public String start() { return raw.getString("start", "08:00"); }
     public String end() { return raw.getString("end", "17:45"); }
     public Set<Integer> days() {

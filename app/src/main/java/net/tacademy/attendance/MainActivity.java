@@ -194,6 +194,19 @@ public final class MainActivity extends Activity {
     }
 
     private void settings() {
+        LinearLayout notifications = card("알림");
+        Switch resultAlerts = new Switch(this);
+        resultAlerts.setText("입실 · 퇴실 알림"); resultAlerts.setTextSize(16); resultAlerts.setTextColor(INK);
+        resultAlerts.setMinHeight(dp(48));
+        resultAlerts.setChecked(prefs.resultNotificationsEnabled()); notifications.addView(resultAlerts);
+        note(notifications, "입실·퇴실 결과와 출석 확인 요청을 알립니다. 기본값은 켜짐이며 앱을 다시 열어도 설정이 유지됩니다.");
+        note(notifications, "Wi-Fi 미연결 알림과 감시 중 상태 알림은 별도로 표시됩니다.");
+        if (!getSystemService(NotificationManager.class).areNotificationsEnabled())
+            note(notifications, "휴대폰에서 앱 알림이 차단되어 있습니다. 연결 탭에서 알림 권한을 허용해 주세요.");
+        resultAlerts.setOnCheckedChangeListener((v, checked) -> {
+            Notices.setResultNotificationsEnabled(this, checked);
+            prefs.log(checked ? "입실·퇴실 알림 켜짐" : "입실·퇴실 알림 꺼짐");
+        });
         LinearLayout wifi = card("출석에 사용할 Wi-Fi");
         wifi.addView(text("등록한 네트워크에서만 처리합니다", 17, INK, true));
         note(wifi, "Wi-Fi 이름은 대소문자를 구분합니다. 실제 연결은 휴대폰 Wi-Fi 설정에서 저장해 주세요.");
@@ -385,7 +398,7 @@ public final class MainActivity extends Activity {
                     prefs.raw.edit().remove("pending").apply(); prefs.log("사용자가 요청 보류 해제"); render(2);
                 }).show());
         LinearLayout info = card("ABOUT");
-        info.addView(text("출석 메이트 0.1.0 · 초기 테스트 버전", 14, INK, true));
+        info.addView(text("출석 메이트 0.1.1 · 초기 테스트 버전", 14, INK, true));
         note(info, "인증과 위치는 이 기기에 저장합니다. 별도의 분석 서버로 전송하지 않습니다. 실제 계정과 지정 Wi-Fi에서의 동작 검증은 아직 필요합니다.");
     }
     private void permissions() {
