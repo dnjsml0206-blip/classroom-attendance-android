@@ -16,7 +16,7 @@ public final class LockLabActivity extends Activity {
     private static final int INK=0xFF183631, MUTED=0xFF687D77, ACCENT=0xFF007C78;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private LinearLayout content;
-    private TextView current, progress, log, description;
+    private TextView current, progress, log, preparation, procedure, expected, guideNote;
     private Spinner methods, delay;
     private Switch actual;
     private final Runnable refresh=new Runnable(){@Override public void run(){update();handler.postDelayed(this,1000);}};
@@ -39,7 +39,11 @@ public final class LockLabActivity extends Activity {
         methods=new Spinner(this);String[] labels=new String[LockTestPolicy.Mode.values().length];
         for(int i=0;i<labels.length;i++)labels[i]=LockTestPolicy.Mode.values()[i].label;
         ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,labels);methods.setAdapter(adapter);select.addView(methods,new LinearLayout.LayoutParams(-1,dp(52)));
-        description=text("",14,MUTED,false);space(select,8);select.addView(description);
+        preparation=guideStep(select,"준비");
+        procedure=guideStep(select,"실행");
+        expected=guideStep(select,"성공 확인");
+        guideNote=text("",12,MUTED,false);space(select,12);select.addView(guideNote);
+        add(select,"처음 한 번 확인할 설정",false,this::firstHelp);
         methods.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){@Override public void onNothingSelected(AdapterView<?> p){} @Override public void onItemSelected(AdapterView<?> p,View v,int position,long id){describe();}});
 
         LinearLayout run=card("2. 실행");
@@ -69,17 +73,18 @@ public final class LockLabActivity extends Activity {
     }
     private LockTestPolicy.Mode selected(){return LockTestPolicy.Mode.values()[methods.getSelectedItemPosition()];}
     private void describe(){
-        if(description==null)return;
-        String message=switch(selected()){
-            case WAKE -> "화면을 깨운 뒤 잠금이 이미 해제되어 있으면 Chrome을 엽니다. 잠금 화면이 남으면 결과만 남깁니다.";
-            case EXTEND -> "Extend Unlock이 활성화된 상태에서 시스템에 잠금 해제를 요청합니다. 새 인증이 필요하면 자동 진행을 멈춥니다.";
-            case DEVICE -> "Extend Unlock에 등록한 Bluetooth 기기에 연결하고 시험하세요. 시스템의 신뢰 상태를 이용해 잠금 해제를 요청합니다.";
-            case PLACE -> "Extend Unlock에 등록한 신뢰 장소에서 시험하세요. 장소 범위는 앱의 강의실 반경 30m와 별개입니다.";
-            case BODY -> "Extend Unlock의 신체 활동 감지를 켜고 휴대 중인 상태에서 시험하세요. 책상 위에 놓았을 때도 비교해 보세요.";
-            case AUTH -> "잠겨 있으면 Android의 인증 화면을 요청합니다. 휴대폰이 제공하는 PIN·패턴·지문 등 인증 후 Chrome으로 이어집니다. 이미 해제된 상태에서는 새 인증을 요구하지 않습니다.";
-            case NETWORK -> "화면을 깨우거나 Chrome을 열지 않고 등록 Wi-Fi에서 HTTPS 연결만 진단합니다. 앱 전용 서버 인증/API는 아직 연결되지 않아 실제 출결은 처리하지 않습니다.";
+        if(preparation==null)return;
+        int guide=switch(selected()){
+            case WAKE -> R.array.lock_guide_wake;
+            case EXTEND -> R.array.lock_guide_extend;
+            case DEVICE -> R.array.lock_guide_device;
+            case PLACE -> R.array.lock_guide_place;
+            case BODY -> R.array.lock_guide_body;
+            case AUTH -> R.array.lock_guide_auth;
+            case NETWORK -> R.array.lock_guide_network;
         };
-        description.setText(message);
+        String[] steps=getResources().getStringArray(guide);
+        preparation.setText(steps[0]);procedure.setText(steps[1]);expected.setText(steps[2]);guideNote.setText(steps[3]);
         if(actual!=null){boolean available=selected()!=LockTestPolicy.Mode.NETWORK;actual.setEnabled(available);if(!available)actual.setChecked(false);}
     }
     private void startTrial(int seconds){
@@ -90,6 +95,13 @@ public final class LockLabActivity extends Activity {
             update();
         }catch(IllegalStateException e){Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show();}
     }
+    private TextView guideStep(LinearLayout parent,String title){
+        space(parent,12);parent.addView(text(title,12,ACCENT,true));space(parent,3);
+        TextView value=text("",14,INK,false);parent.addView(value);return value;
+    }
+    private void firstHelp(){new AlertDialog.Builder(this).setTitle("처음 한 번 확인할 설정")
+        .setMessage("1. 아래 ‘휴대폰 상태와 신뢰 설정’에서 Chrome 접근성·알람 및 리마인더·테스트 알림을 허용하세요.\n\n2. Chrome에서 평소 출결 주소가 열리는지 확인하세요. 서버 연결 진단은 등록 Wi-Fi에 연결하세요.\n\n3. 처음에는 실제 출결 스위치를 OFF로 두세요. 예약한 뒤 전원 버튼으로 화면을 끄고, 자동 동작을 확인할 때까지 알림이나 화면을 누르지 마세요. 시스템 인증 방식은 인증 요청이 뜨면 직접 인증하세요.\n\n4. 예약 시각이 지나도 반응이 없으면 최대 2분 뒤 앱으로 돌아와 기록을 확인하세요. 화면만 켜졌는지, 인증을 요구했는지, 알림을 직접 눌렀는지도 메모하세요.")
+        .setPositiveButton("확인",null).show();}
     private void trustHelp(){new AlertDialog.Builder(this).setTitle("Extend Unlock · 신뢰 방식")
         .setMessage("먼저 PIN 등으로 한 번 잠금을 해제한 후 시험하세요.\n\n• 신뢰 기기: 등록한 Bluetooth 기기 연결\n• 신뢰 장소: 휴대폰에 등록한 장소에 머무르기\n• 신체 활동 감지: 휴대 중과 책상 위 상태 비교\n\n지원 항목과 설정 경로는 기기마다 다릅니다. 신뢰 유지 시간은 제한되어 있으며 잠금 모드·재부팅·재인증 요구 뒤에는 다시 인증이 필요할 수 있습니다.\n\n앱은 보안 설정을 자동으로 켜거나 변경하지 않습니다.")
         .setPositiveButton("확인",null).setNeutralButton("Google 안내",(d,w)->open(new Intent(Intent.ACTION_VIEW,Uri.parse("https://support.google.com/android/answer/9075927?hl=ko")))).show();}

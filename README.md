@@ -2,7 +2,7 @@
 
 기존 **휴대폰 Chrome의 인증 상태**로 SK플래닛 출석 버튼을 처리하는 개인용 앱입니다.
 
-[APK 다운로드 · v0.4.0](https://github.com/dnjsml0206-blip/classroom-attendance-android/releases/tag/v0.4.0)
+[APK 다운로드 · v0.4.1](https://github.com/dnjsml0206-blip/classroom-attendance-android/releases/tag/v0.4.1)
 
 **실제 수강생 Chrome 인증과 강의실 Wi-Fi에서 확인이 필요한 초기 테스트 버전입니다.**
 화면이 잠겨 있으면 출석 알림을 눌러 잠금을 해제해야 합니다.
@@ -28,13 +28,15 @@
 
 설정 맨 위에서 화면 깨우기, Extend Unlock, 신뢰 기기·장소·신체 활동 감지, 시스템 인증 후 Chrome 연결, 잠금 유지 서버 연결 진단을 선택할 수 있습니다. 15·30·60초 후 한 번만 시험하고 성공·부분 성공·실패와 메모를 기록·복사합니다. 실제 출결 시도는 기본 OFF입니다. 서버 인증/API 출결은 미연동이며 연결 진단만 제공합니다.
 
+방법 선택 시 **준비 → 실행 → 성공 확인** 안내가 바뀝니다. **처음 한 번 확인할 설정**에서 공통 준비와 결과 기록 요령도 볼 수 있습니다.
+
 [테스트 사용법과 결과 읽는 법](docs/lock-screen-lab.md)
 
-<p><img src="docs/screenshots/lock-methods.png" width="280" alt="일곱 가지 잠금 테스트 선택"/> <img src="docs/screenshots/lock-trust-settings.png" width="280" alt="신뢰 설정과 결과 기록"/></p>
+<p><img src="docs/screenshots/lock-guide-extend.png" width="280" alt="Extend Unlock 테스트 안내"/> <img src="docs/screenshots/lock-guide-network.png" width="280" alt="잠금 유지 서버 연결 진단 안내"/></p>
 
 ## 설치와 설정
 
-1. 릴리스의 `classroom-attendance-0.4.0-debug.apk`를 설치합니다. Android 8.0 이상을 지원하며 이전 릴리스 위에 업데이트할 수 있습니다.
+1. 릴리스의 `classroom-attendance-0.4.1-debug.apk`를 설치합니다. Android 8.0 이상을 지원하며 이전 릴리스 위에 업데이트할 수 있습니다.
 2. 연결 탭에서 **Chrome 출결 화면 열기**를 눌러 평소처럼 인증된 페이지가 열리는지 확인합니다. 이미 인증된 경우 재인증할 필요가 없습니다.
 3. **Chrome 접근성 설정**에서 출석 메이트 서비스를 켭니다.
 4. 정확한 위치·알림 권한을 허용하고 위치 권한을 **항상 허용**으로 설정합니다. **알람 및 리마인더**도 허용합니다.
@@ -70,6 +72,6 @@ JDK 21, Android SDK 36, Gradle Wrapper 9.3.1을 사용합니다.
 출력: `app/build/outputs/apk/debug/app-debug.apk`
 Windows에서는 `gradlew.bat`를 사용합니다.
 
-[검증 기록](docs/verification-v0.4.0.md) · [구조](docs/architecture.md) · [Android 설정](docs/android-setup.md) · [사이트 연동](docs/site-integration.md)
+[검증 기록](docs/verification-v0.4.1.md) · [구조](docs/architecture.md) · [Android 설정](docs/android-setup.md) · [사이트 연동](docs/site-integration.md)
 
 [설정 JSON](config/attendance.example.json)은 설명용이며 앱에서 가져오지는 않습니다.
