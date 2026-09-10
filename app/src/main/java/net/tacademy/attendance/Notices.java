@@ -6,7 +6,7 @@ import android.os.Build;
 import android.provider.Settings;
 
 public final class Notices {
-    public static final int MONITOR = 10, WIFI = 12, RESULT = 13;
+    public static final int MONITOR = 10, WIFI = 12, RESULT = 13, ENTRY_RESULT = 16, CHECKOUT_RESULT = 17;
     private Notices() {}
     public static void channels(Context context) {
         NotificationManager nm = context.getSystemService(NotificationManager.class);
@@ -28,14 +28,33 @@ public final class Notices {
                 PendingIntent.getService(context, 3, stop, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)).build())
             .build();
     }
-    public static synchronized void setResultNotificationsEnabled(Context context, boolean enabled) {
-        new Prefs(context).resultNotificationsEnabled(enabled);
-        if (!enabled) context.getSystemService(NotificationManager.class).cancel(RESULT);
+    public static boolean attendanceNotificationsAllowed(Context context) {
+        channels(context);
+        NotificationManager nm = context.getSystemService(NotificationManager.class);
+        return nm.areNotificationsEnabled() && nm.getNotificationChannel("result").getImportance() != NotificationManager.IMPORTANCE_NONE;
+    }
+    /** A confirmed entry and exit each keep their own notification, independently of monitoring. */
+    public static void attendanceCompleted(Context context, String day, Policy.Phase phase, Policy.Record record) {
+        if (phase == Policy.Phase.IDLE || !record.checkedIn() ||
+                (phase == Policy.Phase.CHECKOUT && !record.checkedOut())) return;
+        java.time.LocalDate date = java.time.LocalDate.parse(day);
+        String title = phase == Policy.Phase.ENTRY ? "입실 완료" : "퇴실 완료";
+        String time = phase == Policy.Phase.ENTRY ? record.in() : record.out();
+        String detail = date + " · Chrome 사이트 기록 " + time;
+        int id = phase == Policy.Phase.ENTRY ? ENTRY_RESULT : CHECKOUT_RESULT;
+        channels(context);
+        Notification notification = new Notification.Builder(context, "result").setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title + " · " + time).setContentText(detail)
+            .setStyle(new Notification.BigTextStyle().bigText(detail))
+            .setContentIntent(open(context)).setAutoCancel(false).setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_STATUS).build();
+        // The date and phase avoid overwriting entry, exit, another day, or an error notice.
+        try { context.getSystemService(NotificationManager.class).notify("attendance:" + date, id, notification); }
+        catch (SecurityException ignored) {}
     }
     public static synchronized void alert(Context context, String title, String detail) {
-        if (!new Prefs(context).resultNotificationsEnabled()) return;
         channels(context);
-        publish(context, RESULT, new Notification.Builder(context, "result").setSmallIcon(R.drawable.ic_notification)
+        publish(context, RESULT, new Notification.Builder(context, "attention").setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title).setContentText(detail).setStyle(new Notification.BigTextStyle().bigText(detail))
             .setContentIntent(open(context)).setAutoCancel(true).setOnlyAlertOnce(true).build());
     }

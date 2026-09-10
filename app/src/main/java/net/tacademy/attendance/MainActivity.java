@@ -54,7 +54,7 @@ public final class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         handler.removeCallbacks(refresh); handler.post(refresh);
-        if (selected == 2) render(2);
+        if (selected != 0) render(selected);
         if (prefs.enabled()) ScheduleController.reconcile(this);
     }
     @Override protected void onPause() { handler.removeCallbacks(refresh); super.onPause(); }
@@ -214,10 +214,12 @@ public final class MainActivity extends Activity {
         });
         action(automation, "Chrome에서 지금 확인", false, () -> startActivity(new Intent(this, ChromeLaunchActivity.class)));
         LinearLayout notifications = card("알림");
-        Switch alerts = new Switch(this); alerts.setText("입실 · 퇴실 결과 알림"); alerts.setTextSize(16); alerts.setTextColor(INK); alerts.setMinHeight(dp(48));
-        alerts.setChecked(prefs.resultNotificationsEnabled()); notifications.addView(alerts);
-        note(notifications, "결과 알림을 켜거나 끕니다. Wi-Fi 연결 요청과 Chrome 확인 요청은 별도로 표시됩니다.");
-        alerts.setOnCheckedChangeListener((v, checked) -> Notices.setResultNotificationsEnabled(this, checked));
+        notifications.addView(text("입실 · 퇴실 완료 알림 항상 표시",17,INK,true));
+        note(notifications,"완료를 확인할 때마다 입실과 퇴실 알림을 따로 남깁니다. 앱을 열거나 감시가 끝나도 유지되며 직접 지울 수 있습니다.");
+        note(notifications,Notices.attendanceNotificationsAllowed(this) ? "휴대폰에서 완료 알림을 허용하고 있습니다."
+            : "휴대폰에서 알림이 차단되어 있습니다. 앱 알림과 ‘입실·퇴실 결과’ 알림을 허용해 주세요.");
+        action(notifications,"휴대폰 알림 설정",false,() -> startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName())));
         LinearLayout wifi = card("출석에 사용할 Wi-Fi");
         note(wifi, "등록한 Wi-Fi에서 Chrome 출석을 처리합니다. 이름은 대소문자를 구분합니다.");
         for (String ssid : prefs.ssids()) {
@@ -414,7 +416,7 @@ public final class MainActivity extends Activity {
                 .setMessage("보류를 해제하면 설정한 시간 안에서 다시 클릭할 수 있습니다.").setNegativeButton("취소",null)
                 .setPositiveButton("확인했고 해제",(d,w) -> { prefs.raw.edit().remove("chrome_pending").apply(); render(2); }).show());
         }
-        LinearLayout info = card("출석 메이트 0.2.0");
+        LinearLayout info = card("출석 메이트 0.2.1");
         note(info,"출결 달력에는 앱이 Chrome에서 확인한 기록을 표시합니다. 이전 전체 기록은 Chrome 출결 화면에서 확인하세요.");
     }
 

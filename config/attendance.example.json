@@ -18,6 +18,6 @@
     "checkOutRetryMinutes": 10,
     "stopAfterConfirmedAttendance": true
   },
-  "notifications": { "attendanceResult": true, "wifiAndChromeActionRequests": true },
+  "notifications": { "attendanceResult": "always", "separateDateAndPhase": true, "autoCancelOnTap": false, "wifiAndChromeActionRequests": true },
   "history": { "source": "recordsObservedInChrome", "olderRecords": "openChrome" }
 }

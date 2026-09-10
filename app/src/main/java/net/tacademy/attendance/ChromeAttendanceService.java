@@ -124,7 +124,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
                 String time = phase == Policy.Phase.ENTRY ? record.in() : record.out();
                 prefs.status(title + " · 감시 종료", "Chrome 사이트 기록 " + time);
                 prefs.log(title + " " + time);
-                Notices.alert(this, title, "Chrome 사이트 기록 " + time);
+                Notices.attendanceCompleted(this, day, phase, record);
                 Notices.chromeAction(this, false, "");
                 if (record.checkedOut()) Notices.checkoutAttention(this, false, "");
                 finishWork(); ScheduleController.reconcile(this); return;

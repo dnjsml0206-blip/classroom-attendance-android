@@ -2,7 +2,7 @@
 
 기존 **휴대폰 Chrome의 인증 상태**로 SK플래닛 출석 버튼을 처리하는 개인용 앱입니다.
 
-[APK 다운로드 · v0.2.0](https://github.com/dnjsml0206-blip/classroom-attendance-android/releases/tag/v0.2.0)
+[APK 다운로드 · v0.2.1](https://github.com/dnjsml0206-blip/classroom-attendance-android/releases/tag/v0.2.1)
 
 **실제 수강생 Chrome 인증과 강의실 Wi-Fi에서 확인이 필요한 초기 테스트 버전입니다.**
 화면이 잠겨 있으면 출석 알림을 눌러 잠금을 해제해야 합니다.
@@ -16,14 +16,14 @@
 - 휴강일은 달력에서 추가·삭제합니다.
 - 오늘 탭은 출결 현황과 오늘 로그만 표시합니다. 현황의 달력 버튼으로 날짜별 확인 기록을 조회합니다.
 - 기본 Wi-Fi `TACADEMY_5G`; 사용자 추가·삭제를 지원합니다.
-- 결과 알림 ON/OFF를 지원합니다. Wi-Fi 연결 요청과 잠금 해제·Chrome 확인 요청은 별도입니다.
+- 입실·퇴실 완료 알림은 항상 표시합니다. 날짜별·입실/퇴실별로 남고, 앱을 열거나 감시가 끝나도 자동 삭제하지 않습니다. 직접 지울 수 있으며 휴대폰의 앱 알림과 결과 알림 채널이 허용되어 있어야 합니다.
 - 인텔리전트 Wi-Fi 버튼은 기기에서 제공하는 메뉴를 우선 열고, 지원되는 갤럭시에서는 접근성으로 메뉴를 찾아 이동합니다.
 
-<p><img src="docs/screenshots/today.png" width="280" alt="오늘 출결과 로그"/> <img src="docs/screenshots/settings.png" width="280" alt="출석 시간과 예약 설정"/></p>
+<p><img src="docs/screenshots/today.png" width="280" alt="오늘 출결과 로그"/> <img src="docs/screenshots/settings.png" width="280" alt="출석 시간과 예약 설정"/> <img src="docs/screenshots/notifications.png" width="280" alt="완료 알림 항상 표시 설정"/></p>
 
 ## 설치와 설정
 
-1. 릴리스의 `classroom-attendance-0.2.0-debug.apk`를 설치합니다. Android 8.0 이상을 지원하며 이전 릴리스 위에 업데이트할 수 있습니다.
+1. 릴리스의 `classroom-attendance-0.2.1-debug.apk`를 설치합니다. Android 8.0 이상을 지원하며 이전 릴리스 위에 업데이트할 수 있습니다.
 2. 연결 탭에서 **Chrome 출결 화면 열기**를 눌러 평소처럼 인증된 페이지가 열리는지 확인합니다. 이미 인증된 경우 재인증할 필요가 없습니다.
 3. **Chrome 접근성 설정**에서 출석 메이트 서비스를 켭니다.
 4. 정확한 위치·알림 권한을 허용하고 위치 권한을 **항상 허용**으로 설정합니다. **알람 및 리마인더**도 허용합니다.
@@ -59,6 +59,6 @@ JDK 21, Android SDK 36, Gradle Wrapper 9.3.1을 사용합니다.
 출력: `app/build/outputs/apk/debug/app-debug.apk`
 Windows에서는 `gradlew.bat`를 사용합니다.
 
-[검증 기록](docs/verification-v0.2.0.md) · [구조](docs/architecture.md) · [Android 설정](docs/android-setup.md) · [사이트 연동](docs/site-integration.md)
+[검증 기록](docs/verification-v0.2.1.md) · [구조](docs/architecture.md) · [Android 설정](docs/android-setup.md) · [사이트 연동](docs/site-integration.md)
 
 [설정 JSON](config/attendance.example.json)은 설명용이며 앱에서 가져오지는 않습니다.

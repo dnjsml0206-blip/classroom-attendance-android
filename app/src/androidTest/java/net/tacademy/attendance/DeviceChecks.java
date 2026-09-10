@@ -68,7 +68,8 @@ public final class DeviceChecks extends Instrumentation {
             awaitRunning(false);
             check(prefs.raw.getLong("next_alarm",0)>now.toLocalDate().plusDays(1).atStartOfDay(Policy.ZONE).toInstant().toEpochMilli()-1,
                 "Holiday skips today's work");
-            result.putString("stream","PASS: "+checks+" Android lifecycle checks. No attendance request or Chrome click performed.\n");
+            notificationChecks();
+            result.putString("stream","PASS: "+checks+" Android lifecycle and notification checks. No attendance request or Chrome click performed.\n");
             restore();
             finish(Activity.RESULT_OK,result);
         } catch(Throwable failure) {
@@ -76,6 +77,51 @@ public final class DeviceChecks extends Instrumentation {
             result.putString("stream","FAIL: "+failure.toString()+"\n");
             finish(Activity.RESULT_CANCELED,result);
         }
+    }
+    private void notificationChecks() throws Exception {
+        String day = "2000-01-03", nextDay = "2000-01-04";
+        Prefs prefs = new Prefs(context);
+        runOnMainSync(() -> {
+            prefs.raw.edit().putBoolean("result_notifications",false).apply();
+            Notices.attendanceCompleted(context,day,Policy.Phase.ENTRY,new Policy.Record("08:45:00",""));
+        });
+        Notification entry = awaitNotice(day,Notices.ENTRY_RESULT);
+        check(entry.extras.getCharSequence(Notification.EXTRA_TITLE).toString().contains("08:45:00"),
+            "Confirmed entry posts its time even when the legacy result toggle was off");
+        runOnMainSync(() -> Notices.attendanceCompleted(context,day,Policy.Phase.CHECKOUT,new Policy.Record("08:45:00","17:50:00")));
+        Notification exit = awaitNotice(day,Notices.CHECKOUT_RESULT);
+        check(notification(day,Notices.ENTRY_RESULT)!=null && exit.extras.getCharSequence(Notification.EXTRA_TITLE).toString().contains("퇴실 완료"),
+            "Entry and exit remain as separate result notifications");
+        runOnMainSync(() -> ScheduleController.reconcile(context));
+        check(notification(day,Notices.ENTRY_RESULT)!=null && notification(day,Notices.CHECKOUT_RESULT)!=null,
+            "Stopping scheduled monitoring does not clear completed attendance notifications");
+        entry.contentIntent.send();
+        waitForIdleSync();
+        check((entry.flags & Notification.FLAG_AUTO_CANCEL)==0 && (exit.flags & Notification.FLAG_AUTO_CANCEL)==0
+            && notification(day,Notices.ENTRY_RESULT)!=null && notification(day,Notices.CHECKOUT_RESULT)!=null,
+            "Opening the app preserves both results with automatic removal disabled");
+        runOnMainSync(() -> Notices.attendanceCompleted(context,nextDay,Policy.Phase.ENTRY,new Policy.Record("08:46:00","")));
+        awaitNotice(nextDay,Notices.ENTRY_RESULT);
+        check(notification(day,Notices.ENTRY_RESULT)!=null && notification(day,Notices.CHECKOUT_RESULT)!=null,
+            "Another attendance date does not replace earlier result notifications");
+        runOnMainSync(() -> {
+            Notices.attendanceCompleted(context,"2000-01-05",Policy.Phase.ENTRY,new Policy.Record("",""));
+            Notices.attendanceCompleted(context,"2000-01-05",Policy.Phase.CHECKOUT,new Policy.Record("08:45:00",""));
+        });
+        check(notification("2000-01-05",Notices.ENTRY_RESULT)==null && notification("2000-01-05",Notices.CHECKOUT_RESULT)==null,
+            "Unconfirmed entry and exit never produce a completion notification");
+    }
+    private Notification notification(String day,int id) {
+        for(android.service.notification.StatusBarNotification item:context.getSystemService(NotificationManager.class).getActiveNotifications())
+            if(item.getId()==id && ("attendance:"+day).equals(item.getTag())) return item.getNotification();
+        return null;
+    }
+    private Notification awaitNotice(String day,int id) {
+        long until=SystemClock.elapsedRealtime()+5000;
+        Notification notice;
+        while((notice=notification(day,id))==null && SystemClock.elapsedRealtime()<until) SystemClock.sleep(100);
+        if(notice==null) throw new AssertionError("Missing result notification: "+day+":"+id);
+        return notice;
     }
     private void check(boolean value,String label) {
         if(!value)throw new AssertionError(label);
@@ -104,6 +150,10 @@ public final class DeviceChecks extends Instrumentation {
                 else if(v instanceof Set)edit.putStringSet(k,new HashSet<>((Set<String>)v));
             }
             if (!edit.commit()) throw new AssertionError("Could not restore emulator preferences"); Notices.checkoutAttention(context,false,""); Notices.chromeAction(context,false,"");
+            for(String testDay:List.of("2000-01-03","2000-01-04","2000-01-05")) {
+                context.getSystemService(NotificationManager.class).cancel("attendance:"+testDay,Notices.ENTRY_RESULT);
+                context.getSystemService(NotificationManager.class).cancel("attendance:"+testDay,Notices.CHECKOUT_RESULT);
+            }
             AlarmScheduler.arm(context,false); if(activity!=null)activity.finish();
         });
     }
