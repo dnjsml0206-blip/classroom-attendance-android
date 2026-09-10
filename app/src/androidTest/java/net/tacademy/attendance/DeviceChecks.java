@@ -12,10 +12,11 @@ public final class DeviceChecks extends Instrumentation {
     private Map<String,?> saved;
     private MainActivity activity;
     private int checks;
-    private boolean themes, locks;
-    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments); themes = arguments != null && "themes".equals(arguments.getString("suite")); locks = arguments != null && "locks".equals(arguments.getString("suite")); start(); }
+    private boolean themes, locks, upload;
+    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments); upload = arguments != null && "upload".equals(arguments.getString("suite")); themes = arguments != null && "themes".equals(arguments.getString("suite")); locks = arguments != null && "locks".equals(arguments.getString("suite")); start(); }
     @Override public void onStart() {
         if (themes) { new ThemeChecks(this).run(); return; }
+        if (upload) { new LogUploadChecks(this).run(); return; }
         if (locks) { new LockLabChecks(this).run(); return; }
         Bundle result = new Bundle();
         try {

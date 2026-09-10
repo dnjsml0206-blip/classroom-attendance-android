@@ -36,9 +36,9 @@ public final class LockLab {
         archive(c); c.getSystemService(AlarmManager.class).cancel(alarm(c,""));
         String token=UUID.randomUUID().toString(); long now=System.currentTimeMillis(), due=now+delaySeconds*1000L;
         if(!prefs(c).edit().putString("id",token).putString("mode",mode.name()).putLong("created",now).putLong("due",due)
-            .putLong("expires",due+120000).putBoolean("active",true).putBoolean("allow_attendance",false).putBoolean("started",false).putBoolean("fired",false)
+            .putLong("expires",due+120000).putBoolean("active",true).remove("execution_environment").putBoolean("allow_attendance",false).putBoolean("started",false).putBoolean("fired",false)
             .putBoolean("actual",actual && mode!=LockTestPolicy.Mode.NETWORK).putString("events","").putString("stage","실행 대기")
-            .putString("verdict","미확인").putString("note","").commit())throw new IllegalStateException("테스트 저장 실패");
+            .putString("verdict","미확인").putString("note","").putString("environment",LockLogExport.environment(c).toString()).commit())throw new IllegalStateException("테스트 저장 실패");
         event(c,token,mode.label+" 예약 · "+(actual(c)?"조건 충족 시 실제 출결 시도":"조회 테스트"));
         event(c,token,"예약 당시: "+snapshot(c));
         if(delaySeconds>0){
@@ -76,7 +76,7 @@ public final class LockLab {
     static synchronized void fire(Context c,String token,String source){
         if(!live(c,token)){expire(c);return;}
         if(prefs(c).getBoolean("fired",false))return;
-        prefs(c).edit().putBoolean("fired",true).commit();event(c,token,"실행 당시: "+snapshot(c));
+        prefs(c).edit().putBoolean("fired",true).putString("execution_environment",LockLogExport.environment(c).toString()).commit();event(c,token,"실행 당시: "+snapshot(c));
         if(mode(c)==LockTestPolicy.Mode.NETWORK){stage(c,token,"화면을 깨우지 않고 서버 연결 진단");return;}
         stage(c,token,"테스트 화면 자동 진입 요청");
         notice(c,"잠금 테스트 진행","화면이 열리지 않으면 알림을 눌러 비교하세요. 수동 진입은 따로 기록합니다.",true);
@@ -105,7 +105,13 @@ public final class LockLab {
     }
     private static void archive(Context c){
         if(id(c).isEmpty())return;
-        try{JSONArray old=new JSONArray(prefs(c).getString("history","[]")), next=new JSONArray();next.put(report(c));for(int i=0;i<Math.min(9,old.length());i++)next.put(old.getString(i));prefs(c).edit().putString("history",next.toString()).commit();}catch(JSONException ignored){}
+        try{
+            JSONArray old=new JSONArray(prefs(c).getString("history","[]")), next=new JSONArray();
+            JSONArray details=new JSONArray(prefs(c).getString("history_details","[]")), nextDetails=new JSONArray();
+            next.put(report(c));nextDetails.put(LockLogExport.current(c));
+            for(int i=0;i<Math.min(9,old.length());i++){next.put(old.getString(i));JSONObject detail=details.optJSONObject(i);nextDetails.put(detail==null?LockLogExport.legacy(old.getString(i)):detail);}
+            prefs(c).edit().putString("history",next.toString()).putString("history_details",nextDetails.toString()).commit();
+        }catch(JSONException ignored){}
     }
     static String allReports(Context c){StringBuilder out=new StringBuilder(report(c));try{JSONArray history=new JSONArray(prefs(c).getString("history","[]"));for(int i=0;i<history.length();i++)out.append("\n\n──────── 이전 테스트 ────────\n").append(history.getString(i));}catch(JSONException ignored){}return out.toString();}
 }

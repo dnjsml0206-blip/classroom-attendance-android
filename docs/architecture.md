@@ -44,3 +44,6 @@ LockLab은 출결 Prefs와 별도인 lock_lab 저장소에 일회성 ID·기한�
 테스트 준비 중에는 ChromeAttendanceService가 출석 작업을 보류한다. 실제 출결을 선택한 경우, 잠금 해제와 기존 조건을 확인한 시점에만 보류를 풀고 기존 AttendanceEngine에 연결한다. 해당 작업은 테스트 토큰과 기한을 계속 확인하며 취소되면 종료한다. 조회 경로는 접근성으로 Chrome 주소를 확인할 뿐 버튼을 누르거나 출결 기록을 저장하지 않는다. 기한이 지났거나 재부팅/업데이트된 테스트는 재실행하지 않는다.
 
 서버 진단은 등록 Wi-Fi에 종속된 HTTPS GET 한 번이며 화면을 깨우지 않는 CPU wake lock에 12초 제한을 둔다. 연결/읽기 제한은 각각 4초다. 서버 인증·출결 API로 간주하지 않으며 쿠키·응답 본문을 저장하지 않는다. 테스트 알림은 기존 완료 알림과 별도 ID 24를 사용한다.
+## GitHub 로그 업로드
+
+LockLogExport는 잠금 시험에 한정한 JSON과 단계별 증거를 생성합니다. GitHubTokenStore는 Android Keystore AES-GCM으로 기기 내부 토큰을 암호화합니다. LogUploadStore는 검토한 파일 내용과 경로를 보존하고, GitHubLogClient는 비공개 저장소와 전용 브랜치를 확인한 뒤 Contents API로 새 파일만 만듭니다. 동일한 파일은 blob SHA를 비교해 중복 쓰기를 하지 않습니다. 전송은 명시적 버튼으로만 시작하며 자동 반복·백그라운드 서비스는 추가하지 않습니다. 분석 도구는 test_id 중복을 제거하고 수동 판정과 앱 증거를 구분합니다.

@@ -43,3 +43,7 @@ config/local/
 config/*.local.json
 config/attendance.json
 !config/attendance.example.json
+
+# Python analysis outputs
+__pycache__/
+*.py[cod]

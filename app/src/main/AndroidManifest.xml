@@ -25,6 +25,7 @@
         </activity>
         <activity android:name=".ChromeLaunchActivity" android:exported="false"/>
         <activity android:name=".LockLabActivity" android:exported="false"/>
+        <activity android:name=".LogUploadActivity" android:exported="false"/>
         <activity android:name=".LockTrialActivity" android:exported="false" android:excludeFromRecents="true"/>
         <receiver android:name=".LockTestReceiver" android:exported="false"/>
         <service android:name=".ChromeAttendanceService" android:exported="true"
