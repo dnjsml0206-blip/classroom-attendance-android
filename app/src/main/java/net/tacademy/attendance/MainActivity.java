@@ -276,6 +276,9 @@ public final class MainActivity extends Activity {
     }
 
     private void settings() {
+        LinearLayout lab = card("임시 메뉴");
+        note(lab,"화면 깨우기 · Extend Unlock · 신뢰 방식 · 시스템 인증 · 서버 연결을 직접 시험하고 결과를 기록합니다.");
+        action(lab,"잠금 상태 테스트 열기",true,() -> startActivity(new Intent(this,LockLabActivity.class)));
         LinearLayout schedule = card("출석 시간");
         schedule.addView(text("입실 " + prefs.start() + "–" + prefs.end() + "\n퇴실 " + prefs.checkout(), 21, INK, true));
         note(schedule, "입실 완료 또는 입실 종료 시 감시를 끕니다. 퇴실은 예약 시각에 다시 확인하고 완료하면 종료합니다.");
@@ -497,7 +500,7 @@ public final class MainActivity extends Activity {
                 .setMessage("보류를 해제하면 설정한 시간 안에서 다시 클릭할 수 있습니다.").setNegativeButton("취소",null)
                 .setPositiveButton("확인했고 해제",(d,w) -> { prefs.raw.edit().remove("chrome_pending").apply(); render(2); }).show());
         }
-        LinearLayout info = card("출석 메이트 0.3.0");
+        LinearLayout info = card("출석 메이트 0.4.0");
         note(info,"출결 달력에는 앱이 Chrome에서 확인한 기록을 표시합니다. 이전 전체 기록은 Chrome 출결 화면에서 확인하세요.");
     }
 

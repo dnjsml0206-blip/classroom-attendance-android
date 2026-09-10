@@ -17,6 +17,8 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private static ChromeAttendanceService instance;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Runnable finished;
+    private String lockProbe="", lockAttendanceToken="";
+    private long lockProbeUntil;
     private boolean working, clicked, confirmationExpected, confirmationClicked, navigatingWifi, menuOpened;
     private Policy.Phase phase;
     private String day, key;
@@ -48,6 +50,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         }
     }
     public static void begin(Context context, Runnable done) {
+        if (LockLab.readOnlyActive(context)) { if (done != null) done.run(); return; }
         Prefs prefs = new Prefs(context);
         if (instance == null) {
             prefs.status("Chrome 접근성 연결 필요", "연결 탭에서 출석 메이트 접근성을 켜 주세요");
@@ -66,6 +69,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if (service.phase == Policy.Phase.IDLE) { if (done != null) done.run(); return; }
         service.day = LocalDate.now(Policy.ZONE).toString();
         service.key = service.day + ":" + service.phase.name();
+        service.lockAttendanceToken = LockLab.live(context,LockLab.id(context)) && LockLab.prefs(context).getBoolean("allow_attendance",false) ? LockLab.id(context) : "";
         service.finished = done; service.working = true; service.clicked = false;
         service.confirmationExpected = false; service.confirmationClicked = false;
         service.started = SystemClock.elapsedRealtime(); service.pageSeen = 0;
@@ -84,6 +88,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     }
     private void inspect() {
         if (!working) return;
+        if (LockLab.readOnlyActive(this) || (!lockAttendanceToken.isEmpty() && !LockLab.live(this,lockAttendanceToken))) { finishWork(); return; }
         Prefs prefs = new Prefs(this);
         if (!day.equals(LocalDate.now(Policy.ZONE).toString()) || prefs.phase(ZonedDateTime.now(Policy.ZONE)) != phase) { finishWork(); return; }
         if (!NetworkAccess.inspect(this).allowed()) { fail("Wi-Fi 연결 대기", "지정 Wi-Fi에 연결한 뒤 다시 확인합니다"); return; }
@@ -177,6 +182,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private static boolean click(AccessibilityNodeInfo node) { return node.performAction(AccessibilityNodeInfo.ACTION_CLICK); }
     private void fail(String title, String detail) {
         if (!working) return;
+        if (LockLab.readOnlyActive(this) || (!lockAttendanceToken.isEmpty() && !LockLab.live(this,lockAttendanceToken))) { finishWork(); return; }
         Prefs prefs = new Prefs(this);
         prefs.status(title, detail);
         String failureKey = day + ":" + phase + ":" + title;
@@ -187,12 +193,52 @@ public final class ChromeAttendanceService extends AccessibilityService {
         finishWork();
     }
     private void finishWork() {
-        working = false; handler.removeCallbacks(timeout); handler.removeCallbacks(tick);
-        if (!navigatingWifi) events(false);
+        working = false; lockAttendanceToken=""; handler.removeCallbacks(timeout); handler.removeCallbacks(tick);
+        if (!navigatingWifi && lockProbe.isEmpty()) events(false);
         Runnable done = finished; finished = null;
         if (done != null) done.run();
     }
     public static void cancelWork() { if (instance != null) instance.finishWork(); }
+    public static void launchLockTest(Context context, Intent intent) {
+        Context source=instance!=null?instance:context;
+        LockLab.event(context,intent.getStringExtra(LockLab.TOKEN),instance!=null?"접근성 서비스에서 화면 진입 시도":"앱에서 화면 진입 시도 · Android 제한 가능");
+        source.startActivity(intent);
+    }
+    public static void probeLockChrome(Context context,String token) {
+        if(!LockLab.live(context,token))return;
+        if(instance==null){
+            boolean sent=openChrome(context,SiteProtocol.PAGE);
+            LockLab.finish(context,token,sent?"Chrome 실행 요청 전송 · 접근성이 없어 실제 화면은 직접 확인":"Chrome 실행 실패");return;
+        }
+        ChromeAttendanceService service=instance;
+        if(service.working||service.navigatingWifi){LockLab.finish(context,token,"다른 Chrome/설정 작업 진행 중 · 테스트 보류");return;}
+        service.endLockProbe(null);service.lockProbe=token;service.lockProbeUntil=SystemClock.elapsedRealtime()+20000;service.events(true);
+        LockLab.stage(context,token,"Chrome 실행 요청 · 출결 주소 표시 확인 중");
+        if(!openChrome(context,SiteProtocol.PAGE)){service.endLockProbe("Chrome 실행 실패");return;}
+        service.handler.postDelayed(service.lockProbeTick,600);
+    }
+    private final Runnable lockProbeTick=new Runnable(){@Override public void run(){
+        if(lockProbe.isEmpty())return;
+        if(!LockLab.live(ChromeAttendanceService.this,lockProbe)){endLockProbe(null);return;}
+        if(getSystemService(KeyguardManager.class).isKeyguardLocked() || !getSystemService(PowerManager.class).isInteractive()){
+            endLockProbe("Chrome 연결 중 다시 잠김 또는 화면 꺼짐");return;
+        }
+        AccessibilityNodeInfo root=focusedRoot();
+        if(root!=null && "com.android.chrome".equals(string(root.getPackageName()))){
+            List<AccessibilityNodeInfo> nodes=new ArrayList<>();collect(root,nodes,0);
+            for(AccessibilityNodeInfo node:nodes)if("com.android.chrome:id/url_bar".equals(node.getViewIdResourceName()) && ChromePage.attendanceAddress(string(node.getText()))){
+                endLockProbe("Chrome 출결 주소 표시 확인 · 사이트 인증과 출결 결과는 직접 확인");return;
+            }
+        }
+        if(SystemClock.elapsedRealtime()>=lockProbeUntil){endLockProbe("Chrome 출결 화면 미확인 · 실행 제한/주소 표시/인증 페이지를 확인하세요");return;}
+        handler.postDelayed(this,600);
+    }};
+    private void endLockProbe(String result){
+        String token=lockProbe;lockProbe="";handler.removeCallbacks(lockProbeTick);
+        if(!working&&!navigatingWifi)events(false);
+        if(result!=null&&!token.isEmpty())LockLab.finish(this,token,result);
+    }
+    public static void cancelLockProbe(){if(instance!=null)instance.endLockProbe(null);}
     public static void intelligentWifi(Activity activity) {
         // Discover only exported activities supplied by the device's trusted Settings package.
         try {
@@ -230,8 +276,8 @@ public final class ChromeAttendanceService extends AccessibilityService {
             if (menu != null) menuOpened = click(menu);
         }
     }
-    @Override public void onInterrupt() { finishWork(); }
+    @Override public void onInterrupt() { endLockProbe("접근성 연결 중단"); finishWork(); }
     @Override public void onDestroy() {
-        finishWork(); navigatingWifi = false; handler.removeCallbacksAndMessages(null); instance = null; super.onDestroy();
+        endLockProbe("접근성 연결 종료"); finishWork(); navigatingWifi = false; handler.removeCallbacksAndMessages(null); instance = null; super.onDestroy();
     }
 }

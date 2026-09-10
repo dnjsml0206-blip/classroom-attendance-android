@@ -24,6 +24,9 @@
             </intent-filter>
         </activity>
         <activity android:name=".ChromeLaunchActivity" android:exported="false"/>
+        <activity android:name=".LockLabActivity" android:exported="false"/>
+        <activity android:name=".LockTrialActivity" android:exported="false" android:excludeFromRecents="true"/>
+        <receiver android:name=".LockTestReceiver" android:exported="false"/>
         <service android:name=".ChromeAttendanceService" android:exported="true"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:label="@string/chrome_accessibility_label">

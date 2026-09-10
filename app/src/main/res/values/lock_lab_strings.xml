@@ -1,0 +1,5 @@
+<resources>
+    <string name="lock_trial_status">%1$s\n화면과 시스템 잠금 상태를 확인합니다.</string>
+    <string name="lock_lab_state">%1$s\n접근성 %2$s · 정확한 알람 %3$s\n</string>
+    <string name="lock_lab_remaining">%1$s · %2$d초 남음</string>
+</resources>
