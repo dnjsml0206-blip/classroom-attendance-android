@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "report_id": "a8b20492-8858-4476-9c6d-377f24661e3c",
+  "exported_at": "2026-09-10T22:26:18.410975Z",
+  "timezone": "Asia\/Seoul",
+  "export_environment": {
+    "app_version": "0.5.0",
+    "device": "Google sdk_gphone64_x86_64 · Android 15 \/ API 35",
+    "emulator": true,
+    "accessibility_connected": false,
+    "exact_alarm_allowed": true,
+    "notifications_enabled": true,
+    "location_permission": true,
+    "battery_optimization_exempt": false,
+    "registered_wifi_connected": false,
+    "wifi_check": "등록되지 않은 Wi-Fi에 연결되어 있습니다",
+    "schedule_enabled": true,
+    "auto_click": false
+  },
+  "records": [
+    {
+      "test_id": "74bf819e-7ce6-4c61-896d-0afa1e4c3b2e",
+      "mode": "WAKE",
+      "mode_label": "화면 깨우기",
+      "created_at_ms": 1000,
+      "due_at_ms": 16000,
+      "active": false,
+      "actual_attendance_requested": false,
+      "stage": "Chrome 출결 주소 표시 확인",
+      "user_verdict": "부분 성공",
+      "user_note": "[TOKEN REMOVED]",
+      "events": "08:40:00  실행 당시: 화면 꺼짐 · 인증 필요 아니요\n08:40:01  테스트 화면 진입 · 예약에서 자동 진입\n08:40:02  Chrome 출결 주소 표시 확인 · 사이트 인증과 출결 결과는 직접 확인\n",
+      "environment": {
+        "app_version": "0.5.0",
+        "device": "Google sdk_gphone64_x86_64 · Android 15 \/ API 35",
+        "emulator": true,
+        "accessibility_connected": false,
+        "exact_alarm_allowed": true,
+        "notifications_enabled": true,
+        "location_permission": true,
+        "battery_optimization_exempt": false,
+        "registered_wifi_connected": false,
+        "wifi_check": "등록되지 않은 Wi-Fi에 연결되어 있습니다",
+        "schedule_enabled": true,
+        "auto_click": false
+      },
+      "legacy": false,
+      "evidence": {
+        "screen_off_at_run": true,
+        "automatic_entry": true,
+        "manual_notification_entry": false,
+        "immediate_entry": false,
+        "chrome_address_observed": true,
+        "credential_needed_at_run": false,
+        "dismiss_requested": false,
+        "dismiss_succeeded": false,
+        "attendance_record_confirmed": false,
+        "cancelled": false,
+        "https_status": null
+      }
+    },
+    {
+      "legacy": true,
+      "test_id": null,
+      "created_at_ms": null,
+      "due_at_ms": null,
+      "mode": "EXTEND",
+      "mode_label": "Extend Unlock",
+      "user_verdict": "실패",
+      "stage": "현재 인증 필요",
+      "actual_attendance_requested": false,
+      "events": "08:40:00  실행 당시: 화면 꺼짐 · 인증 필요 예\n",
+      "legacy_report": "emulator\n방식: Extend Unlock\n실제 출결 시도: 꺼짐\n진행 결과: 현재 인증 필요\n사용자 확인: 실패\n메모: old\n\n08:40:00  실행 당시: 화면 꺼짐 · 인증 필요 예\n",
+      "active": false,
+      "evidence": {
+        "screen_off_at_run": true,
+        "automatic_entry": false,
+        "manual_notification_entry": false,
+        "immediate_entry": false,
+        "chrome_address_observed": false,
+        "credential_needed_at_run": true,
+        "dismiss_requested": false,
+        "dismiss_succeeded": false,
+        "attendance_record_confirmed": false,
+        "cancelled": false,
+        "https_status": null
+      }
+    }
+  ],
+  "analysis_note": "사용자 판정과 앱 관찰을 구분하세요. Chrome 주소 확인은 출결 성공이 아니며, 서버 응답은 인증 성공이 아닙니다. 과거 legacy 기록의 날짜와 기기 설정은 알 수 없습니다. 메모는 사용자 입력입니다.",
+  "verification_fixture": true
+}
