@@ -1,53 +1,23 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "enabled": false,
-  "mode": "observe",
+  "automaticChromeClicks": false,
   "site": {
     "attendanceUrl": "https://skplanet.atosoft.net/Worknet/Present/Present.asp",
-    "courseId": null
+    "authenticationUrl": "https://skplanet.atosoft.net/Worknet/Present/PAuthWay.asp",
+    "sessionSource": "existingChrome"
   },
-  "location": {
-    "latitude": null,
-    "longitude": null,
-    "radiusMeters": 150
-  },
-  "wifi": {
-    "allowedSsids": [
-      "TACADEMY_5G"
-    ],
-    "connectionStrategy": "systemAutoJoin",
-    "requireAllowedWifiForAttendance": true
-  },
+  "location": { "latitude": null, "longitude": null, "radiusMeters": 30 },
+  "wifi": { "allowedSsids": ["TACADEMY_5G"], "connectionStrategy": "systemAutoJoin" },
   "schedule": {
     "timezone": "Asia/Seoul",
-    "classDays": [
-      1,
-      2,
-      3,
-      4,
-      5
-    ],
+    "classDays": [1, 2, 3, 4, 5],
     "excludedDates": [],
-    "checkInWindow": {
-      "start": "08:00",
-      "end": "17:45"
-    },
+    "checkInWindow": { "start": "08:30", "end": "09:30" },
     "checkOutTime": "17:50",
-    "lateCheckOutGraceMinutes": 5
+    "checkOutRetryMinutes": 10,
+    "stopAfterConfirmedAttendance": true
   },
-  "monitoring": {
-    "proposedPollIntervalSeconds": 60,
-    "executionSubjectToAndroidLimits": true
-  },
-  "retry": {
-    "maxAttempts": 3,
-    "initialDelaySeconds": 30,
-    "maxDelaySeconds": 120,
-    "reconcileBeforeRetry": true
-  },
-  "notifications": {
-    "wifiMissing": true,
-    "attendanceResult": true,
-    "actionRequired": true
-  }
+  "notifications": { "attendanceResult": true, "wifiAndChromeActionRequests": true },
+  "history": { "source": "recordsObservedInChrome", "olderRecords": "openChrome" }
 }

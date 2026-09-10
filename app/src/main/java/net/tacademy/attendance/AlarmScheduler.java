@@ -7,6 +7,7 @@ import java.time.*;
 
 public final class AlarmScheduler {
     private static PendingIntent operation(Context context) {
+        // Keep the legacy identity so updating replaces the old fixed 17:50 alarm.
         return PendingIntent.getBroadcast(context, 1750, new Intent(context, AlarmReceiver.class),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
@@ -22,9 +23,9 @@ public final class AlarmScheduler {
         cancel(context);
         if (!prefs.enabled() || !allowed(context)) return false;
         ZonedDateTime now = ZonedDateTime.now(Policy.ZONE);
-        ZonedDateTime next = Policy.nextCheckout(now, prefs.days(), prefs.excluded());
-        if (recover && Policy.isClassDay(now, prefs.days(), prefs.excluded()) && Policy.checkoutDue(now))
-            next = now.plusSeconds(2);
+        ZonedDateTime next = Policy.nextWake(now, prefs.days(), prefs.excluded(), prefs.start(), prefs.end(),
+            prefs.checkout(), prefs.retryMinutes(), prefs.checkedInToday(), prefs.checkedOutToday());
+        if (recover && prefs.phase(now) != Policy.Phase.IDLE) next = now.plusSeconds(2);
         if (next == null) return false;
         try {
             context.getSystemService(AlarmManager.class).setExactAndAllowWhileIdle(

@@ -1,0 +1,34 @@
+package net.tacademy.attendance;
+
+import android.Manifest;
+import android.content.*;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import java.time.ZonedDateTime;
+
+/** enabled means future reservations are enabled, not that a service is running. */
+public final class ScheduleController {
+    private ScheduleController() {}
+    public static boolean backgroundLocationAllowed(Context context) {
+        return Build.VERSION.SDK_INT < 29 ||
+            context.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+    public static void reconcile(Context context) {
+        Prefs prefs = new Prefs(context);
+        AlarmScheduler.arm(context, false);
+        if (prefs.phase(ZonedDateTime.now(Policy.ZONE)) == Policy.Phase.IDLE) {
+            ChromeAttendanceService.cancelWork();
+            context.stopService(new Intent(context, MonitorService.class));
+            if (!prefs.enabled() || prefs.checkedOutToday()) Notices.checkoutAttention(context, false, "");
+            Notices.chromeAction(context, false, "");
+            return;
+        }
+        try { context.startForegroundService(new Intent(context, MonitorService.class)); }
+        catch (RuntimeException e) {
+            prefs.status("예약 실행 권한 확인 필요", "연결 탭에서 위치 항상 허용과 알람 권한을 확인해 주세요");
+            if (prefs.phase(ZonedDateTime.now(Policy.ZONE)) == Policy.Phase.CHECKOUT)
+                Notices.checkoutAttention(context, true, "자동 실행 권한을 확인한 뒤 앱에서 다시 확인해 주세요");
+            else Notices.alert(context, "입실 감시를 시작하지 못했습니다", "앱을 열어 위치 항상 허용과 알람 권한을 확인해 주세요");
+        }
+    }
+}

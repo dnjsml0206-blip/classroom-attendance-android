@@ -6,7 +6,7 @@ import android.os.Build;
 import android.provider.Settings;
 
 public final class Notices {
-    public static final int MONITOR = 10, CHECKOUT = 11, WIFI = 12, RESULT = 13;
+    public static final int MONITOR = 10, WIFI = 12, RESULT = 13;
     private Notices() {}
     public static void channels(Context context) {
         NotificationManager nm = context.getSystemService(NotificationManager.class);
@@ -24,15 +24,9 @@ public final class Notices {
         return new Notification.Builder(context, "monitor").setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("출석 메이트 · 감시 중").setContentText(detail)
             .setContentIntent(open(context)).setOngoing(true).setOnlyAlertOnce(true)
-            .addAction(new Notification.Action.Builder(null, "감시 중지",
+            .addAction(new Notification.Action.Builder(null, "예약 끄기",
                 PendingIntent.getService(context, 3, stop, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)).build())
             .build();
-    }
-    public static Notification checking(Context context) {
-        channels(context);
-        return new Notification.Builder(context, "monitor").setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("17:50 퇴실 확인").setContentText("연결과 사이트 기록을 확인하고 있습니다")
-            .setContentIntent(open(context)).setOngoing(true).build();
     }
     public static synchronized void setResultNotificationsEnabled(Context context, boolean enabled) {
         new Prefs(context).resultNotificationsEnabled(enabled);
@@ -54,6 +48,31 @@ public final class Notices {
             .setContentTitle("강의실 Wi-Fi 미연결 · 출석 대기 중").setContentText(detail)
             .setContentIntent(action).setOnlyAlertOnce(true).setOngoing(true)
             .addAction(new Notification.Action.Builder(null, "Wi-Fi 연결", action).build()).build());
+    }
+    public static void checkoutAttention(Context context, boolean show, String detail) {
+        final int id = 14;
+        if (!show) { context.getSystemService(NotificationManager.class).cancel(id); return; }
+        channels(context);
+        Intent settings = new Intent(Build.VERSION.SDK_INT >= 29 ? Settings.Panel.ACTION_WIFI : Settings.ACTION_WIFI_SETTINGS);
+        PendingIntent action = PendingIntent.getActivity(context, 5, settings, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        publish(context, id, new Notification.Builder(context, "attention").setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("퇴실 미완료 · Wi-Fi 연결 확인")
+            .setContentText(detail).setStyle(new Notification.BigTextStyle().bigText(detail))
+            .setContentIntent(action).setOnlyAlertOnce(true).setAutoCancel(true)
+            .addAction(new Notification.Action.Builder(null, "Wi-Fi 연결", action).build())
+            .addAction(new Notification.Action.Builder(null, "앱에서 확인", open(context)).build()).build());
+    }
+    public static void chromeAction(Context context, boolean show, String detail) {
+        final int id = 15;
+        if (!show) { context.getSystemService(NotificationManager.class).cancel(id); return; }
+        channels(context);
+        PendingIntent open = PendingIntent.getActivity(context, 6, new Intent(context, ChromeLaunchActivity.class),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        publish(context, id, new Notification.Builder(context, "attention").setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Chrome에서 출석 확인")
+            .setContentText(detail).setStyle(new Notification.BigTextStyle().bigText(detail))
+            .setContentIntent(open).setOnlyAlertOnce(true).setAutoCancel(true)
+            .addAction(new Notification.Action.Builder(null, "Chrome 열기", open).build()).build());
     }
     private static void publish(Context context, int id, Notification notification) {
         try { context.getSystemService(NotificationManager.class).notify(id, notification); }

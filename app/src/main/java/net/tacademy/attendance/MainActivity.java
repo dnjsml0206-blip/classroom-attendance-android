@@ -25,7 +25,7 @@ public final class MainActivity extends Activity {
     private LinearLayout root, content, tabs;
     private int selected;
     private boolean pendingStart, pendingLocation;
-    private TextView status, detail, wifiStatus, locationStatus, inTime, outTime, modeStatus;
+    private TextView status, detail, inTime, outTime, todayLog;
     private Button monitorButton;
     private LocationManager locationManager;
     private LocationListener oneLocation;
@@ -55,7 +55,7 @@ public final class MainActivity extends Activity {
         super.onResume();
         handler.removeCallbacks(refresh); handler.post(refresh);
         if (selected == 2) render(2);
-        if (prefs.enabled()) AlarmScheduler.arm(this, false);
+        if (prefs.enabled()) ScheduleController.reconcile(this);
     }
     @Override protected void onPause() { handler.removeCallbacks(refresh); super.onPause(); }
     @Override protected void onDestroy() {
@@ -111,7 +111,7 @@ public final class MainActivity extends Activity {
         content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(22), dp(26), dp(22), dp(18));
         scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         content.addView(text("T  /  ATTENDANCE MATE", 12, TEAL, true)); gap(content, 10);
-        content.addView(text(tab == 0 ? "출석, 잊지 않도록." : tab == 1 ? "나에게 맞게 설정" : "한 번 연결하고\n편하게 출석하세요.", 28, INK, true));
+        content.addView(text(tab == 0 ? "오늘 출결" : tab == 1 ? "나에게 맞게 설정" : "한 번 연결하고\n편하게 출석하세요.", 28, INK, true));
         gap(content, 8);
         content.addView(text(tab == 0 ? ZonedDateTime.now(Policy.ZONE).format(DateTimeFormatter.ofPattern("M월 d일 EEEE", Locale.KOREAN))
             : tab == 1 ? "Wi-Fi · 장소 · 수업 일정" : "사이트 인증과 휴대폰 권한을 확인하세요.", 14, MUTED, false));
@@ -128,131 +128,122 @@ public final class MainActivity extends Activity {
     }
 
     private void home() {
-        LinearLayout state = card("TODAY'S STATUS");
-        status = text("", 23, INK, true); detail = text("", 14, MUTED, false);
-        state.addView(status); gap(state, 8); state.addView(detail); gap(state, 16);
+        LinearLayout state = card("출결 현황");
+        status = text("", 21, INK, true); detail = text("", 13, MUTED, false);
+        state.addView(status); gap(state, 8); state.addView(detail); gap(state, 20);
         LinearLayout times = new LinearLayout(this);
         LinearLayout left = new LinearLayout(this); left.setOrientation(LinearLayout.VERTICAL);
-        left.addView(text("입실", 12, MUTED, false)); inTime = text("—", 25, TEAL, true); left.addView(inTime);
+        left.addView(text("입실", 13, MUTED, false)); inTime = text("—", 28, TEAL, true); left.addView(inTime);
         LinearLayout right = new LinearLayout(this); right.setOrientation(LinearLayout.VERTICAL);
-        right.addView(text("퇴실", 12, MUTED, false)); outTime = text("—", 25, TEAL, true); right.addView(outTime);
-        times.addView(left, new LinearLayout.LayoutParams(0, -2, 1)); times.addView(right, new LinearLayout.LayoutParams(0, -2, 1));
-        state.addView(times);
-        note(state, "사이트에 기록된 결과를 확인한 뒤 표시합니다.");
-        LinearLayout environment = card("CONNECTION");
-        wifiStatus = text("", 17, INK, true); locationStatus = text("", 14, MUTED, false);
-        environment.addView(wifiStatus); gap(environment, 8); environment.addView(locationStatus);
-        action(environment, "Wi-Fi 설정 열기", false, () -> openSettings(Build.VERSION.SDK_INT >= 29 ? Settings.Panel.ACTION_WIFI : Settings.ACTION_WIFI_SETTINGS));
-        LinearLayout control = card("AUTOMATION");
-        modeStatus = text("", 16, INK, true); control.addView(modeStatus);
-        note(control, "17:50 퇴실 · 한국 시간\n휴대폰에서 감시를 시작하면 알림바에 상태가 표시됩니다.");
-        monitorButton = button("", true, this::toggleMonitor); gap(control, 14); control.addView(monitorButton);
-        action(control, "지금 상태 확인", false, () -> {
-            if (!prefs.enabled()) { toast("먼저 감시를 시작해 주세요"); return; }
-            AttendanceEngine.request(this, true, null); toast("지정 Wi-Fi에서 출석 기록을 확인합니다");
-        });
-        LinearLayout log = card("RECENT ACTIVITY");
-        String messages = prefs.raw.getString("log", "");
-        log.addView(text(messages.isEmpty() ? "아직 활동 기록이 없습니다." : messages, 13, MUTED, false));
+        right.addView(text("퇴실", 13, MUTED, false)); outTime = text("—", 28, TEAL, true); right.addView(outTime);
+        times.addView(left, new LinearLayout.LayoutParams(0, -2, 1));
+        times.addView(right, new LinearLayout.LayoutParams(0, -2, 1)); state.addView(times);
+        action(state, "달력에서 출결 조회", false, this::attendanceCalendar);
+        LinearLayout log = card("오늘 로그");
+        todayLog = text("", 14, MUTED, false); log.addView(todayLog);
         updateHome();
+    }
+    private void attendanceCalendar() {
+        LocalDate today = LocalDate.now(Policy.ZONE);
+        new DatePickerDialog(this, (view, y, m, d) -> showAttendance(LocalDate.of(y, m+1, d)),
+            today.getYear(), today.getMonthValue()-1, today.getDayOfMonth()).show();
+    }
+    private void showAttendance(LocalDate day) {
+        Policy.Record record = prefs.history(day);
+        String body = record == null ? "앱에서 확인한 기록이 없습니다.\n이전 기록은 Chrome 출결 화면에서 확인해 주세요."
+            : "입실  " + (record.in().isEmpty() ? "확인된 기록 없음" : record.in()) + "\n퇴실  " +
+                (record.out().isEmpty() ? "확인된 기록 없음" : record.out());
+        if (prefs.excluded().contains(day.toString())) body += "\n등록한 휴강일입니다.";
+        new AlertDialog.Builder(this).setTitle(day + " 출결").setMessage(body)
+            .setPositiveButton("닫기", null).setNeutralButton("다른 날짜", (d,w) -> attendanceCalendar())
+            .setNegativeButton("Chrome 출결 조회", (d,w) -> ChromeAttendanceService.openChrome(this, SiteProtocol.PAGE)).show();
     }
 
     private void setIfChanged(TextView view, String value) { if (!view.getText().toString().equals(value)) view.setText(value); }
 
     private void updateHome() {
         if (status == null || selected != 0) return;
-        boolean active = prefs.enabled() && MonitorService.running;
-        setIfChanged(status, !prefs.enabled() ? "감시를 시작해 주세요" : !active ? "감시를 다시 시작해 주세요" : prefs.raw.getString("status", "연결 확인 중"));
-        setIfChanged(detail, !prefs.enabled() ? "위치와 Wi-Fi를 확인해 출석을 도와드려요." : !active ? "앱 중단 또는 재부팅 후에는 감시를 다시 시작해 주세요." : prefs.raw.getString("detail", ""));
-        boolean today = LocalDate.now(Policy.ZONE).toString().equals(prefs.raw.getString("record_day", ""));
-        String entry = today ? prefs.raw.getString("in", "") : "", exit = today ? prefs.raw.getString("out", "") : "";
+        Policy.Record record = prefs.history(LocalDate.now(Policy.ZONE));
+        String entry = record == null ? "" : record.in(), exit = record == null ? "" : record.out();
+        String title = !exit.isEmpty() ? "오늘 출결 완료" : !entry.isEmpty() ? "입실 완료 · 퇴실 예약 대기"
+            : MonitorService.running ? prefs.raw.getString("status", "입실 확인 중")
+            : prefs.enabled() ? "출석 예약 대기" : "출석 예약 꺼짐";
+        String description = prefs.enabled() ? "입실 " + prefs.start() + "–" + prefs.end() + " · 퇴실 " + prefs.checkout()
+            : "설정에서 출석 예약을 켜 주세요.";
+        if (MonitorService.running) description = prefs.raw.getString("detail", description);
+        setIfChanged(status, title); setIfChanged(detail, description);
         setIfChanged(inTime, entry.isEmpty() ? "—" : entry); setIfChanged(outTime, exit.isEmpty() ? "—" : exit);
-        NetworkAccess.State network = NetworkAccess.inspect(this);
-        setIfChanged(wifiStatus, network.allowed() ? "●  " + network.ssid() + " 연결됨" : network.ssid().isEmpty() ? "○  지정 Wi-Fi 연결 대기" : "○  " + network.ssid());
-        setIfChanged(locationStatus, active ? prefs.raw.getString("proximity", "위치 확인 중") :
-            prefs.hasLocation() ? "강의실 위치 등록됨 · 반경 " + prefs.radius() + "m" : "설정에서 강의실 위치를 등록해 주세요.");
-        setIfChanged(modeStatus, prefs.auto() ? "자동 입실 · 자동 퇴실" : "조회 모드 · 자동 처리는 꺼짐");
-        setIfChanged(monitorButton, active ? "감시 일시 중지" : "감시 시작");
+        String log = prefs.todayLog();
+        setIfChanged(todayLog, log.isEmpty() ? "아직 오늘 기록이 없습니다." : log);
     }
 
     private void toggleMonitor() {
-        if (prefs.enabled() && MonitorService.running) {
-            prefs.enabled(false); stopService(new Intent(this, MonitorService.class)); AlarmScheduler.cancel(this);
-            Notices.wifi(this, false, ""); prefs.log("출석 감시 중지"); updateHome(); return;
+        if (prefs.enabled()) {
+            prefs.enabled(false); ScheduleController.reconcile(this);
+            Notices.wifi(this, false, ""); prefs.log("출석 예약 꺼짐"); render(1); return;
         }
-        if (prefs.ssids().isEmpty() || prefs.days().isEmpty()) { toast("Wi-Fi와 수업 요일을 먼저 등록해 주세요"); render(1); return; }
+        if (prefs.ssids().isEmpty() || prefs.days().isEmpty()) { toast("Wi-Fi와 수업 요일을 먼저 등록해 주세요"); return; }
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             pendingStart = true; permissions(); return;
         }
+        if (!ScheduleController.backgroundLocationAllowed(this) || !AlarmScheduler.allowed(this) || !ChromeAttendanceService.available()) {
+            toast("연결 탭에서 Chrome 접근성, 위치 항상 허용, 정확한 알람을 설정해 주세요"); render(2); return;
+        }
         LocationManager lm = getSystemService(LocationManager.class);
-        if (Build.VERSION.SDK_INT >= 28 && !lm.isLocationEnabled()) { toast("휴대폰의 위치 기능을 켜 주세요"); openSettings(Settings.ACTION_LOCATION_SOURCE_SETTINGS); return; }
-        prefs.enabled(true);
-        try { startForegroundService(new Intent(this, MonitorService.class)); }
-        catch (RuntimeException e) { prefs.enabled(false); toast("위치 권한을 확인한 뒤 다시 시작해 주세요"); }
-        if (!AlarmScheduler.allowed(this)) toast("17:50 예약을 위해 연결 탭에서 정확한 알람을 허용해 주세요");
-        updateHome();
+        if (Build.VERSION.SDK_INT >= 28 && !lm.isLocationEnabled()) { toast("휴대폰 위치 기능을 켜 주세요"); openSettings(Settings.ACTION_LOCATION_SOURCE_SETTINGS); return; }
+        prefs.enabled(true); prefs.log("출석 예약 켜짐");
+        ScheduleController.reconcile(this); render(1);
     }
 
     private void settings() {
-        LinearLayout notifications = card("알림");
-        Switch resultAlerts = new Switch(this);
-        resultAlerts.setText("입실 · 퇴실 알림"); resultAlerts.setTextSize(16); resultAlerts.setTextColor(INK);
-        resultAlerts.setMinHeight(dp(48));
-        resultAlerts.setChecked(prefs.resultNotificationsEnabled()); notifications.addView(resultAlerts);
-        note(notifications, "입실·퇴실 결과와 출석 확인 요청을 알립니다. 기본값은 켜짐이며 앱을 다시 열어도 설정이 유지됩니다.");
-        note(notifications, "Wi-Fi 미연결 알림과 감시 중 상태 알림은 별도로 표시됩니다.");
-        if (!getSystemService(NotificationManager.class).areNotificationsEnabled())
-            note(notifications, "휴대폰에서 앱 알림이 차단되어 있습니다. 연결 탭에서 알림 권한을 허용해 주세요.");
-        resultAlerts.setOnCheckedChangeListener((v, checked) -> {
-            Notices.setResultNotificationsEnabled(this, checked);
-            prefs.log(checked ? "입실·퇴실 알림 켜짐" : "입실·퇴실 알림 꺼짐");
+        LinearLayout schedule = card("출석 시간");
+        schedule.addView(text("입실 " + prefs.start() + "–" + prefs.end() + "\n퇴실 " + prefs.checkout(), 21, INK, true));
+        note(schedule, "입실 완료 또는 입실 종료 시 감시를 끕니다. 퇴실은 예약 시각에 다시 확인하고 완료하면 종료합니다.");
+        note(schedule, "퇴실 재시도: 최대 " + prefs.retryMinutes() + "분 · 한국 시간");
+        action(schedule, "요일 · 입실 · 퇴실 시간 변경", false, this::editSchedule);
+        action(schedule, "달력에서 휴강일 등록 (" + prefs.excluded().size() + "일)", false, this::editExcluded);
+        LinearLayout automation = card("출석 예약");
+        action(automation, prefs.enabled() ? "출석 예약 끄기" : "출석 예약 켜기", true, this::toggleMonitor);
+        Switch auto = new Switch(this); auto.setText(R.string.automatic_chrome_click); auto.setTextSize(16); auto.setTextColor(INK); auto.setMinHeight(dp(48));
+        auto.setChecked(prefs.auto()); automation.addView(auto);
+        note(automation, "기존 Chrome 인증을 사용합니다. 화면 잠금 중에는 출석 알림을 눌러 잠금을 해제해 주세요. 자동 클릭을 끄면 조회만 합니다.");
+        auto.setOnCheckedChangeListener((v, checked) -> {
+            if (checked && !ChromeAttendanceService.available()) { auto.setChecked(false); toast("연결 탭에서 Chrome 접근성을 먼저 켜 주세요"); return; }
+            prefs.raw.edit().putBoolean("auto", checked).apply(); prefs.log(checked ? "Chrome 자동 클릭 켜짐" : "Chrome 조회 모드");
+            ScheduleController.reconcile(this);
         });
+        action(automation, "Chrome에서 지금 확인", false, () -> startActivity(new Intent(this, ChromeLaunchActivity.class)));
+        LinearLayout notifications = card("알림");
+        Switch alerts = new Switch(this); alerts.setText("입실 · 퇴실 결과 알림"); alerts.setTextSize(16); alerts.setTextColor(INK); alerts.setMinHeight(dp(48));
+        alerts.setChecked(prefs.resultNotificationsEnabled()); notifications.addView(alerts);
+        note(notifications, "결과 알림을 켜거나 끕니다. Wi-Fi 연결 요청과 Chrome 확인 요청은 별도로 표시됩니다.");
+        alerts.setOnCheckedChangeListener((v, checked) -> Notices.setResultNotificationsEnabled(this, checked));
         LinearLayout wifi = card("출석에 사용할 Wi-Fi");
-        wifi.addView(text("등록한 네트워크에서만 처리합니다", 17, INK, true));
-        note(wifi, "Wi-Fi 이름은 대소문자를 구분합니다. 실제 연결은 휴대폰 Wi-Fi 설정에서 저장해 주세요.");
+        note(wifi, "등록한 Wi-Fi에서 Chrome 출석을 처리합니다. 이름은 대소문자를 구분합니다.");
         for (String ssid : prefs.ssids()) {
-            LinearLayout row = new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL); gap(wifi, 10);
+            LinearLayout row = new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL);
             TextView name = text(ssid, 15, INK, true); name.setMaxLines(2);
             row.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
-            row.addView(button("삭제", false, () -> {
-                Set<String> values = prefs.ssids(); values.remove(ssid); prefs.ssids(values); prefs.log("Wi-Fi 목록 변경"); render(1);
-            }), new LinearLayout.LayoutParams(dp(72), dp(48)));
-            wifi.addView(row);
+            row.addView(button("삭제", false, () -> { Set<String> values = prefs.ssids(); values.remove(ssid); prefs.ssids(values); render(1); }),
+                new LinearLayout.LayoutParams(dp(72), dp(48))); wifi.addView(row);
         }
-        if (prefs.ssids().isEmpty()) note(wifi, "등록된 Wi-Fi가 없습니다.");
         action(wifi, "+ Wi-Fi 추가", true, this::addWifi);
         action(wifi, "현재 Wi-Fi 등록", false, () -> {
             String current = NetworkAccess.inspect(this).ssid();
-            if (!Policy.validSsid(current)) { toast("현재 Wi-Fi 이름을 확인할 수 없습니다. 직접 입력해 주세요"); return; }
+            if (!Policy.validSsid(current)) { toast("Wi-Fi 이름을 확인할 수 없습니다. 직접 입력해 주세요"); return; }
             Set<String> values = prefs.ssids(); values.add(current); prefs.ssids(values); render(1);
         });
         LinearLayout location = card("강의실 위치");
-        location.addView(text(prefs.hasLocation() ? "주변 " + prefs.radius() + "m에서 감지" : "아직 등록하지 않았어요", 18, INK, true));
-        note(location, "강의실 주변인데 Wi-Fi가 연결되지 않으면 알림바로 알려드립니다.");
+        location.addView(text(prefs.hasLocation() ? "반경 " + prefs.radius() + "m" : "기본 반경 30m · 위치 미등록", 19, INK, true));
+        note(location, "입실 시간에 주변인데 Wi-Fi가 연결되지 않으면 알려드립니다. 위치 정확도가 반경보다 나쁘면 도착으로 판단하지 않습니다.");
         action(location, "현재 위치로 등록", true, this::currentLocation);
-        action(location, "좌표와 반경 직접 입력", false, () -> editLocation(null));
+        action(location, "좌표와 반경 변경", false, () -> editLocation(null));
         if (prefs.hasLocation()) action(location, "강의실 위치 삭제", false, () -> {
             prefs.raw.edit().remove("latitude").remove("longitude").apply(); Notices.wifi(this, false, ""); render(1);
         });
-        LinearLayout schedule = card("수업 일정");
-        schedule.addView(text("입실 " + prefs.start() + "–" + prefs.end() + "\n퇴실 17:50", 19, INK, true));
-        note(schedule, "기본값: 월–금, 입실 08:00–17:45. 실제 수업 일정에 맞게 바꿔 주세요.");
-        action(schedule, "요일 · 입실 시간 변경", false, this::editSchedule);
-        action(schedule, "휴강일 등록 (" + prefs.excluded().size() + "일)", false, this::editExcluded);
-        LinearLayout automation = card("자동 처리");
-        Switch auto = new Switch(this); auto.setText("입실 · 퇴실 자동 처리"); auto.setTextSize(16); auto.setTextColor(INK);
-        auto.setChecked(prefs.auto()); automation.addView(auto);
-        note(automation, "처음에는 조회만 합니다. 사이트 인증 후 켜면 지정 Wi-Fi에서 입실하고 17:50에 퇴실합니다. 실제 계정·기기에서 검증이 필요한 초기 버전입니다.");
-        auto.setOnCheckedChangeListener((v, checked) -> {
-            if (checked && !new AuthVault(this).ready()) { auto.setChecked(false); toast("연결 탭에서 사이트 인증을 먼저 완료해 주세요"); return; }
-            prefs.raw.edit().putBoolean("auto", checked).apply();
-            prefs.log(checked ? "자동 입퇴실 켜짐" : "조회 모드로 변경");
-            if (prefs.enabled()) AttendanceEngine.request(this, true, null);
-        });
-        LinearLayout help = card("Wi-Fi 자동 연결 안내");
-        help.addView(text("휴대폰 자동 연결을 함께 사용하세요", 17, INK, true));
-        note(help, "Android 일반 앱은 꺼진 Wi-Fi를 직접 켤 수 없습니다. Wi-Fi를 켜 두고 등록한 네트워크의 자동 연결을 켜 주세요. 지원되는 갤럭시에서는 모드 및 루틴에 ‘강의실 도착 → Wi-Fi 켜기’를 설정할 수 있습니다.");
-        action(help, "휴대폰 Wi-Fi 설정", false, () -> openSettings(Settings.ACTION_WIFI_SETTINGS));
+        LinearLayout help = card("Wi-Fi 자동 연결");
+        note(help, "갤럭시의 인텔리전트 Wi-Fi에서 자동 켜기/끄기를 설정할 수 있습니다. 출석에 쓸 네트워크는 휴대폰에도 저장해 주세요.");
+        action(help, "인텔리전트 Wi-Fi 설정", false, () -> ChromeAttendanceService.intelligentWifi(this));
     }
 
     private void addWifi() {
@@ -276,13 +267,13 @@ public final class MainActivity extends Activity {
         EditText lon = input("경도", current != null ? String.valueOf(current.getLongitude()) : prefs.hasLocation() ? String.valueOf(prefs.longitude()) : "", true);
         EditText radius = input("반경(m)", String.valueOf(prefs.radius()), true);
         view.addView(lat); view.addView(lon); view.addView(radius);
-        note(view, current != null ? "현재 위치 정확도: 약 " + Math.round(current.getAccuracy()) + "m. 강의실 안에서 등록해 주세요." : "위도 -90~90, 경도 -180~180, 반경 50~1000m");
+        note(view, current != null ? "현재 위치 정확도: 약 " + Math.round(current.getAccuracy()) + "m. 강의실 안에서 등록해 주세요." : "위도 -90~90, 경도 -180~180, 반경 10~1000m");
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("강의실 위치 등록").setView(view).setPositiveButton("저장", null).setNegativeButton("취소", null).create();
         dialog.setOnShowListener(v -> dialog.getButton(-1).setOnClickListener(b -> {
             try {
                 double a = Double.parseDouble(lat.getText().toString()), o = Double.parseDouble(lon.getText().toString());
                 int r = Integer.parseInt(radius.getText().toString());
-                if (!Double.isFinite(a) || !Double.isFinite(o) || Math.abs(a) > 90 || Math.abs(o) > 180 || r < 50 || r > 1000) throw new IllegalArgumentException();
+                if (!Double.isFinite(a) || !Double.isFinite(o) || Math.abs(a) > 90 || Math.abs(o) > 180 || r < 10 || r > 1000) throw new IllegalArgumentException();
                 prefs.location(a, o, r); prefs.log("강의실 위치 등록"); dialog.dismiss(); render(1);
             } catch (IllegalArgumentException e) { toast("올바른 좌표와 반경을 입력해 주세요"); }
         }));
@@ -316,91 +307,117 @@ public final class MainActivity extends Activity {
     }
 
     private void editSchedule() {
-        LinearLayout view = form();
-        Set<String> chosen = new HashSet<>();
-        String[] days = {"월", "화", "수", "목", "금", "토", "일"};
+        LinearLayout view = form(); Set<String> chosen = new HashSet<>();
+        String[] days = {"월","화","수","목","금","토","일"};
         LinearLayout row = new LinearLayout(this);
-        for (int i = 0; i < 7; i++) {
-            final String day = String.valueOf(i + 1);
-            CheckBox check = new CheckBox(this); check.setText(days[i]); check.setTextSize(13); check.setPadding(0,0,0,0);
+        for (int i=0; i<7; i++) {
+            final String day = String.valueOf(i+1);
+            CheckBox check = new CheckBox(this); check.setText(days[i]); check.setTextSize(13);
             check.setButtonDrawable((android.graphics.drawable.Drawable)null); check.setGravity(Gravity.CENTER);
-            check.setChecked(prefs.days().contains(i + 1));
+            check.setChecked(prefs.days().contains(i+1)); if (check.isChecked()) chosen.add(day);
             check.setBackground(shape(check.isChecked() ? 0xFFCDEDE4 : 0xFFF0F3F2, 8));
-            if (check.isChecked()) chosen.add(day);
             check.setOnCheckedChangeListener((v, yes) -> { if (yes) chosen.add(day); else chosen.remove(day); check.setBackground(shape(yes ? 0xFFCDEDE4 : 0xFFF0F3F2, 8)); });
-            row.addView(check, new LinearLayout.LayoutParams(0, dp(48), 1));
+            row.addView(check,new LinearLayout.LayoutParams(0,dp(48),1));
         }
-        view.addView(row); gap(view, 12);
-        EditText start = input("입실 시작 HH:mm", prefs.start(), false);
-        EditText end = input("입실 종료 HH:mm", prefs.end(), false);
-        view.addView(start); view.addView(end); note(view, "퇴실은 한국 시간 17:50입니다. 입실 종료는 17:50 이전으로 설정해 주세요.");
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("수업 일정").setView(view).setPositiveButton("저장", null).setNegativeButton("취소", null).create();
+        view.addView(row);
+        String[] times = {prefs.start(),prefs.end(),prefs.checkout()};
+        String[] labels = {"입실 시작","입실 종료","퇴실 시작"};
+        for (int i=0; i<3; i++) {
+            final int index = i;
+            Button time = button(labels[i] + "  " + times[i], false, () -> {});
+            time.setOnClickListener(v -> {
+                LocalTime initial = LocalTime.parse(times[index]);
+                new TimePickerDialog(this, (picker,h,m) -> {
+                    times[index] = String.format(Locale.ROOT,"%02d:%02d",h,m);
+                    time.setText(getString(R.string.time_picker_label, labels[index], times[index]));
+                }, initial.getHour(), initial.getMinute(), true).show();
+            });
+            gap(view,10); view.addView(time,new LinearLayout.LayoutParams(-1,dp(50)));
+        }
+        note(view,"퇴실 실패 시 재시도할 시간 (1–60분)");
+        EditText retry = input("재시도 분",String.valueOf(prefs.retryMinutes()),true); view.addView(retry);
+        ScrollView scroll = new ScrollView(this); scroll.addView(view);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("수업 일정 · 한국 시간").setView(scroll)
+            .setPositiveButton("저장",null).setNegativeButton("취소",null).create();
         dialog.setOnShowListener(v -> dialog.getButton(-1).setOnClickListener(b -> {
             try {
-                LocalTime from = LocalTime.parse(start.getText().toString().trim()), to = LocalTime.parse(end.getText().toString().trim());
-                if (chosen.isEmpty() || !from.isBefore(to) || to.isAfter(LocalTime.of(17, 50))) throw new IllegalArgumentException();
-                prefs.raw.edit().putStringSet("days", chosen).putString("start", from.toString()).putString("end", to.toString()).apply();
-                AlarmScheduler.arm(this, false); dialog.dismiss(); render(1);
-            } catch (RuntimeException e) { toast("요일을 고르고 HH:mm 형식의 올바른 입실 시간을 입력해 주세요"); }
+                int minutes = Integer.parseInt(retry.getText().toString());
+                if (chosen.isEmpty() || !Policy.validSchedule(times[0],times[1],times[2],minutes)) throw new IllegalArgumentException();
+                prefs.raw.edit().putStringSet("days",chosen).putString("start",times[0]).putString("end",times[1])
+                    .putString("checkout",times[2]).putInt("checkout_retry_minutes",minutes).apply();
+                prefs.log("출석 시간 변경"); ScheduleController.reconcile(this); dialog.dismiss(); render(1);
+            } catch (RuntimeException e) { toast("입실 시작 < 종료 ≤ 퇴실, 재시도 1–60분으로 자정 이전까지 설정해 주세요"); }
         }));
         dialog.show();
     }
     private void editExcluded() {
-        EditText edit = input("2026-09-25, 2026-09-28", String.join(", ", new TreeSet<>(prefs.excluded())), false); edit.setSingleLine(false); edit.setMinLines(3);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("휴강일 · YYYY-MM-DD").setView(edit).setPositiveButton("저장", null).setNegativeButton("취소", null).create();
-        dialog.setOnShowListener(v -> dialog.getButton(-1).setOnClickListener(b -> {
-            try {
-                Set<String> values = new HashSet<>();
-                for (String date : edit.getText().toString().split("[,\\s]+")) if (!date.isEmpty()) values.add(LocalDate.parse(date).toString());
-                prefs.raw.edit().putStringSet("excluded", values).apply(); AlarmScheduler.arm(this, false); dialog.dismiss(); render(1);
-            } catch (RuntimeException e) { edit.setError("날짜를 YYYY-MM-DD 형식으로 입력해 주세요"); }
-        }));
-        dialog.show();
+        Set<String> values = new TreeSet<>(prefs.excluded());
+        LinearLayout view = form(), dates = new LinearLayout(this); dates.setOrientation(LinearLayout.VERTICAL);
+        note(view,"달력에서 날짜를 골라 추가하고 저장해 주세요.");
+        action(view,"달력에서 날짜 추가",true,() -> {
+            LocalDate today = LocalDate.now(Policy.ZONE);
+            new DatePickerDialog(this,(picker,y,m,d) -> { values.add(LocalDate.of(y,m+1,d).toString()); excludedRows(dates,values); },
+                today.getYear(),today.getMonthValue()-1,today.getDayOfMonth()).show();
+        });
+        gap(view,12); view.addView(dates); excludedRows(dates,values);
+        ScrollView scroll = new ScrollView(this); scroll.addView(view);
+        new AlertDialog.Builder(this).setTitle("휴강일").setView(scroll).setNegativeButton("취소",null)
+            .setPositiveButton("저장",(d,w) -> {
+                prefs.raw.edit().putStringSet("excluded",new HashSet<>(values)).apply();
+                prefs.log("휴강일 변경"); ScheduleController.reconcile(this); render(1);
+            }).show();
+    }
+    private void excludedRows(LinearLayout list, Set<String> values) {
+        list.removeAllViews();
+        if (values.isEmpty()) { list.addView(text("등록한 휴강일이 없습니다.",14,MUTED,false)); return; }
+        for (String date : new TreeSet<>(values)) {
+            LinearLayout row = new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL);
+            row.addView(text(date,16,INK,false),new LinearLayout.LayoutParams(0,-2,1));
+            row.addView(button("삭제",false,() -> { values.remove(date); excludedRows(list,values); }),
+                new LinearLayout.LayoutParams(dp(72),dp(48))); list.addView(row);
+        }
     }
 
     private void connection() {
-        LinearLayout auth = card("01  사이트 인증");
-        boolean ready = new AuthVault(this).ready();
-        auth.addView(text(ready ? "인증 정보가 저장되어 있습니다" : "출석 사이트를 연결해 주세요", 18, INK, true));
-        note(auth, "Chrome의 인증은 자동으로 공유되지 않습니다. 앱 안에서 발급받은 인증 링크를 열어 인증한 뒤 저장해 주세요.");
-        action(auth, ready ? "출석 사이트 · 인증 다시 확인" : "출석 사이트 인증하기", true,
-            () -> startActivity(new Intent(this, AuthActivity.class)));
-        if (ready) action(auth, "저장한 인증 삭제", false, () -> {
-            prefs.raw.edit().putBoolean("auto", false).remove("record_day").remove("in").remove("out").apply();
-            new AuthVault(this).clear();
-            android.webkit.CookieManager.getInstance().removeAllCookies(null);
-            android.webkit.CookieManager.getInstance().flush();
-            toast("인증 정보를 삭제했습니다"); render(2);
+        LinearLayout chrome = card("01  기존 Chrome 연결");
+        chrome.addView(text(ChromeAttendanceService.available() ? "Chrome 접근성 연결됨" : "Chrome 접근성을 켜 주세요",18,INK,true));
+        note(chrome,"휴대폰 Chrome에 저장된 인증을 그대로 사용합니다. 지정한 출석 화면의 버튼과 기록 시각을 확인합니다.");
+        note(chrome,"인텔리전트 Wi-Fi 버튼을 누를 때에는 휴대폰 설정 메뉴 이동에도 접근성을 사용합니다.");
+        action(chrome,"Chrome 출결 화면 열기",true,() -> ChromeAttendanceService.openChrome(this,SiteProtocol.PAGE));
+        action(chrome,"Chrome 접근성 설정",false,() -> openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        action(chrome,"Chrome 인증 페이지 열기",false,() -> ChromeAttendanceService.openChrome(this,SiteProtocol.AUTH_PAGE));
+        note(chrome,"이미 출결 화면이 열리면 다시 인증하지 않아도 됩니다. 화면이 잠겨 있으면 출석 알림을 눌러 잠금을 해제해 주세요.");
+        LinearLayout permissions = card("02  위치와 알림");
+        permissions.addView(text(ScheduleController.backgroundLocationAllowed(this) ? "위치 항상 허용됨" : "예약 실행에 위치 항상 허용 필요",17,INK,true));
+        note(permissions,"예약 시간에 Wi-Fi 이름을 확인하고 입실 시간에만 강의실 위치를 확인합니다.");
+        action(permissions,"위치 · 알림 권한 허용",false,this::permissions);
+        action(permissions,"위치 항상 허용 설정",false,() -> {
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) { permissions(); return; }
+            if (Build.VERSION.SDK_INT == 29) requestPermissions(new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},11);
+            else startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())));
         });
-        LinearLayout permissions = card("02  휴대폰 권한");
-        permissions.addView(text(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            ? "위치 권한 허용됨" : "정확한 위치 권한이 필요합니다", 17, INK, true));
-        note(permissions, getSystemService(NotificationManager.class).areNotificationsEnabled()
-            ? "알림이 허용되어 있습니다." : "알림이 꺼져 있어 Wi-Fi 미연결과 출석 결과를 알릴 수 없습니다.");
-        action(permissions, "위치 · 알림 권한 허용", false, this::permissions);
-        action(permissions, "앱 권한 설정", false, () -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))));
-        LinearLayout alarm = card("03  17:50 예약");
-        alarm.addView(text(AlarmScheduler.allowed(this) ? "정확한 알람 사용 가능" : "정확한 알람 허용 필요", 18, INK, true));
-        long next = prefs.raw.getLong("next_alarm", 0);
-        note(alarm, next > 0 ? "다음 예약: " + Instant.ofEpochMilli(next).atZone(Policy.ZONE).format(DateTimeFormatter.ofPattern("M/d HH:mm")) : "감시 시작 후 수업일에 맞춰 예약합니다.");
-        if (Build.VERSION.SDK_INT >= 31) action(alarm, "알람 및 리마인더 설정", false,
-            () -> startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + getPackageName()))));
-        LinearLayout battery = card("04  안정적인 감시");
-        note(battery, "배터리 설정에서 이 앱의 백그라운드 실행을 허용해 주세요. 재부팅 또는 앱 강제 중지 후에는 앱을 열어 감시를 다시 시작해야 합니다. 위치 감시가 켜져 있는 동안 상태 알림이 유지됩니다.");
-        action(battery, "배터리 최적화 설정", false, () -> openSettings(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
-        LinearLayout pending = card("처리 기록 점검");
-        note(pending, "요청 후 통신이 끊기면 중복 처리를 막기 위해 다시 요청하지 않습니다. 사이트에서 실제 기록을 확인한 뒤에만 아래 보류 상태를 해제해 주세요.");
-        action(pending, "사이트에서 기록 보기", false, () -> startActivity(new Intent(this, AuthActivity.class)));
-        if (!prefs.raw.getString("pending", "").isEmpty()) action(pending, "확인 후 보류 해제", false, () ->
-            new AlertDialog.Builder(this).setTitle("사이트 기록을 확인하셨나요?")
-                .setMessage("보류를 해제하면 설정한 시간대에 자동 처리를 다시 시도할 수 있습니다.")
-                .setNegativeButton("취소", null).setPositiveButton("확인했고 해제", (d,w) -> {
-                    prefs.raw.edit().remove("pending").apply(); prefs.log("사용자가 요청 보류 해제"); render(2);
-                }).show());
-        LinearLayout info = card("ABOUT");
-        info.addView(text("출석 메이트 0.1.1 · 초기 테스트 버전", 14, INK, true));
-        note(info, "인증과 위치는 이 기기에 저장합니다. 별도의 분석 서버로 전송하지 않습니다. 실제 계정과 지정 Wi-Fi에서의 동작 검증은 아직 필요합니다.");
+        note(permissions,getSystemService(NotificationManager.class).areNotificationsEnabled() ? "알림 권한이 허용되어 있습니다." : "출석 알림을 받으려면 앱 알림을 허용해 주세요.");
+        LinearLayout alarm = card("03  예약 실행");
+        alarm.addView(text(AlarmScheduler.allowed(this) ? "정확한 알람 사용 가능" : "정확한 알람 허용 필요",18,INK,true));
+        long next = prefs.raw.getLong("next_alarm",0);
+        note(alarm,next > 0 ? "다음 예약: "+Instant.ofEpochMilli(next).atZone(Policy.ZONE).format(DateTimeFormatter.ofPattern("M/d HH:mm"))
+            : "설정에서 출석 예약을 켜면 수업일에 맞춰 예약합니다.");
+        if (Build.VERSION.SDK_INT >= 31) action(alarm,"알람 및 리마인더 설정",false,
+            () -> startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+getPackageName()))));
+        action(alarm,"배터리 최적화 설정",false,() -> openSettings(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+        note(alarm,"입실·퇴실 시간 밖에서는 감시를 종료합니다. 재부팅 후 예약을 복구하며 앱 강제 중지 후에는 앱을 다시 열어 주세요.");
+        if (!prefs.raw.getString("chrome_pending","").isEmpty()) {
+            LinearLayout pending = card("클릭 결과 확인");
+            note(pending,"중복 클릭을 막기 위해 이전 요청을 보류했습니다. Chrome에서 실제 기록을 먼저 확인해 주세요.");
+            action(pending,"Chrome에서 기록 확인",false,() -> ChromeAttendanceService.openChrome(this,SiteProtocol.PAGE));
+            action(pending,"확인 후 보류 해제",false,() -> new AlertDialog.Builder(this).setTitle("Chrome에서 기록을 확인했나요?")
+                .setMessage("보류를 해제하면 설정한 시간 안에서 다시 클릭할 수 있습니다.").setNegativeButton("취소",null)
+                .setPositiveButton("확인했고 해제",(d,w) -> { prefs.raw.edit().remove("chrome_pending").apply(); render(2); }).show());
+        }
+        LinearLayout info = card("출석 메이트 0.2.0");
+        note(info,"출결 달력에는 앱이 Chrome에서 확인한 기록을 표시합니다. 이전 전체 기록은 Chrome 출결 화면에서 확인하세요.");
     }
+
     private void permissions() {
         java.util.ArrayList<String> wanted = new java.util.ArrayList<>();
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {

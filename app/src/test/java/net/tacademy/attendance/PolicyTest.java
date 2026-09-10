@@ -34,29 +34,4 @@ public final class PolicyTest {
             assertThrows(IllegalArgumentException.class, () -> Policy.parseRecord(bad));
         }
     }
-    @Test public void checkoutHasBoundedWindow() {
-        assertFalse(Policy.checkoutDue(time("2026-09-10T17:49:59")));
-        assertTrue(Policy.checkoutDue(time("2026-09-10T17:50:00")));
-        assertTrue(Policy.checkoutDue(time("2026-09-10T17:54:59")));
-        assertFalse(Policy.checkoutDue(time("2026-09-10T17:55:00")));
-    }
-    @Test public void datesUseSeoulEvenWhenPhoneZoneIsDifferent() {
-        ZonedDateTime utc = ZonedDateTime.parse("2026-09-10T08:50:00Z");
-        assertTrue(Policy.checkoutDue(utc));
-        assertTrue(Policy.isClassDay(utc, weekdays, Set.of()));
-        assertFalse(Policy.isClassDay(utc, weekdays, Set.of("2026-09-10")));
-    }
-    @Test public void nextAlarmSkipsWeekendsAndExcludedDays() {
-        ZonedDateTime friday = time("2026-09-11T18:00:00");
-        assertEquals(time("2026-09-15T17:50:00"), Policy.nextCheckout(friday, weekdays, Set.of("2026-09-14")));
-        assertNull(Policy.nextCheckout(friday, Set.of(), Set.of()));
-    }
-    @Test public void checkoutDoesNotSchedulePastTimeForToday() {
-        assertEquals(time("2026-09-11T17:50:00"), Policy.nextCheckout(time("2026-09-10T17:50:00"), weekdays, Set.of()));
-        assertEquals(time("2026-09-10T17:50:00"), Policy.nextCheckout(time("2026-09-10T17:49:59"), weekdays, Set.of()));
-    }
-    @Test public void entryWindowIsStartInclusiveEndExclusive() {
-        assertTrue(Policy.inWindow(time("2026-09-10T08:00:00"), "08:00", "17:45"));
-        assertFalse(Policy.inWindow(time("2026-09-10T17:45:00"), "08:00", "17:45"));
-    }
 }

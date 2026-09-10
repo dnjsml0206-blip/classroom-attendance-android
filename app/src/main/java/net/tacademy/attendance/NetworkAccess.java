@@ -52,9 +52,4 @@ public final class NetworkAccess {
         }
     }
 
-    public static void requireSame(Context context, Network network) throws SiteClient.Failure {
-        State state = inspect(context);
-        if (!state.allowed() || !state.network().equals(network))
-            throw new SiteClient.Failure("NETWORK_CHANGED", "지정 Wi-Fi 연결이 변경되었습니다");
-    }
 }

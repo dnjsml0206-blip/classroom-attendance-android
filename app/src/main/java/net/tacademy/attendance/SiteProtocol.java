@@ -7,7 +7,21 @@ import java.net.URI;
 public final class SiteProtocol {
     public static final String BASE = "https://skplanet.atosoft.net/Worknet/Present/";
     public static final String PAGE = BASE + "Present.asp";
+    public static final String AUTH_PAGE = BASE + "PAuthWay.asp";
     private SiteProtocol() {}
+    public static String secureNavigation(String url) {
+        try {
+            URI uri = URI.create(url.trim());
+            if ("http".equalsIgnoreCase(uri.getScheme()) && "skplanet.atosoft.net".equalsIgnoreCase(uri.getHost())
+                    && uri.getUserInfo() == null && (uri.getPort() == -1 || uri.getPort() == 80)) {
+                String result = "https://skplanet.atosoft.net" + (uri.getRawPath() == null ? "" : uri.getRawPath());
+                if (uri.getRawQuery() != null) result += "?" + uri.getRawQuery();
+                if (uri.getRawFragment() != null) result += "#" + uri.getRawFragment();
+                return result;
+            }
+            return allowedNavigation(url) ? url : null;
+        } catch (RuntimeException e) { return null; }
+    }
     public static boolean allowedNavigation(String url) {
         try {
             URI uri = URI.create(url);
