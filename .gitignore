@@ -1,0 +1,45 @@
+# Android / Gradle local outputs
+.gradle/
+.kotlin/
+**/build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.apks
+
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Signing and local secrets
+*.jks
+*.keystore
+keystore.properties
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+google-services.json
+secrets/
+private/
+credentials/
+auth/
+playwright/.auth/
+cookies*.json
+cookies*.txt
+session*.json
+
+# Site inspection data and private configuration
+*.har
+*.log
+diagnostics/
+config/local/
+config/*.local.json
+config/attendance.json
+!config/attendance.example.json

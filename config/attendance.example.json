@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "enabled": false,
+  "mode": "observe",
+  "site": {
+    "attendanceUrl": "https://skplanet.atosoft.net/Worknet/Present/Present.asp",
+    "courseId": null
+  },
+  "location": {
+    "latitude": null,
+    "longitude": null,
+    "radiusMeters": 150
+  },
+  "wifi": {
+    "allowedSsids": [],
+    "connectionStrategy": "systemAutoJoin",
+    "requireAllowedWifiForAttendance": true
+  },
+  "schedule": {
+    "timezone": "Asia/Seoul",
+    "classDays": [],
+    "excludedDates": [],
+    "checkInWindow": {
+      "start": null,
+      "end": null
+    },
+    "checkOutTime": "17:50",
+    "lateCheckOutGraceMinutes": 5
+  },
+  "monitoring": {
+    "proposedPollIntervalSeconds": 60,
+    "executionSubjectToAndroidLimits": true
+  },
+  "retry": {
+    "maxAttempts": 3,
+    "initialDelaySeconds": 30,
+    "maxDelaySeconds": 120,
+    "reconcileBeforeRetry": true
+  },
+  "notifications": {
+    "wifiMissing": true,
+    "attendanceResult": true,
+    "actionRequired": true
+  }
+}
