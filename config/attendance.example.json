@@ -12,17 +12,25 @@
     "radiusMeters": 150
   },
   "wifi": {
-    "allowedSsids": [],
+    "allowedSsids": [
+      "TACADEMY_5G"
+    ],
     "connectionStrategy": "systemAutoJoin",
     "requireAllowedWifiForAttendance": true
   },
   "schedule": {
     "timezone": "Asia/Seoul",
-    "classDays": [],
+    "classDays": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
     "excludedDates": [],
     "checkInWindow": {
-      "start": null,
-      "end": null
+      "start": "08:00",
+      "end": "17:45"
     },
     "checkOutTime": "17:50",
     "lateCheckOutGraceMinutes": 5
