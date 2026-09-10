@@ -26,7 +26,11 @@ public final class MainActivity extends Activity {
     private int selected;
     private boolean pendingStart, pendingLocation;
     private TextView status, detail, inTime, outTime, todayLog;
-    private Button monitorButton;
+    private HomeTheme homeTheme;
+    private LocalDate homeDay;
+    private String homeCheckout, homeEntryEnd;
+    private Clock homeClock = Clock.system(Policy.ZONE);
+    private ScrollView homeScroll;
     private LocationManager locationManager;
     private LocationListener oneLocation;
     private final Runnable refresh = new Runnable() {
@@ -76,18 +80,27 @@ public final class MainActivity extends Activity {
     private void gap(LinearLayout parent, int amount) { View space = new View(this); parent.addView(space, new LinearLayout.LayoutParams(1, dp(amount))); }
     private Button button(String label, boolean primary, Runnable action) {
         Button button = new Button(this); button.setText(label); button.setTextSize(15); button.setAllCaps(false);
-        button.setTextColor(primary ? Color.WHITE : TEAL);
-        button.setBackground(shape(primary ? TEAL : 0xFFE5F2EF, 14));
+        if (selected == 0) {
+            button.setStateListAnimator(null); button.setElevation(0);
+            button.setTextColor(primary ? (homeTheme == HomeTheme.NIGHT ? 0xFF142338 : homeTheme.ink) : homeTheme.accent);
+            button.setBackground(shape(primary ? homeTheme.button : homeTheme.soft, 14));
+        } else {
+            button.setTextColor(primary ? Color.WHITE : TEAL);
+            button.setBackground(shape(primary ? TEAL : 0xFFE5F2EF, 14));
+        }
         button.setMinHeight(dp(50)); button.setPadding(dp(12), dp(8), dp(12), dp(8));
         button.setOnClickListener(v -> action.run());
         return button;
     }
     private LinearLayout card(String label) {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(20), dp(20), dp(20), dp(20)); card.setBackground(shape(Color.WHITE, 22));
+        card.setPadding(dp(20), dp(18), dp(20), dp(18));
+        GradientDrawable background = shape(selected == 0 ? homeTheme.surface : Color.WHITE, 22);
+        if (selected == 0) background.setStroke(dp(1), homeTheme.border);
+        card.setBackground(background);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2); params.bottomMargin = dp(14);
         content.addView(card, params);
-        if (!label.isEmpty()) { card.addView(text(label, 13, TEAL, true)); gap(card, 10); }
+        if (!label.isEmpty()) { card.addView(text(label, 13, selected == 0 ? homeTheme.accent : TEAL, true)); gap(card, 10); }
         return card;
     }
     private void note(LinearLayout parent, String message) { TextView view = text(message, 13, MUTED, false); gap(parent, 8); parent.addView(view); }
@@ -107,17 +120,35 @@ public final class MainActivity extends Activity {
 
     private void render(int tab) {
         selected = tab; root.removeAllViews();
+        ZonedDateTime now = ZonedDateTime.now(homeClock).withZoneSameInstant(Policy.ZONE);
+        homeDay = now.toLocalDate(); homeCheckout = prefs.checkout(); homeEntryEnd = prefs.end();
+        homeTheme = HomeTheme.at(now, homeEntryEnd, homeCheckout);
+        boolean night = tab == 0 && homeTheme == HomeTheme.NIGHT;
+        int background = tab == 0 ? homeTheme.background : BG;
+        root.setBackgroundColor(background);
+        updateSystemBars(night, background);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true);
-        content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(22), dp(26), dp(22), dp(18));
+        homeScroll = scroll;
+        content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(22), dp(22), dp(22), dp(18));
         scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        content.addView(text("T  /  ATTENDANCE MATE", 12, TEAL, true)); gap(content, 10);
-        content.addView(text(tab == 0 ? "오늘 출결" : tab == 1 ? "나에게 맞게 설정" : "한 번 연결하고\n편하게 출석하세요.", 28, INK, true));
-        gap(content, 8);
-        content.addView(text(tab == 0 ? ZonedDateTime.now(Policy.ZONE).format(DateTimeFormatter.ofPattern("M월 d일 EEEE", Locale.KOREAN))
-            : tab == 1 ? "Wi-Fi · 장소 · 수업 일정" : "사이트 인증과 휴대폰 권한을 확인하세요.", 14, MUTED, false));
-        gap(content, 24);
-        if (tab == 0) home(); else if (tab == 1) settings(); else connection();
-        tabs = new LinearLayout(this); tabs.setPadding(dp(16), dp(10), dp(16), dp(10)); tabs.setBackgroundColor(Color.WHITE);
+        if (tab == 0) {
+            LinearLayout heading = new LinearLayout(this); heading.setGravity(Gravity.CENTER_VERTICAL);
+            heading.addView(text("ATTENDANCE MATE", 11, homeTheme.accent, true), new LinearLayout.LayoutParams(0, -2, 1));
+            TextView mode = text(night ? "NIGHT" : "DAYLIGHT", 10, homeTheme.accent, true);
+            mode.setLetterSpacing(.12f); heading.addView(mode); content.addView(heading); gap(content, 8);
+            content.addView(text("오늘 출결", 29, homeTheme.ink, true)); gap(content, 4);
+            content.addView(text(now.format(DateTimeFormatter.ofPattern("M월 d일 EEEE", Locale.KOREAN)), 13, homeTheme.muted, false));
+            gap(content, 18); home();
+        } else {
+            content.addView(text("T  /  ATTENDANCE MATE", 12, TEAL, true)); gap(content, 10);
+            content.addView(text(tab == 1 ? "나에게 맞게 설정" : "한 번 연결하고\n편하게 출석하세요.", 28, INK, true)); gap(content, 8);
+            content.addView(text(tab == 1 ? "Wi-Fi · 장소 · 수업 일정" : "사이트 인증과 휴대폰 권한을 확인하세요.", 14, MUTED, false));
+            gap(content, 24);
+            if (tab == 1) settings(); else connection();
+        }
+        tabs = new LinearLayout(this); tabs.setPadding(dp(16), dp(10), dp(16), dp(10));
+        tabs.setBackgroundColor(tab == 0 ? homeTheme.surface : Color.WHITE);
         String[] labels = {"오늘", "설정", "연결"};
         for (int i = 0; i < labels.length; i++) {
             final int target = i; Button item = button(labels[i], selected == i, () -> render(target));
@@ -127,24 +158,69 @@ public final class MainActivity extends Activity {
         root.addView(tabs);
     }
 
+    @SuppressWarnings("deprecation")
+    private void updateSystemBars(boolean night, int background) {
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(background);
+        if (Build.VERSION.SDK_INT >= 29) getWindow().setNavigationBarContrastEnforced(false);
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                controller.setSystemBarsAppearance(night ? 0 : light, light);
+            }
+        } else {
+            int light = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            View decor = getWindow().getDecorView();
+            decor.setSystemUiVisibility(night ? decor.getSystemUiVisibility() & ~light : decor.getSystemUiVisibility() | light);
+        }
+    }
+
     private void home() {
+        LinearLayout hero = new LinearLayout(this); hero.setOrientation(LinearLayout.VERTICAL);
+        hero.setBackground(shape(homeTheme.soft, 22)); hero.setClipToOutline(true);
+        ImageView illustration = new ImageView(this);
+        illustration.setImageResource(homeTheme == HomeTheme.NIGHT ? R.drawable.hero_night : R.drawable.hero_warm);
+        illustration.setScaleType(ImageView.ScaleType.MATRIX);
+        final float verticalFocus = homeTheme == HomeTheme.WARM ? .82f : .5f;
+        illustration.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
+            android.graphics.drawable.Drawable asset = illustration.getDrawable();
+            float width = r-l, height = b-t;
+            float scale = Math.max(width/asset.getIntrinsicWidth(), height/asset.getIntrinsicHeight());
+            android.graphics.Matrix matrix = new android.graphics.Matrix(); matrix.setScale(scale, scale);
+            matrix.postTranslate((width-asset.getIntrinsicWidth()*scale)/2, (height-asset.getIntrinsicHeight()*scale)*verticalFocus);
+            illustration.setImageMatrix(matrix);
+        });
+        illustration.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        hero.addView(illustration, new LinearLayout.LayoutParams(-1, dp(144)));
+        TextView greeting = text(homeTheme == HomeTheme.NIGHT ? "차분하게 하루를 마무리해요." : "오늘도 좋은 배움이 기다려요.", 14, homeTheme.ink, true);
+        greeting.setPadding(dp(16), dp(10), dp(16), dp(11)); hero.addView(greeting);
+        LinearLayout.LayoutParams heroParams = new LinearLayout.LayoutParams(-1, -2); heroParams.bottomMargin = dp(16);
+        content.addView(hero, heroParams);
+
         LinearLayout state = card("출결 현황");
-        status = text("", 21, INK, true); detail = text("", 13, MUTED, false);
-        state.addView(status); gap(state, 8); state.addView(detail); gap(state, 20);
+        status = text("", 20, homeTheme.ink, true); detail = text("", 12, homeTheme.muted, false);
+        state.addView(status); gap(state, 6); state.addView(detail); gap(state, 18);
         LinearLayout times = new LinearLayout(this);
         LinearLayout left = new LinearLayout(this); left.setOrientation(LinearLayout.VERTICAL);
-        left.addView(text("입실", 13, MUTED, false)); inTime = text("—", 28, TEAL, true); left.addView(inTime);
-        LinearLayout right = new LinearLayout(this); right.setOrientation(LinearLayout.VERTICAL);
-        right.addView(text("퇴실", 13, MUTED, false)); outTime = text("—", 28, TEAL, true); right.addView(outTime);
+        left.addView(text("입실", 12, homeTheme.muted, false)); gap(left, 3);
+        inTime = text("—", 30, homeTheme.accent, true); inTime.setFontFeatureSettings("tnum"); left.addView(inTime);
+        LinearLayout right = new LinearLayout(this); right.setOrientation(LinearLayout.VERTICAL); right.setPadding(dp(18), 0, 0, 0);
+        right.addView(text("퇴실", 12, homeTheme.muted, false)); gap(right, 3);
+        outTime = text("—", 30, homeTheme.accent, true); outTime.setFontFeatureSettings("tnum"); right.addView(outTime);
         times.addView(left, new LinearLayout.LayoutParams(0, -2, 1));
+        View divider = new View(this); divider.setBackgroundColor(homeTheme.border);
+        times.addView(divider, new LinearLayout.LayoutParams(dp(1), -1));
         times.addView(right, new LinearLayout.LayoutParams(0, -2, 1)); state.addView(times);
-        action(state, "달력에서 출결 조회", false, this::attendanceCalendar);
+        gap(state, 10);
+        state.addView(button("달력에서 출결 조회  ›", true, this::attendanceCalendar), new LinearLayout.LayoutParams(-1, -2));
         LinearLayout log = card("오늘 로그");
-        todayLog = text("", 14, MUTED, false); log.addView(todayLog);
+        todayLog = text("", 13, homeTheme.muted, false); todayLog.setLineSpacing(dp(8), 1); log.addView(todayLog);
         updateHome();
     }
+
     private void attendanceCalendar() {
-        LocalDate today = LocalDate.now(Policy.ZONE);
+        LocalDate today = ZonedDateTime.now(homeClock).withZoneSameInstant(Policy.ZONE).toLocalDate();
         new DatePickerDialog(this, (view, y, m, d) -> showAttendance(LocalDate.of(y, m+1, d)),
             today.getYear(), today.getMonthValue()-1, today.getDayOfMonth()).show();
     }
@@ -163,9 +239,13 @@ public final class MainActivity extends Activity {
 
     private void updateHome() {
         if (status == null || selected != 0) return;
-        Policy.Record record = prefs.history(LocalDate.now(Policy.ZONE));
+        ZonedDateTime now = ZonedDateTime.now(homeClock).withZoneSameInstant(Policy.ZONE);
+        if (HomeTheme.at(now, prefs.end(), prefs.checkout()) != homeTheme || !now.toLocalDate().equals(homeDay) || !prefs.checkout().equals(homeCheckout) || !prefs.end().equals(homeEntryEnd)) {
+            int position = homeScroll.getScrollY(); render(0); homeScroll.post(() -> homeScroll.scrollTo(0, position)); return;
+        }
+        Policy.Record record = prefs.history(now.toLocalDate());
         String entry = record == null ? "" : record.in(), exit = record == null ? "" : record.out();
-        String title = !exit.isEmpty() ? "오늘 출결 완료" : !entry.isEmpty() ? "입실 완료 · 퇴실 예약 대기"
+        String title = !exit.isEmpty() ? "오늘 출결 완료" : !entry.isEmpty() ? "입실 완료"
             : MonitorService.running ? prefs.raw.getString("status", "입실 확인 중")
             : prefs.enabled() ? "출석 예약 대기" : "출석 예약 꺼짐";
         String description = prefs.enabled() ? "입실 " + prefs.start() + "–" + prefs.end() + " · 퇴실 " + prefs.checkout()
@@ -173,7 +253,7 @@ public final class MainActivity extends Activity {
         if (MonitorService.running) description = prefs.raw.getString("detail", description);
         setIfChanged(status, title); setIfChanged(detail, description);
         setIfChanged(inTime, entry.isEmpty() ? "—" : entry); setIfChanged(outTime, exit.isEmpty() ? "—" : exit);
-        String log = prefs.todayLog();
+        String log = prefs.raw.getString("log:" + now.toLocalDate(), "");
         setIfChanged(todayLog, log.isEmpty() ? "아직 오늘 기록이 없습니다." : log);
     }
 
@@ -200,6 +280,7 @@ public final class MainActivity extends Activity {
         schedule.addView(text("입실 " + prefs.start() + "–" + prefs.end() + "\n퇴실 " + prefs.checkout(), 21, INK, true));
         note(schedule, "입실 완료 또는 입실 종료 시 감시를 끕니다. 퇴실은 예약 시각에 다시 확인하고 완료하면 종료합니다.");
         note(schedule, "퇴실 재시도: 최대 " + prefs.retryMinutes() + "분 · 한국 시간");
+        note(schedule, "오늘 화면: 따뜻한 일러스트 → " + HomeTheme.nightStarts(prefs.end(), prefs.checkout()) + "부터 야간 테마. 퇴실 1시간 전에 전환하며 입실 시간과 겹치면 입실 종료 후 전환합니다. 자정에 밝은 테마로 돌아옵니다.");
         action(schedule, "요일 · 입실 · 퇴실 시간 변경", false, this::editSchedule);
         action(schedule, "달력에서 휴강일 등록 (" + prefs.excluded().size() + "일)", false, this::editExcluded);
         LinearLayout automation = card("출석 예약");
@@ -416,7 +497,7 @@ public final class MainActivity extends Activity {
                 .setMessage("보류를 해제하면 설정한 시간 안에서 다시 클릭할 수 있습니다.").setNegativeButton("취소",null)
                 .setPositiveButton("확인했고 해제",(d,w) -> { prefs.raw.edit().remove("chrome_pending").apply(); render(2); }).show());
         }
-        LinearLayout info = card("출석 메이트 0.2.1");
+        LinearLayout info = card("출석 메이트 0.3.0");
         note(info,"출결 달력에는 앱이 Chrome에서 확인한 기록을 표시합니다. 이전 전체 기록은 Chrome 출결 화면에서 확인하세요.");
     }
 

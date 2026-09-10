@@ -1,0 +1,15 @@
+{
+  "generator": "Built-in image_gen imagegen",
+  "date": "2026-09-10",
+  "note": "Text-free assets derived from the user's selected warm-campus and midnight-study concept references. All UI text is rendered natively by Android. Original generated files retained.",
+  "images": [
+    {
+      "asset": "app/src/main/res/drawable-nodpi/hero_warm.png",
+      "prompt": "Create a NEW decorative landscape hero illustration asset for a Korean classroom attendance Android app. Use the reference ONLY for the warm morning palette, peaceful classroom mood and soft illustrated tactile aesthetic. Output just a standalone wide landscape illustration, approximately 3:2 landscape canvas; not a phone, not a screenshot, absolutely NO text, letters, numbers, UI, logos, borders or watermarks. Composition must work when center-cropped to a wide 2.4:1 banner: keep essential objects within middle 55 percent of vertical height. Morning sunlight spilling through an open light oak classroom doorway, a small leafy plant in a cream ceramic pot and one closed unmarked apricot notebook on a pale table, distant desks softly receding. Tasteful editorial 3D clay and soft watercolor illustration, warm ivory, muted apricot, honey oak, cocoa and tiny sage details. Calm, premium, welcoming, simple forms, no people. Generous breathing room, a balanced wide composition with main plant and notebook toward lower-middle right, softly lit wall on left. No writing anywhere."
+    },
+    {
+      "asset": "app/src/main/res/drawable-nodpi/hero_night.png",
+      "prompt": "Create a NEW decorative landscape hero illustration asset for a Korean classroom attendance Android app. Use the reference ONLY for the quiet evening classroom mood and navy/ice blue palette, with a restrained amber lamp. Output just a standalone wide landscape illustration, approximately 3:2 landscape canvas; not a phone, not a screenshot, absolutely NO text, letters, numbers, UI, logos, borders or watermarks. Composition must work when center-cropped to a wide 2.4:1 banner: keep essential objects within middle 55 percent of vertical height. A quiet evening classroom desk beside a window showing a small crescent moon and distant blue city silhouettes, one closed unmarked navy notebook and small navy desk lamp casting warm amber light, tiny plant silhouette. Tasteful editorial 3D clay and soft painterly illustration, deep navy #121C2D, blue slate #1B2940 and muted ice blue highlights #93BCE3, quiet intimate warm lamp lighting, no neon, no people. Simple, elegant, subtle gradients, enough visible detail on dark backgrounds, uncluttered premium composition. No writing anywhere."
+    }
+  ]
+}

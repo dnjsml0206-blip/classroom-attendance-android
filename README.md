@@ -2,7 +2,7 @@
 
 기존 **휴대폰 Chrome의 인증 상태**로 SK플래닛 출석 버튼을 처리하는 개인용 앱입니다.
 
-[APK 다운로드 · v0.2.1](https://github.com/dnjsml0206-blip/classroom-attendance-android/releases/tag/v0.2.1)
+[APK 다운로드 · v0.3.0](https://github.com/dnjsml0206-blip/classroom-attendance-android/releases/tag/v0.3.0)
 
 **실제 수강생 Chrome 인증과 강의실 Wi-Fi에서 확인이 필요한 초기 테스트 버전입니다.**
 화면이 잠겨 있으면 출석 알림을 눌러 잠금을 해제해야 합니다.
@@ -14,16 +14,19 @@
 - 입실 시작·종료, 퇴실 시각, 재시도 시간과 수업 요일은 설정에서 바꿀 수 있습니다.
 - 강의실 기본 반경은 **30m**입니다. 이전 기본값 150m도 업데이트 시 30m로 변경합니다.
 - 휴강일은 달력에서 추가·삭제합니다.
-- 오늘 탭은 출결 현황과 오늘 로그만 표시합니다. 현황의 달력 버튼으로 날짜별 확인 기록을 조회합니다.
+- 오늘 탭은 따뜻한 교실 일러스트와 출결 현황·오늘 로그를 표시합니다. 현황의 달력 버튼으로 날짜별 확인 기록을 조회합니다.
+- **퇴실 1시간 전부터 자정까지 야간 대시보드**로 자동 전환합니다. 기본 퇴실 17:50이면 **16:50**에 바뀌며, 설정을 바꾸면 전환 시각도 따라갑니다. 입실 시간과 겹치면 입실 종료 후 전환합니다. 한국 시간을 기준으로 화면을 보는 동안 또는 앱 복귀 시 반영하며 별도 백그라운드 작업은 추가하지 않습니다.
 - 기본 Wi-Fi `TACADEMY_5G`; 사용자 추가·삭제를 지원합니다.
 - 입실·퇴실 완료 알림은 항상 표시합니다. 날짜별·입실/퇴실별로 남고, 앱을 열거나 감시가 끝나도 자동 삭제하지 않습니다. 직접 지울 수 있으며 휴대폰의 앱 알림과 결과 알림 채널이 허용되어 있어야 합니다.
 - 인텔리전트 Wi-Fi 버튼은 기기에서 제공하는 메뉴를 우선 열고, 지원되는 갤럭시에서는 접근성으로 메뉴를 찾아 이동합니다.
 
-<p><img src="docs/screenshots/today.png" width="280" alt="오늘 출결과 로그"/> <img src="docs/screenshots/settings.png" width="280" alt="출석 시간과 예약 설정"/> <img src="docs/screenshots/notifications.png" width="280" alt="완료 알림 항상 표시 설정"/></p>
+<p><img src="docs/screenshots/today-warm.png" width="280" alt="입실 시간의 따뜻한 일러스트 테마"/> <img src="docs/screenshots/today-night.png" width="280" alt="퇴실 전 자동 전환한 야간 대시보드"/></p>
+
+위 화면은 실제 APK를 에뮬레이터에서 실행한 캡처이며 출결 시각과 로그는 화면 검증용 예시 데이터입니다. 설치된 앱에는 예시 기록이 들어가지 않습니다.
 
 ## 설치와 설정
 
-1. 릴리스의 `classroom-attendance-0.2.1-debug.apk`를 설치합니다. Android 8.0 이상을 지원하며 이전 릴리스 위에 업데이트할 수 있습니다.
+1. 릴리스의 `classroom-attendance-0.3.0-debug.apk`를 설치합니다. Android 8.0 이상을 지원하며 이전 릴리스 위에 업데이트할 수 있습니다.
 2. 연결 탭에서 **Chrome 출결 화면 열기**를 눌러 평소처럼 인증된 페이지가 열리는지 확인합니다. 이미 인증된 경우 재인증할 필요가 없습니다.
 3. **Chrome 접근성 설정**에서 출석 메이트 서비스를 켭니다.
 4. 정확한 위치·알림 권한을 허용하고 위치 권한을 **항상 허용**으로 설정합니다. **알람 및 리마인더**도 허용합니다.
@@ -59,6 +62,6 @@ JDK 21, Android SDK 36, Gradle Wrapper 9.3.1을 사용합니다.
 출력: `app/build/outputs/apk/debug/app-debug.apk`
 Windows에서는 `gradlew.bat`를 사용합니다.
 
-[검증 기록](docs/verification-v0.2.1.md) · [구조](docs/architecture.md) · [Android 설정](docs/android-setup.md) · [사이트 연동](docs/site-integration.md)
+[검증 기록](docs/verification-v0.3.0.md) · [구조](docs/architecture.md) · [Android 설정](docs/android-setup.md) · [사이트 연동](docs/site-integration.md)
 
 [설정 JSON](config/attendance.example.json)은 설명용이며 앱에서 가져오지는 않습니다.

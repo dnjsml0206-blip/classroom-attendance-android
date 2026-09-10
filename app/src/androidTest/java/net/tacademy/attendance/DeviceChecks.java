@@ -12,8 +12,10 @@ public final class DeviceChecks extends Instrumentation {
     private Map<String,?> saved;
     private MainActivity activity;
     private int checks;
-    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments); start(); }
+    private boolean themes;
+    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments); themes = arguments != null && "themes".equals(arguments.getString("suite")); start(); }
     @Override public void onStart() {
+        if (themes) { new ThemeChecks(this).run(); return; }
         Bundle result = new Bundle();
         try {
             if (!Build.HARDWARE.equals("ranchu") && !Build.HARDWARE.equals("goldfish")) throw new AssertionError("Emulator only");
