@@ -20,6 +20,9 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private String lockProbe="", lockAttendanceToken="";
     private final Set<String> lockTrace=new HashSet<>();
     private long lockProbeUntil;
+    private PhoneSettings.Target settingsTarget;
+    private int settingsStep, settingsScrolls;
+    private long settingsUntil, settingsActionAt;
     private boolean working, clicked, confirmationExpected, confirmationClicked, navigatingWifi, menuOpened;
     private Policy.Phase phase;
     private String day, key;
@@ -65,7 +68,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
             Notices.chromeAction(context, true, "접근성을 켜면 기존 Chrome 인증으로 출석 버튼을 처리합니다");
             if (done != null) done.run(); return;
         }
-        if (instance.working || instance.navigatingWifi) { if (done != null) done.run(); return; }
+        if (instance.working || instance.navigatingWifi || instance.settingsTarget!=null) { if (done != null) done.run(); return; }
         if (context.getSystemService(KeyguardManager.class).isKeyguardLocked() ||
                 !context.getSystemService(PowerManager.class).isInteractive()) {
             prefs.status("잠금 해제 후 Chrome에서 확인", "출석 알림을 눌러 화면 잠금을 해제해 주세요");
@@ -89,6 +92,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         service.handler.postDelayed(service.tick, 1200);
     }
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
+        if(settingsTarget!=null){return;} // The bounded settings poll owns only explicitly requested menu navigation.
         if (navigatingWifi && "com.android.settings".equals(string(event.getPackageName()))) { navigateWifi(); return; }
         if (working && "com.android.chrome".equals(string(event.getPackageName()))) {
             handler.removeCallbacks(tick); handler.postDelayed(tick, 300);
@@ -208,7 +212,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     }
     private void finishWork() {
         working = false; lockAttendanceToken=""; handler.removeCallbacks(timeout); handler.removeCallbacks(tick);
-        if (!navigatingWifi && lockProbe.isEmpty()) events(false);
+        if (!navigatingWifi && settingsTarget==null && lockProbe.isEmpty()) events(false);
         Runnable done = finished; finished = null;
         if (done != null) done.run();
     }
@@ -224,7 +228,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
             LockLab.finish(context,token,"Chrome 접근성 연결 끊김 · 화면 확인과 클릭을 시작하지 않았습니다");return;
         }
         ChromeAttendanceService service=instance;
-        if(service.working||service.navigatingWifi){LockLab.finish(context,token,"다른 Chrome/설정 작업 진행 중 · 테스트 보류");return;}
+        if(service.working||service.navigatingWifi||service.settingsTarget!=null){LockLab.finish(context,token,"다른 Chrome/설정 작업 진행 중 · 테스트 보류");return;}
         service.endLockProbe(null);service.lockProbe=token;service.lockProbeUntil=SystemClock.elapsedRealtime()+20000;service.events(true);
         LockLab.stage(context,token,"Chrome 실행 요청 · 출결 주소 표시 확인 중");
         if(!openChrome(context,SiteProtocol.PAGE)){service.endLockProbe("Chrome 실행 실패");return;}
@@ -248,11 +252,70 @@ public final class ChromeAttendanceService extends AccessibilityService {
     }};
     private void endLockProbe(String result){
         String token=lockProbe;lockProbe="";handler.removeCallbacks(lockProbeTick);
-        if(!working&&!navigatingWifi)events(false);
+        if(!working&&!navigatingWifi&&settingsTarget==null)events(false);
         if(result!=null&&!token.isEmpty())LockLab.finish(this,token,result);
     }
     public static void cancelLockProbe(){if(instance!=null)instance.endLockProbe(null);}
+    public static boolean settingsMenu(Activity activity,PhoneSettings.Target target){
+        if(instance==null||instance.working||instance.navigatingWifi||!instance.lockProbe.isEmpty())return false;
+        if(target!=PhoneSettings.Target.LOCATION_PERMISSION&&target!=PhoneSettings.Target.BATTERY&&target!=PhoneSettings.Target.EXTEND)return false;
+        cancelSettingsMenu();ChromeAttendanceService s=instance;s.settingsTarget=target;s.settingsStep=0;s.settingsScrolls=0;
+        s.settingsUntil=SystemClock.elapsedRealtime()+15000;s.settingsActionAt=SystemClock.elapsedRealtime();s.events(true);s.handler.postDelayed(s.settingsTick,700);return true;
+    }
+    public static void cancelSettingsMenu(){if(instance!=null)instance.endSettingsMenu(false);}
+    private void endSettingsMenu(boolean guide){
+        PhoneSettings.Target target=settingsTarget;settingsTarget=null;handler.removeCallbacks(settingsTick);
+        if(!working&&!navigatingWifi&&lockProbe.isEmpty())events(false);
+        if(guide&&target!=null)Toast.makeText(this,PhoneSettings.guide(target),Toast.LENGTH_LONG).show();
+    }
+    private final Runnable settingsTick=new Runnable(){@Override public void run(){
+        if(settingsTarget==null)return;
+        if(SystemClock.elapsedRealtime()>=settingsUntil){endSettingsMenu(true);return;}
+        navigateSettingsMenu();if(settingsTarget!=null)handler.postDelayed(this,700);
+    }};
+    private void navigateSettingsMenu(){
+        if(getSystemService(KeyguardManager.class).isDeviceLocked()){endSettingsMenu(true);return;}
+        AccessibilityNodeInfo root=focusedRoot();if(root==null)return;
+        String pkg=string(root.getPackageName());
+        if(!Set.of("com.android.settings","com.android.permissioncontroller","com.google.android.permissioncontroller").contains(pkg)){
+            if(!getPackageName().equals(pkg))endSettingsMenu(false);return;
+        }
+        if(SystemClock.elapsedRealtime()-settingsActionAt<900)return;
+        List<AccessibilityNodeInfo> nodes=new ArrayList<>();collect(root,nodes,0);
+        boolean ownApp=allText(nodes).contains(getString(R.string.app_name));
+        String[] names;boolean last;
+        if(settingsTarget==PhoneSettings.Target.LOCATION_PERMISSION){
+            if(!ownApp)return;
+            names=settingsStep==0?new String[]{"권한","Permissions"}:new String[]{"위치","Location"};last=settingsStep==1;
+        }else if(settingsTarget==PhoneSettings.Target.BATTERY){
+            if(!ownApp)return;names=new String[]{"배터리","앱 배터리 사용량","Battery","App battery usage"};last=true;
+        }else{
+            AccessibilityNodeInfo extend=menuButton(nodes,"Extend Unlock","Smart Lock","잠금 해제 유지");
+            if(extend!=null&&click(extend)){endSettingsMenu(false);return;}
+            if(settingsStep>0)return;
+            names=Build.MANUFACTURER.equalsIgnoreCase("samsung")?new String[]{"잠금화면 및 AOD","잠금화면","Lock screen and AOD","Lock screen"}
+                :new String[]{"보안 및 개인정보 보호 더보기","기타 보안 설정","More security & privacy","More security settings"};last=false;
+        }
+        AccessibilityNodeInfo button=menuButton(nodes,names);
+        if(button!=null){
+            // A newly composed row may reject its first click. Keep it in view and retry.
+            if(click(button)){settingsActionAt=SystemClock.elapsedRealtime();settingsStep++;settingsScrolls=0;if(last)endSettingsMenu(false);}
+            return;
+        }
+        if(settingsScrolls<3)for(AccessibilityNodeInfo node:nodes)if(node.isScrollable()&&node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)){
+            settingsScrolls++;settingsActionAt=SystemClock.elapsedRealtime();return;
+        }
+    }
+    private static AccessibilityNodeInfo menuButton(List<AccessibilityNodeInfo> nodes,String... names){
+        AccessibilityNodeInfo button=exactButton(nodes,names);
+        // Old Android permission lists sometimes expose a switch instead of a submenu. Never toggle it.
+        if(button==null)return null;
+        List<AccessibilityNodeInfo> children=new ArrayList<>();collect(button,children,0);
+        for(AccessibilityNodeInfo child:children)if(child.isCheckable()||string(child.getClassName()).contains("Switch")||string(child.getClassName()).contains("CheckBox"))return null;
+        return button;
+    }
     public static void intelligentWifi(Activity activity) {
+        cancelSettingsMenu();
         // Discover only exported activities supplied by the device's trusted Settings package.
         try {
             PackageInfo settings = activity.getPackageManager().getPackageInfo("com.android.settings", PackageManager.GET_ACTIVITIES);
@@ -289,8 +352,8 @@ public final class ChromeAttendanceService extends AccessibilityService {
             if (menu != null) menuOpened = click(menu);
         }
     }
-    @Override public void onInterrupt() { endLockProbe("접근성 연결 중단"); finishWork(); }
+    @Override public void onInterrupt() { endSettingsMenu(false); endLockProbe("접근성 연결 중단"); finishWork(); }
     @Override public void onDestroy() {
-        endLockProbe("접근성 연결 종료"); finishWork(); navigatingWifi = false; handler.removeCallbacksAndMessages(null); instance = null; super.onDestroy();
+        endSettingsMenu(false); endLockProbe("접근성 연결 종료"); finishWork(); navigatingWifi = false; handler.removeCallbacksAndMessages(null); instance = null; super.onDestroy();
     }
 }

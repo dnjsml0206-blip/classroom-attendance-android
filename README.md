@@ -2,7 +2,7 @@
 
 기존 **휴대폰 Chrome의 인증 상태**로 SK플래닛 출석 버튼을 처리하는 개인용 앱입니다.
 
-[APK 다운로드 · v0.5.1](https://github.com/dnjsml0206-blip/classroom-attendance-android/releases/tag/v0.5.1)
+[APK 다운로드 · v0.5.2](https://github.com/dnjsml0206-blip/classroom-attendance-android/releases/tag/v0.5.2)
 
 **실제 수강생 Chrome 인증과 강의실 Wi-Fi에서 확인이 필요한 초기 테스트 버전입니다.**
 화면이 잠겨 있으면 출석 알림을 눌러 잠금을 해제해야 합니다.
@@ -23,6 +23,16 @@
 <p><img src="docs/screenshots/today-warm.png" width="280" alt="입실 시간의 따뜻한 일러스트 테마"/> <img src="docs/screenshots/today-night.png" width="280" alt="퇴실 전 자동 전환한 야간 대시보드"/></p>
 
 위 화면은 실제 APK를 에뮬레이터에서 실행한 캡처이며 출결 시각과 로그는 화면 검증용 예시 데이터입니다. 설치된 앱에는 예시 기록이 들어가지 않습니다.
+
+## v0.5.2 설정 바로가기와 완료 표시
+
+설정·연결·임시 테스트 화면에서 **기본 설정 n/7 완료**를 표시합니다. 각 항목을 누르면 해당 설정 화면으로 이동하고, 앱으로 돌아왔을 때와 화면을 보고 있는 동안 실제 권한·서비스 연결·예약·자동 클릭 상태를 다시 읽습니다. Wi-Fi와 Extend Unlock은 시험 직전 조건으로 따로 표시합니다. Extend Unlock은 활성 여부를 앱에서 확정할 수 없어 항상 ‘휴대폰에서 확인’으로 표시합니다.
+
+정확한 알람과 알림은 앱별 화면을 바로 엽니다. 위치·배터리는 앱 정보에서 시작해, 접근성이 연결되어 있으면 지원되는 하위 메뉴까지 이동하며, 메뉴를 읽을 수 없으면 남은 경로를 안내합니다. Android가 접근성 상세 화면 직접 실행을 제한하므로 공개 설정 화면에서 이 앱 항목을 강조하며, 지원하지 않는 기기에는 다음 경로를 안내합니다. 권한 스위치·허용 버튼·PIN은 자동으로 조작하지 않습니다.
+
+[설정별 확인 기준](docs/settings-shortcuts.md) · [v0.5.2 검증 기록](docs/verification-v0.5.2.md)
+
+업데이트 후 임시 테스트 예약은 다시 해야 합니다. 오늘 17:50 시험은 설치 후 Extend Unlock을 선택하고 **오늘 17:50 퇴실 테스트 예약**을 눌러 주세요.
 
 ## v0.5.1 진단 개선
 
@@ -45,7 +55,7 @@
 
 ## 설치와 설정
 
-1. 릴리스의 `classroom-attendance-0.5.1-debug.apk`를 설치합니다. Android 8.0 이상을 지원하며 이전 릴리스 위에 업데이트할 수 있습니다.
+1. 릴리스의 `classroom-attendance-0.5.2-debug.apk`를 설치합니다. Android 8.0 이상을 지원하며 이전 릴리스 위에 업데이트할 수 있습니다.
 2. 연결 탭에서 **Chrome 출결 화면 열기**를 눌러 평소처럼 인증된 페이지가 열리는지 확인합니다. 이미 인증된 경우 재인증할 필요가 없습니다.
 3. **Chrome 접근성 설정**에서 출석 메이트 서비스를 켭니다.
 4. 정확한 위치·알림 권한을 허용하고 위치 권한을 **항상 허용**으로 설정합니다. **알람 및 리마인더**도 허용합니다.
@@ -81,6 +91,6 @@ JDK 21, Android SDK 36, Gradle Wrapper 9.3.1을 사용합니다.
 출력: `app/build/outputs/apk/debug/app-debug.apk`
 Windows에서는 `gradlew.bat`를 사용합니다.
 
-[검증 기록](docs/verification-v0.5.1.md) · [구조](docs/architecture.md) · [Android 설정](docs/android-setup.md) · [사이트 연동](docs/site-integration.md)
+[검증 기록](docs/verification-v0.5.2.md) · [구조](docs/architecture.md) · [Android 설정](docs/android-setup.md) · [사이트 연동](docs/site-integration.md)
 
 [설정 JSON](config/attendance.example.json)은 설명용이며 앱에서 가져오지는 않습니다.

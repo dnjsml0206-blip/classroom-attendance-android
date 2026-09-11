@@ -18,6 +18,7 @@ public final class LockLabActivity extends Activity {
     private LinearLayout content;
     private TextView current, progress, log, preparation, procedure, expected, guideNote, readiness;
     private Button reserve, immediate, checkout;
+    private SetupStatusView setupStatus;
     private Spinner methods, delay;
     private Switch actual;
     private final Runnable refresh=new Runnable(){@Override public void run(){update();handler.postDelayed(this,1000);}};
@@ -36,10 +37,9 @@ public final class LockLabActivity extends Activity {
         content.addView(text("잠금 상태 테스트",28,INK,true));space(content,8);
         content.addView(text("설정 확인 → 조회 또는 실제 출결 선택 → 예약 → 결과 기록\n화면 켜짐·잠금 해제 상태에서도 시험할 수 있습니다.",14,MUTED,false));space(content,18);
 
-        LinearLayout setup=card("실행 준비");readiness=text("",14,INK,false);setup.addView(readiness);
-        add(setup,"연결 · 권한 설정",true,()->open(new Intent(this,MainActivity.class).putExtra("open_tab",2)));
-        add(setup,"출석 예약 · 자동 클릭 설정",false,()->open(new Intent(this,MainActivity.class).putExtra("open_tab",1)));
-        setup.addView(text("접근성을 켰는데도 연결 안 됨이면 휴대폰 접근성 설정에서 껐다 켜 주세요. 시험을 시작할 때 빠진 조건을 다시 확인합니다.",12,MUTED,false));
+        LinearLayout setup=card("실행 준비");readiness=text("",14,INK,true);setup.addView(readiness);
+        setupStatus=new SetupStatusView(this,true);setup.addView(setupStatus);
+        setup.addView(text("Extend Unlock 활성 여부는 앱에서 판별할 수 없습니다. 휴대폰 설정과 실제 시험으로 확인하세요.",12,MUTED,false));
         LinearLayout select=card("1. 테스트 방법");
         methods=new Spinner(this);String[] labels=new String[LockTestPolicy.Mode.values().length];
         for(int i=0;i<labels.length;i++)labels[i]=LockTestPolicy.Mode.values()[i].label;
@@ -64,12 +64,12 @@ public final class LockLabActivity extends Activity {
 
         LinearLayout phone=card("3. 휴대폰 상태와 신뢰 설정");phone.addView(text(LockLab.device(),14,INK,true));current=text("",13,MUTED,false);space(phone,8);phone.addView(current);
         phone.addView(text("Extend Unlock은 예전 Smart Lock입니다. 휴대폰에서 신뢰하는 기기·장소·신체 활동 감지를 직접 설정한 뒤 각각 시험하세요. 앱에서는 활성화된 신뢰 방식을 판별할 수 없습니다.",13,MUTED,false));
-        add(phone,"보안 · Extend Unlock 설정",false,()->{open(new Intent(Settings.ACTION_SECURITY_SETTINGS));Toast.makeText(this,"보안 또는 잠금화면 메뉴에서 Extend Unlock / Smart Lock을 선택하세요",Toast.LENGTH_LONG).show();});
+        add(phone,"보안 · Extend Unlock 설정",false,()->PhoneSettings.open(this,PhoneSettings.Target.EXTEND));
         add(phone,"신뢰 방식별 준비 방법",false,this::trustHelp);
-        add(phone,"Chrome 접근성 설정",false,()->open(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
-        add(phone,"알람 및 리마인더 설정",false,()->open(Build.VERSION.SDK_INT>=31?new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+getPackageName())):new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName()))));
-        add(phone,"위치 항상 허용 설정",false,()->open(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName()))));
-        add(phone,"테스트 알림 설정",false,()->open(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName())));
+        add(phone,"Chrome 접근성 설정",false,()->PhoneSettings.open(this,PhoneSettings.Target.ACCESSIBILITY));
+        add(phone,"알람 및 리마인더 설정",false,()->PhoneSettings.open(this,PhoneSettings.Target.ALARMS));
+        add(phone,"위치 항상 허용 설정",false,()->PhoneSettings.open(this,PhoneSettings.Target.LOCATION_PERMISSION));
+        add(phone,"테스트 알림 설정",false,()->PhoneSettings.open(this,PhoneSettings.Target.TEST_NOTIFICATIONS));
         add(phone,"서버 인증 · API 준비 상태",false,()->new AlertDialog.Builder(this).setTitle("서버 직접 처리 · 미연동")
             .setMessage("Chrome 인증은 앱의 서버 인증으로 공유되지 않습니다. 현재 잠금 유지 테스트는 등록 Wi-Fi에서 HTTPS 연결 응답만 확인합니다.\n\n앱 전용 인증 방법과 출결 API가 확보되어야 잠금 상태의 실제 출결 처리를 연결할 수 있습니다. 연결 응답이 와도 인증·출결 성공으로 표시하지 않습니다.")
             .setPositiveButton("확인",null).show());
@@ -110,10 +110,14 @@ public final class LockLabActivity extends Activity {
         try{LockLab.prepareCheckout(this,selected());update();Toast.makeText(this,"오늘 "+new Prefs(this).checkout()+" 퇴실 테스트를 예약했습니다",Toast.LENGTH_LONG).show();}
         catch(IllegalStateException e){showProblems(e.getMessage());}
     }
-    private void showProblems(String message){new AlertDialog.Builder(this).setTitle("테스트를 시작하지 않았습니다")
-        .setMessage(message).setPositiveButton("확인",null)
-        .setNeutralButton("연결 설정",(d,w)->open(new Intent(this,MainActivity.class).putExtra("open_tab",2)))
-        .setNegativeButton("출석 설정",(d,w)->open(new Intent(this,MainActivity.class).putExtra("open_tab",1))).show();}
+    private void showProblems(String message){
+        java.util.List<PhoneSettings.Target> targets=new java.util.ArrayList<>();java.util.List<String> labels=new java.util.ArrayList<>();
+        for(String issue:message.split("\n")){PhoneSettings.Target target=PhoneSettings.forProblem(issue);if(target!=null&&!targets.contains(target)){targets.add(target);labels.add(issue+"  ›");}}
+        AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("설정이 필요합니다").setPositiveButton("닫기",null);
+        if(targets.isEmpty())dialog.setMessage(message);
+        else dialog.setItems(labels.toArray(new String[0]),(d,index)->PhoneSettings.open(this,targets.get(index)));
+        dialog.show();
+    }
     private TextView guideStep(LinearLayout parent,String title){
         space(parent,12);parent.addView(text(title,12,ACCENT,true));space(parent,3);
         TextView value=text("",14,INK,false);parent.addView(value);return value;
@@ -141,7 +145,7 @@ public final class LockLabActivity extends Activity {
         }).show();
     }
     private void update(){if(progress==null)return;LockLab.expire(this);
-        readiness.setText(TrialReadiness.status(this,actual.isChecked()));
+        readiness.setText(actual.isChecked()?"실제 출결 시도 · 조건을 만족하면 버튼을 누릅니다":"조회 전용 · 입실·퇴실 버튼을 누르지 않습니다");setupStatus.refresh();
         reserve.setText(actual.isChecked()?"실제 출결 테스트 예약":"조회 테스트 예약");
         immediate.setText(actual.isChecked()?"지금 실제 출결 테스트":"지금 조회 테스트");
         checkout.setText(getString(R.string.checkout_trial_button,new Prefs(this).checkout()));
@@ -158,7 +162,7 @@ public final class LockLabActivity extends Activity {
     private void space(LinearLayout p,int n){p.addView(new View(this),new LinearLayout.LayoutParams(1,dp(n)));}
     private LinearLayout card(String title){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(18),dp(18),dp(18),dp(18));GradientDrawable bg=new GradientDrawable();bg.setColor(0xFFFFFFFF);bg.setCornerRadius(dp(20));c.setBackground(bg);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(14);content.addView(c,lp);c.addView(text(title,14,ACCENT,true));space(c,10);return c;}
     private Button add(LinearLayout p,String label,boolean primary,Runnable action){space(p,10);Button b=new Button(this);b.setText(label);b.setTextSize(14);b.setAllCaps(false);b.setTextColor(primary?0xFFFFFFFF:ACCENT);b.setStateListAnimator(null);b.setMinHeight(dp(48));GradientDrawable bg=new GradientDrawable();bg.setColor(primary?ACCENT:0xFFE5F2EF);bg.setCornerRadius(dp(12));b.setBackground(bg);b.setPadding(dp(10),dp(8),dp(10),dp(8));b.setOnClickListener(v->action.run());p.addView(b,new LinearLayout.LayoutParams(-1,-2));return b;}
-    @Override protected void onResume(){super.onResume();handler.removeCallbacks(refresh);handler.post(refresh);}
+    @Override protected void onResume(){super.onResume();ChromeAttendanceService.cancelSettingsMenu();handler.removeCallbacks(refresh);handler.post(refresh);}
     @Override protected void onPause(){handler.removeCallbacks(refresh);super.onPause();}
     @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);super.onDestroy();}
 }

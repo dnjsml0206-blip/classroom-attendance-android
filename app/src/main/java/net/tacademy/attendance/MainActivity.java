@@ -25,6 +25,7 @@ public final class MainActivity extends Activity {
     private LinearLayout root, content, tabs;
     private int selected;
     private boolean pendingStart, pendingLocation;
+    private SetupStatusView setupStatus;
     private TextView status, detail, inTime, outTime, todayLog;
     private HomeTheme homeTheme;
     private LocalDate homeDay;
@@ -34,7 +35,7 @@ public final class MainActivity extends Activity {
     private LocationManager locationManager;
     private LocationListener oneLocation;
     private final Runnable refresh = new Runnable() {
-        @Override public void run() { if (selected == 0) updateHome(); handler.postDelayed(this, 2000); }
+        @Override public void run() { if (selected == 0) updateHome(); else if(setupStatus!=null)setupStatus.refresh(); handler.postDelayed(this, 2000); }
     };
 
     @Override public void onCreate(Bundle state) {
@@ -56,7 +57,7 @@ public final class MainActivity extends Activity {
         render(Math.max(0,Math.min(2,getIntent().getIntExtra("open_tab",0))));
     }
     @Override protected void onResume() {
-        super.onResume();
+        super.onResume(); ChromeAttendanceService.cancelSettingsMenu();
         handler.removeCallbacks(refresh); handler.post(refresh);
         if (selected != 0) render(selected);
         if (prefs.enabled()) ScheduleController.reconcile(this);
@@ -119,7 +120,7 @@ public final class MainActivity extends Activity {
     }
 
     private void render(int tab) {
-        selected = tab; root.removeAllViews();
+        selected = tab; setupStatus=null; root.removeAllViews();
         ZonedDateTime now = ZonedDateTime.now(homeClock).withZoneSameInstant(Policy.ZONE);
         homeDay = now.toLocalDate(); homeCheckout = prefs.checkout(); homeEntryEnd = prefs.end();
         homeTheme = HomeTheme.at(now, homeEntryEnd, homeCheckout);
@@ -156,6 +157,9 @@ public final class MainActivity extends Activity {
             tabs.addView(item, p);
         }
         root.addView(tabs);
+        if(tab==1&&"automation".equals(getIntent().getStringExtra("focus_setting"))){
+            View focus=content.findViewWithTag("automation");if(focus!=null)scroll.post(()->{if(homeScroll==scroll){getIntent().removeExtra("focus_setting");scroll.smoothScrollTo(0,Math.max(0,focus.getTop()-dp(16)));}});
+        }
     }
 
     @SuppressWarnings("deprecation")
@@ -276,6 +280,7 @@ public final class MainActivity extends Activity {
     }
 
     private void settings() {
+        LinearLayout checks=card("설정 확인");setupStatus=new SetupStatusView(this,false);checks.addView(setupStatus);
         LinearLayout lab = card("임시 메뉴");
         note(lab,"화면 깨우기 · Extend Unlock · 신뢰 방식 · 시스템 인증 · 서버 연결을 직접 시험하고 결과를 기록합니다.");
         action(lab,"잠금 상태 테스트 열기",true,() -> startActivity(new Intent(this,LockLabActivity.class)));
@@ -286,7 +291,7 @@ public final class MainActivity extends Activity {
         note(schedule, "오늘 화면: 따뜻한 일러스트 → " + HomeTheme.nightStarts(prefs.end(), prefs.checkout()) + "부터 야간 테마. 퇴실 1시간 전에 전환하며 입실 시간과 겹치면 입실 종료 후 전환합니다. 자정에 밝은 테마로 돌아옵니다.");
         action(schedule, "요일 · 입실 · 퇴실 시간 변경", false, this::editSchedule);
         action(schedule, "달력에서 휴강일 등록 (" + prefs.excluded().size() + "일)", false, this::editExcluded);
-        LinearLayout automation = card("출석 예약");
+        LinearLayout automation = card("출석 예약");automation.setTag("automation");
         action(automation, prefs.enabled() ? "출석 예약 끄기" : "출석 예약 켜기", true, this::toggleMonitor);
         Switch auto = new Switch(this); auto.setText(R.string.automatic_chrome_click); auto.setTextSize(16); auto.setTextColor(INK); auto.setMinHeight(dp(48));
         auto.setChecked(prefs.auto()); automation.addView(auto);
@@ -302,8 +307,7 @@ public final class MainActivity extends Activity {
         note(notifications,"완료를 확인할 때마다 입실과 퇴실 알림을 따로 남깁니다. 앱을 열거나 감시가 끝나도 유지되며 직접 지울 수 있습니다.");
         note(notifications,Notices.attendanceNotificationsAllowed(this) ? "휴대폰에서 완료 알림을 허용하고 있습니다."
             : "휴대폰에서 알림이 차단되어 있습니다. 앱 알림과 ‘입실·퇴실 결과’ 알림을 허용해 주세요.");
-        action(notifications,"휴대폰 알림 설정",false,() -> startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-            .putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName())));
+        action(notifications,"휴대폰 알림 설정",false,() -> PhoneSettings.open(this,PhoneSettings.Target.NOTIFICATIONS));
         LinearLayout wifi = card("출석에 사용할 Wi-Fi");
         note(wifi, "등록한 Wi-Fi에서 Chrome 출석을 처리합니다. 이름은 대소문자를 구분합니다.");
         for (String ssid : prefs.ssids()) {
@@ -465,23 +469,20 @@ public final class MainActivity extends Activity {
     }
 
     private void connection() {
+        LinearLayout checks=card("설정 확인");setupStatus=new SetupStatusView(this,true);checks.addView(setupStatus);
         LinearLayout chrome = card("01  기존 Chrome 연결");
         chrome.addView(text(ChromeAttendanceService.available() ? "Chrome 접근성 연결됨" : "Chrome 접근성을 켜 주세요",18,INK,true));
         note(chrome,"휴대폰 Chrome에 저장된 인증을 그대로 사용합니다. 지정한 출석 화면의 버튼과 기록 시각을 확인합니다.");
-        note(chrome,"인텔리전트 Wi-Fi 버튼을 누를 때에는 휴대폰 설정 메뉴 이동에도 접근성을 사용합니다.");
+        note(chrome,"설정 항목을 누르면 해당 휴대폰 메뉴로 이동합니다. 권한 허용과 보안 설정 변경은 직접 선택합니다.");
         action(chrome,"Chrome 출결 화면 열기",true,() -> ChromeAttendanceService.openChrome(this,SiteProtocol.PAGE));
-        action(chrome,"Chrome 접근성 설정",false,() -> openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        action(chrome,"Chrome 접근성 설정",false,() -> PhoneSettings.open(this,PhoneSettings.Target.ACCESSIBILITY));
         action(chrome,"Chrome 인증 페이지 열기",false,() -> ChromeAttendanceService.openChrome(this,SiteProtocol.AUTH_PAGE));
         note(chrome,"이미 출결 화면이 열리면 다시 인증하지 않아도 됩니다. 화면이 잠겨 있으면 출석 알림을 눌러 잠금을 해제해 주세요.");
         LinearLayout permissions = card("02  위치와 알림");
         permissions.addView(text(ScheduleController.backgroundLocationAllowed(this) ? "위치 항상 허용됨" : "예약 실행에 위치 항상 허용 필요",17,INK,true));
         note(permissions,"예약 시간에 Wi-Fi 이름을 확인하고 입실 시간에만 강의실 위치를 확인합니다.");
         action(permissions,"위치 · 알림 권한 허용",false,this::permissions);
-        action(permissions,"위치 항상 허용 설정",false,() -> {
-            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) { permissions(); return; }
-            if (Build.VERSION.SDK_INT == 29) requestPermissions(new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION},11);
-            else startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())));
-        });
+        action(permissions,"위치 항상 허용 설정",false,() -> PhoneSettings.open(this,PhoneSettings.Target.LOCATION_PERMISSION));
         note(permissions,getSystemService(NotificationManager.class).areNotificationsEnabled() ? "알림 권한이 허용되어 있습니다." : "출석 알림을 받으려면 앱 알림을 허용해 주세요.");
         LinearLayout alarm = card("03  예약 실행");
         alarm.addView(text(AlarmScheduler.allowed(this) ? "정확한 알람 사용 가능" : "정확한 알람 허용 필요",18,INK,true));
@@ -489,8 +490,8 @@ public final class MainActivity extends Activity {
         note(alarm,next > 0 ? "다음 예약: "+Instant.ofEpochMilli(next).atZone(Policy.ZONE).format(DateTimeFormatter.ofPattern("M/d HH:mm"))
             : "설정에서 출석 예약을 켜면 수업일에 맞춰 예약합니다.");
         if (Build.VERSION.SDK_INT >= 31) action(alarm,"알람 및 리마인더 설정",false,
-            () -> startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+getPackageName()))));
-        action(alarm,"배터리 최적화 설정",false,() -> openSettings(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+            () -> PhoneSettings.open(this,PhoneSettings.Target.ALARMS));
+        action(alarm,"배터리 최적화 설정",false,() -> PhoneSettings.open(this,PhoneSettings.Target.BATTERY));
         note(alarm,"입실·퇴실 시간 밖에서는 감시를 종료합니다. 재부팅 후 예약을 복구하며 앱 강제 중지 후에는 앱을 다시 열어 주세요.");
         if (!prefs.raw.getString("chrome_pending","").isEmpty()) {
             LinearLayout pending = card("클릭 결과 확인");
@@ -500,7 +501,7 @@ public final class MainActivity extends Activity {
                 .setMessage("보류를 해제하면 설정한 시간 안에서 다시 클릭할 수 있습니다.").setNegativeButton("취소",null)
                 .setPositiveButton("확인했고 해제",(d,w) -> { prefs.raw.edit().remove("chrome_pending").apply(); render(2); }).show());
         }
-        LinearLayout info = card("출석 메이트 0.5.1");
+        LinearLayout info = card("출석 메이트 0.5.2");
         note(info,"출결 달력에는 앱이 Chrome에서 확인한 기록을 표시합니다. 이전 전체 기록은 Chrome 출결 화면에서 확인하세요.");
     }
 
