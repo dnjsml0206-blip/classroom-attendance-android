@@ -18,12 +18,17 @@ final class LockLogExport {
         try{
             out.put("app_version",c.getPackageManager().getPackageInfo(c.getPackageName(),0).versionName);
             out.put("device",LockLab.device()).put("emulator",Build.HARDWARE.equals("ranchu")||Build.HARDWARE.equals("goldfish"));
-            out.put("accessibility_connected",ChromeAttendanceService.available()).put("exact_alarm_allowed",AlarmScheduler.allowed(c));
+            out.put("accessibility_enabled",ChromeAttendanceService.configured(c)).put("accessibility_connected",ChromeAttendanceService.available()).put("exact_alarm_allowed",AlarmScheduler.allowed(c));
             out.put("notifications_enabled",c.getSystemService(NotificationManager.class).areNotificationsEnabled());
             out.put("location_permission",c.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED);
+            out.put("background_location_permission",ScheduleController.backgroundLocationAllowed(c));
+            out.put("location_enabled",Build.VERSION.SDK_INT<28||c.getSystemService(android.location.LocationManager.class).isLocationEnabled());
+            KeyguardManager keyguard=c.getSystemService(KeyguardManager.class);
+            out.put("screen_interactive",c.getSystemService(PowerManager.class).isInteractive()).put("keyguard_locked",keyguard.isKeyguardLocked()).put("device_locked",keyguard.isDeviceLocked());
+            out.put("attendance_notifications_enabled",Notices.attendanceNotificationsAllowed(c));
             out.put("battery_optimization_exempt",c.getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(c.getPackageName()));
-            NetworkAccess.State wifi=NetworkAccess.inspect(c);out.put("registered_wifi_connected",wifi.allowed()).put("wifi_check",wifi.reason());
-            Prefs p=new Prefs(c);out.put("schedule_enabled",p.enabled()).put("auto_click",p.raw.getBoolean("auto",false));
+            NetworkAccess.State wifi=NetworkAccess.inspect(c);out.put("registered_wifi_connected",wifi.allowed()).put("wifi_check",wifi.reason()).put("wifi_check_code",wifi.code()).put("wifi_transport_present",wifi.wifiTransportPresent()).put("ssid_visible",wifi.ssidVisible());
+            Prefs p=new Prefs(c);out.put("schedule_enabled",p.enabled()).put("auto_click",p.auto()).put("attendance_phase",p.phase(ZonedDateTime.now(Policy.ZONE)).name());
         }catch(Exception ignored){}return out;
     }
     static JSONObject current(Context c)throws JSONException{
@@ -34,7 +39,9 @@ final class LockLogExport {
         out.put("created_at_ms",p.get("created")).put("due_at_ms",p.get("due"));
         out.put("active",Boolean.TRUE.equals(p.get("active"))).put("actual_attendance_requested",Boolean.TRUE.equals(p.get("actual")));
         out.put("stage",p.get("stage")).put("user_verdict",p.get("verdict")).put("user_note",p.get("note"));
-        out.put("events",p.get("events"));
+        out.put("events",p.get("events")).put("user_interaction",p.getOrDefault("user_interaction",null));
+        for(String key:new String[]{"fired_at_ms","entry_at_ms","entry_delay_ms","entry_source","checkout_trial","target_phase"})out.put(key,p.containsKey(key)?p.get(key):JSONObject.NULL);
+        for(String key:new String[]{"entry_environment","handoff_environment"}){String value=(String)p.get(key);out.put(key,value==null?JSONObject.NULL:new JSONObject(value));}
         String env=(String)p.get("environment");out.put("environment",env==null?JSONObject.NULL:new JSONObject(env));
         String execution=(String)p.get("execution_environment");out.put("execution_environment",execution==null?JSONObject.NULL:new JSONObject(execution));
         out.put("legacy",env==null);return out;
@@ -61,7 +68,7 @@ final class LockLogExport {
     static JSONObject sanitize(JSONObject original)throws JSONException{
         // Traverse values instead of applying regex to encoded JSON; preserve valid escaping.
         JSONObject out=cleanObject(original);LogEvidence e=LogEvidence.read(out.optString("events"));
-        out.put("evidence",new JSONObject().put("screen_off_at_run",e.screenOffAtRun).put("automatic_entry",e.automaticEntry)
+        out.put("evidence",new JSONObject().put("screen_off_at_run",e.screenOffAtRun).put("automatic_entry",false).put("scheduled_entry",e.scheduledEntry).put("automatic_unlock_confirmed",false)
             .put("manual_notification_entry",e.manualEntry).put("immediate_entry",e.immediateEntry).put("chrome_address_observed",e.chromeObserved)
             .put("credential_needed_at_run",e.credentialNeeded).put("dismiss_requested",e.dismissRequested).put("dismiss_succeeded",e.dismissSucceeded)
             .put("attendance_record_confirmed",e.attendanceConfirmed).put("cancelled",e.cancelled).put("https_status",e.httpsStatus==null?JSONObject.NULL:e.httpsStatus));
@@ -76,8 +83,8 @@ final class LockLogExport {
     }
     static String digest(String value){try{byte[] hash=MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));StringBuilder out=new StringBuilder();for(byte b:hash)out.append(String.format(Locale.ROOT,"%02x",b&255));return out.toString();}catch(Exception e){throw new IllegalStateException(e);}}
     static JSONObject document(Context c,JSONArray records,String id)throws JSONException{
-        return new JSONObject().put("schema_version",1).put("report_id",id).put("exported_at",Instant.now().toString()).put("timezone","Asia/Seoul")
+        return new JSONObject().put("schema_version",2).put("report_id",id).put("exported_at",Instant.now().toString()).put("timezone","Asia/Seoul")
             .put("export_environment",environment(c)).put("records",records)
-            .put("analysis_note","사용자 판정과 앱 관찰을 구분하세요. Chrome 주소 확인은 출결 성공이 아니며, 서버 응답은 인증 성공이 아닙니다. 과거 legacy 기록의 날짜와 기기 설정은 알 수 없습니다. 메모는 사용자 입력입니다.");
+            .put("analysis_note","사용자 판정과 앱 관찰을 구분하세요. 예약 경로의 화면 진입은 자동 잠금 해제 증거가 아닙니다. user_interaction과 entry_delay_ms를 함께 확인하세요. Chrome 주소 확인은 출결 성공이 아니며, 서버 응답은 인증 성공이 아닙니다. 과거 legacy 기록의 날짜와 기기 설정은 알 수 없습니다. 메모는 사용자 입력입니다.");
     }
 }

@@ -12,7 +12,7 @@ public final class LockTestReceiver extends BroadcastReceiver {
         if(!LockLab.live(context,token)){LockLab.expire(context);return;}
         boolean network=LockLab.mode(context)==LockTestPolicy.Mode.NETWORK;
         if(LockLab.prefs(context).getBoolean("fired",false))return;
-        LockLab.fire(context,token,"예약에서 자동 진입");
+        LockLab.fire(context,token,"예약 요청에서 진입 · 무조작 여부 미확인");
         if(network){PendingResult result=goAsync();new Thread(() -> {try{diagnose(context,token);}finally{result.finish();}},"lock-network-diagnostic").start();}
     }
     static void diagnose(Context c,String token){

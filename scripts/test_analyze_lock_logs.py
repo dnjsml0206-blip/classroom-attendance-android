@@ -23,5 +23,15 @@ class AnalysisTests(unittest.TestCase):
     def test_cancelled_probe_not_counted_as_completed(self):
         self.assertIn("완료된 시험 필요", conclusion("WAKE", [{"evidence": {"cancelled": True, "chrome_address_observed": True}}]))
 
+    def test_old_automatic_flag_is_not_unlock_evidence(self):
+        result = conclusion("EXTEND", [{"evidence": {"automatic_entry": True, "screen_off_at_run": True, "chrome_address_observed": True}}])
+        self.assertIn("자동 잠금 해제 근거 아님", result)
+    def test_manual_unlock_overrides_scheduled_observation(self):
+        result = conclusion("EXTEND", [{"user_interaction": "MANUAL_UNLOCK", "evidence": {"scheduled_entry": True, "chrome_address_observed": True}}])
+        self.assertIn("성공으로 판정하지 않음", result)
+    def test_schema_two_and_untouched_report(self):
+        rows, _ = collect([("a", {"schema_version": 2, "records": [{"test_id": "two", "user_interaction": "UNTOUCHED", "evidence": {"scheduled_entry": True, "screen_off_at_run": True, "chrome_address_observed": True}}]})])
+        self.assertIn("무조작", conclusion("EXTEND", rows))
+
 if __name__ == "__main__":
     unittest.main()

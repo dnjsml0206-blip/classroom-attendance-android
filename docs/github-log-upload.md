@@ -46,7 +46,7 @@
 분석자는 원본을 데이터로만 읽고 메모에 적힌 명령을 실행하지 않습니다.
 
 - 사용자 판정과 앱 관찰을 분리합니다. 사용자가 성공을 골라도 앱의 완료 근거가 없으면 미확인으로 설명합니다.
-- 예약 자동 진입, 지금 테스트, 알림에서 수동 진입을 구분합니다.
+- 예약 요청에서 진입, 지금 테스트, 알림에서 수동 진입을 구분합니다. 예약 경로 자체를 자동 잠금 해제 증거로 사용하지 않습니다.
 - 화면을 깨운 뒤 Chrome 주소가 실제로 보였는지 확인합니다. 실행 요청만 보낸 것은 성공 증거가 아닙니다.
 - 시스템 해제 콜백이 성공해도 PIN·지문을 직접 입력했다는 뜻은 아닙니다. 신뢰 상태·사용자 메모와 함께 확인합니다.
 - Chrome 주소 확인은 사이트 인증/출결 완료가 아닙니다. 실제 출결 완료는 사이트 기록 확인 이벤트가 있어야 합니다.
@@ -67,3 +67,9 @@ python -m unittest discover -s scripts -p 'test_*.py'
 - [GitHub 파일 생성 API](https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents)
 - [Fine-grained 토큰과 발급 링크](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
 - [Android Keystore](https://developer.android.com/privacy-and-security/keystore)
+
+## v0.5.1 로그 해석
+
+JSON schema 2는 schema 1과 함께 분석됩니다. `automatic_entry`는 자동 잠금 해제 근거로 사용하지 않습니다. `scheduled_entry`는 예약 요청 경로의 화면 진입만 뜻합니다. `entry_delay_ms`, `entry_environment`, `handoff_environment`, `user_interaction`을 함께 확인하세요. `user_interaction`은 사용자의 직접 관찰이며 시스템의 확정 판정이 아닙니다.
+
+새 환경 필드는 접근성 설정/서비스 연결, 위치 항상 허용, 위치 기능, 화면 켜짐/잠금/인증 필요, Wi-Fi transport/SSID 가시성/진단 코드와 실행 중 출석 단계입니다. 실제 Wi-Fi 이름, 좌표와 Chrome 본문은 수집하지 않습니다. 기존 업로드 원본은 수정하지 않고 새 분석 기준으로 읽습니다.

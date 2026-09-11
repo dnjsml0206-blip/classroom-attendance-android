@@ -62,8 +62,16 @@ public final class LockTrialActivity extends Activity {
         KeyguardManager k=getSystemService(KeyguardManager.class);
         if(k.isKeyguardLocked()||k.isDeviceLocked()||!getSystemService(PowerManager.class).isInteractive())return;
         handedOff=true;LockLab.event(this,token,"Chrome 연결 전: "+LockLab.snapshot(this));
+        LockLab.prefs(this).edit().putString("handoff_environment",LockLogExport.environment(this).toString()).apply();
         Prefs prefs=new Prefs(this);Policy.Phase phase=prefs.phase(ZonedDateTime.now(Policy.ZONE));
-        if(LockLab.actual(this) && phase!=Policy.Phase.IDLE && NetworkAccess.inspect(this).allowed() && ChromeAttendanceService.available()){
+        if(LockLab.actual(this)){
+            java.util.List<String> issues=TrialReadiness.problems(this,LockLab.mode(this),true,System.currentTimeMillis(),false);
+            if(LockLab.prefs(this).getBoolean("checkout_trial",false)&&phase!=Policy.Phase.CHECKOUT)issues.add("예약한 퇴실 시간이 변경되었거나 퇴실이 이미 완료되었습니다.");
+            if(!issues.isEmpty()){
+                LockLab.finish(this,token,"실제 출결 중단: "+String.join(" / ",issues));
+                if(phase==Policy.Phase.CHECKOUT)Notices.checkoutAttention(this,true,String.join(" / ",issues));
+                finish();return;
+            }
             LockLab.stage(this,token,"기존 시간·Wi-Fi 조건으로 실제 출결 요청");
             LockLab.prefs(this).edit().putBoolean("allow_attendance",true).apply();
             AttendanceEngine.request(this,true,() -> {
@@ -72,7 +80,6 @@ public final class LockTrialActivity extends Activity {
                 LockLab.finish(this,token,completed?"사이트 기록으로 실제 출결 완료 확인":"실제 출결 미확인 · "+prefs.raw.getString("status","Chrome에서 확인해 주세요"));
             });
         } else {
-            if(LockLab.actual(this))LockLab.event(this,token,"실제 출결 조건 미충족 · 예약 시간/완료 기록/Wi-Fi/접근성 확인; Chrome 조회만 진행");
             ChromeAttendanceService.probeLockChrome(this,token);
         }
         finish();

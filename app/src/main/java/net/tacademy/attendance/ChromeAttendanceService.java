@@ -18,6 +18,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Runnable finished;
     private String lockProbe="", lockAttendanceToken="";
+    private final Set<String> lockTrace=new HashSet<>();
     private long lockProbeUntil;
     private boolean working, clicked, confirmationExpected, confirmationClicked, navigatingWifi, menuOpened;
     private Policy.Phase phase;
@@ -30,6 +31,13 @@ public final class ChromeAttendanceService extends AccessibilityService {
         }
     };
     public static boolean available() { return instance != null; }
+    public static boolean configured(Context c) {
+        String enabled=Settings.Secure.getString(c.getContentResolver(),Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        if(enabled==null)return false;
+        ComponentName target=new ComponentName(c,ChromeAttendanceService.class);
+        for(String name:enabled.split(":"))if(target.equals(ComponentName.unflattenFromString(name)))return true;
+        return false;
+    }
     public static boolean busy() { return instance != null && instance.working; }
     @Override protected void onServiceConnected() { instance = this; events(false); }
     private void events(boolean enabled) {
@@ -70,7 +78,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         service.day = LocalDate.now(Policy.ZONE).toString();
         service.key = service.day + ":" + service.phase.name();
         service.lockAttendanceToken = LockLab.live(context,LockLab.id(context)) && LockLab.prefs(context).getBoolean("allow_attendance",false) ? LockLab.id(context) : "";
-        service.finished = done; service.working = true; service.clicked = false;
+        service.lockTrace.clear(); service.finished = done; service.working = true; service.clicked = false;
         service.confirmationExpected = false; service.confirmationClicked = false;
         service.started = SystemClock.elapsedRealtime(); service.pageSeen = 0;
         service.events(true);
@@ -96,30 +104,31 @@ public final class ChromeAttendanceService extends AccessibilityService {
             fail("잠금 해제 후 확인", "잠금을 해제하고 Chrome 출석 알림을 눌러 주세요"); return;
         }
         AccessibilityNodeInfo root = focusedRoot();
-        if (root == null || !"com.android.chrome".equals(string(root.getPackageName()))) return;
+        if (root == null || !"com.android.chrome".equals(string(root.getPackageName()))) { traceLock("Chrome 화면 노드 대기 · 현재 화면에서 Chrome을 읽지 못함"); return; }
         List<AccessibilityNodeInfo> nodes = new ArrayList<>(); collect(root, nodes, 0);
         String text = allText(nodes);
         if (confirmationExpected && !confirmationClicked && ChromePage.checkoutConfirmation(text)) {
             if (!prefs.auto()) { finishWork(); return; }
             AccessibilityNodeInfo confirm = exactButton(nodes, "확인", "OK");
-            if (confirm != null && click(confirm)) confirmationClicked = true;
+            if (confirm != null && click(confirm)) { confirmationClicked = true; traceLock("퇴실 확인 대화상자 클릭 요청 전달됨"); }
             return;
         }
         boolean correctAddress = false;
         for (AccessibilityNodeInfo node : nodes)
             if ("com.android.chrome:id/url_bar".equals(node.getViewIdResourceName()) &&
                     ChromePage.attendanceAddress(string(node.getText()))) correctAddress = true;
-        if (!correctAddress) return;
+        if (!correctAddress) { traceLock("Chrome 주소 확인 대기 · 지정 출결 주소를 읽지 못함"); return; }
+        traceLock("Chrome 출결 주소 표시 확인 · 실제 출결 기록 확인 중");
         if (text.contains("인증절차를 진행한후") || text.contains("인증절차를 진행한 후")) {
             fail("Chrome 인증 확인 필요", "평소 인증해 둔 Chrome 일반 탭에서 출석 화면이 열리는지 확인해 주세요"); return;
         }
         if (pageSeen == 0) pageSeen = SystemClock.elapsedRealtime();
         // Wait for the site's asynchronous course and attendance checks before considering a button.
         if (SystemClock.elapsedRealtime() - pageSeen < 1800) return;
-        try { if (!ChromePage.date(text).toString().equals(day)) return; }
-        catch (RuntimeException e) { return; }
+        try { if (!ChromePage.date(text).toString().equals(day)) { traceLock("출결일 불일치 · 오늘 기록이 아니어서 클릭 보류"); return; } }
+        catch (RuntimeException e) { traceLock("출결일 읽기 대기 · 사이트 화면 형식 확인 필요"); return; }
         Policy.Record record;
-        try { record = ChromePage.record(text); } catch (RuntimeException e) { return; }
+        try { record = ChromePage.record(text); } catch (RuntimeException e) { traceLock("입실·퇴실 기록 읽기 대기 · 사이트 화면 형식 확인 필요"); return; }
         if (record.checkedIn()) {
             prefs.record(day, record);
             boolean completed = phase == Policy.Phase.ENTRY || record.checkedOut();
@@ -136,16 +145,17 @@ public final class ChromeAttendanceService extends AccessibilityService {
             }
         }
         if (!prefs.auto()) { prefs.status("Chrome 조회 모드", "설정에서 자동 처리를 켜면 출석 버튼을 누릅니다"); finishWork(); return; }
-        if (phase == Policy.Phase.CHECKOUT && !record.checkedIn()) return;
+        if (phase == Policy.Phase.CHECKOUT && !record.checkedIn()) { traceLock("오늘 입실 기록 없음 · 퇴실 클릭 보류"); return; }
         if (clicked) return;
         if (key.equals(prefs.raw.getString("chrome_pending", ""))) {
             fail("이전 클릭 결과 확인 필요", "Chrome에서 실제 기록을 확인한 뒤 연결 탭에서 보류를 해제해 주세요"); return;
         }
         AccessibilityNodeInfo button = exactButton(nodes, phase == Policy.Phase.ENTRY ? "입실" : "퇴실");
-        if (button == null || !button.isEnabled()) return;
+        if (button == null || !button.isEnabled()) { traceLock("출결 버튼 대기 · 클릭 가능한 "+(phase==Policy.Phase.ENTRY?"입실":"퇴실")+" 버튼을 읽지 못함"); return; }
         if (prefs.phase(ZonedDateTime.now(Policy.ZONE)) != phase || !NetworkAccess.inspect(this).allowed()) return;
         if (!prefs.raw.edit().putString("chrome_pending", key).commit()) { fail("처리 상태 저장 실패", "앱에서 상태를 확인해 주세요"); return; }
         clicked = click(button);
+        traceLock((phase==Policy.Phase.ENTRY?"입실":"퇴실")+(clicked?" 버튼 클릭 요청 전달됨 · 사이트 기록 확인 전":" 버튼 클릭 요청 실패"));
         confirmationExpected = clicked && phase == Policy.Phase.CHECKOUT;
         if (!clicked) prefs.raw.edit().remove("chrome_pending").apply();
     }
@@ -180,10 +190,14 @@ public final class ChromeAttendanceService extends AccessibilityService {
         return null;
     }
     private static boolean click(AccessibilityNodeInfo node) { return node.performAction(AccessibilityNodeInfo.ACTION_CLICK); }
+    private void traceLock(String message) {
+        if(!lockAttendanceToken.isEmpty()&&LockLab.live(this,lockAttendanceToken)&&lockTrace.add(message))LockLab.event(this,lockAttendanceToken,message);
+    }
     private void fail(String title, String detail) {
         if (!working) return;
         if (LockLab.readOnlyActive(this) || (!lockAttendanceToken.isEmpty() && !LockLab.live(this,lockAttendanceToken))) { finishWork(); return; }
         Prefs prefs = new Prefs(this);
+        traceLock("Chrome 처리 중단: "+title+" · "+detail);
         prefs.status(title, detail);
         String failureKey = day + ":" + phase + ":" + title;
         if (!failureKey.equals(prefs.raw.getString("last_failure", ""))) {
@@ -207,8 +221,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     public static void probeLockChrome(Context context,String token) {
         if(!LockLab.live(context,token))return;
         if(instance==null){
-            boolean sent=openChrome(context,SiteProtocol.PAGE);
-            LockLab.finish(context,token,sent?"Chrome 실행 요청 전송 · 접근성이 없어 실제 화면은 직접 확인":"Chrome 실행 실패");return;
+            LockLab.finish(context,token,"Chrome 접근성 연결 끊김 · 화면 확인과 클릭을 시작하지 않았습니다");return;
         }
         ChromeAttendanceService service=instance;
         if(service.working||service.navigatingWifi){LockLab.finish(context,token,"다른 Chrome/설정 작업 진행 중 · 테스트 보류");return;}

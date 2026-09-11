@@ -4,7 +4,7 @@ import java.util.regex.*;
 
 /** Evidence comes only from app events, never the user's verdict or memo. */
 public final class LogEvidence {
-    public boolean screenOffAtRun, automaticEntry, manualEntry, immediateEntry, chromeObserved,
+    public boolean screenOffAtRun, automaticEntry, scheduledEntry, manualEntry, immediateEntry, chromeObserved,
         credentialNeeded, dismissRequested, dismissSucceeded, attendanceConfirmed, cancelled;
     public Integer httpsStatus;
     public static LogEvidence read(String events){
@@ -12,7 +12,7 @@ public final class LogEvidence {
         for(String raw:events.split("\n")){
             String s=raw.replaceFirst("^\\d{2}:\\d{2}:\\d{2}\\s+","");
             if(s.startsWith("실행 당시:")){e.screenOffAtRun=s.contains("화면 꺼짐");e.credentialNeeded=s.contains("인증 필요 예");}
-            if(s.startsWith("테스트 화면 진입 · 예약에서 자동 진입"))e.automaticEntry=true;
+            if(s.startsWith("테스트 화면 진입 · 예약에서 자동 진입")||s.startsWith("테스트 화면 진입 · 예약 요청에서 진입"))e.scheduledEntry=true;
             if(s.startsWith("테스트 화면 진입 · 알림에서 수동 진입"))e.manualEntry=true;
             if(s.startsWith("테스트 화면 진입 · 앱에서 즉시 실행"))e.immediateEntry=true;
             if(s.startsWith("Chrome 출결 주소 표시 확인 ·"))e.chromeObserved=true;

@@ -34,6 +34,9 @@ final class LogUploadChecks {
         String first=LogUploadStore.prepare(c),path=LogUploadStore.prefs(c).getString("path","");
         check(first.equals(LogUploadStore.prepare(c))&&path.equals(LogUploadStore.prefs(c).getString("path","")),"Repeated export keeps identical reviewed payload and path");
         JSONObject doc=new JSONObject(first);JSONArray records=doc.getJSONArray("records");
+        JSONObject env=records.getJSONObject(0).getJSONObject("environment");
+        check(doc.getInt("schema_version")==2&&env.has("background_location_permission")&&env.has("wifi_transport_present")&&env.has("ssid_visible")&&env.has("accessibility_enabled"),"Schema 2 includes permission and Wi-Fi visibility diagnostics");
+        check(records.getJSONObject(0).getJSONObject("evidence").optBoolean("scheduled_entry")&&!records.getJSONObject(0).getJSONObject("evidence").optBoolean("automatic_entry"),"Old scheduled-entry strings never claim automatic unlock");
         check(records.length()==2&&records.getJSONObject(1).optBoolean("legacy")&&records.getJSONObject(1).isNull("created_at_ms"),"Old text history is retained with unknown date");
         check(!first.contains(fake)&&records.getJSONObject(0).getJSONObject("evidence").optBoolean("chrome_address_observed")&&!records.getJSONObject(0).getJSONObject("evidence").optBoolean("attendance_record_confirmed"),"Secrets redacted and Chrome evidence separated from attendance");
         String sha=GitHubLogClient.blobSha(first);List<String> calls=new ArrayList<>();

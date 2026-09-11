@@ -53,7 +53,7 @@ public final class MainActivity extends Activity {
             return insets;
         });
         setContentView(root);
-        render(0);
+        render(Math.max(0,Math.min(2,getIntent().getIntExtra("open_tab",0))));
     }
     @Override protected void onResume() {
         super.onResume();
@@ -500,7 +500,7 @@ public final class MainActivity extends Activity {
                 .setMessage("보류를 해제하면 설정한 시간 안에서 다시 클릭할 수 있습니다.").setNegativeButton("취소",null)
                 .setPositiveButton("확인했고 해제",(d,w) -> { prefs.raw.edit().remove("chrome_pending").apply(); render(2); }).show());
         }
-        LinearLayout info = card("출석 메이트 0.5.0");
+        LinearLayout info = card("출석 메이트 0.5.1");
         note(info,"출결 달력에는 앱이 Chrome에서 확인한 기록을 표시합니다. 이전 전체 기록은 Chrome 출결 화면에서 확인하세요.");
     }
 
