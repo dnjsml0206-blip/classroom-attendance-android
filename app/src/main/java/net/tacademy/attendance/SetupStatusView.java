@@ -47,6 +47,7 @@ final class SetupStatusView extends LinearLayout {
         rows.add(new Row(PhoneSettings.Target.SCHEDULE,"출석 예약",true,p.enabled(),p.enabled()?"켜짐":"꺼짐"));
         rows.add(new Row(PhoneSettings.Target.AUTO_CLICK,"Chrome 자동 클릭",true,p.auto(),p.auto()?"켜짐":"꺼짐"));
         if(extras){
+            boolean departureAlerts=Notices.attentionNotificationsAllowed(activity);rows.add(new Row(PhoneSettings.Target.TEST_NOTIFICATIONS,"퇴실 이탈 알림",false,departureAlerts,departureAlerts?"허용됨":"알림 허용 필요"));
             NetworkAccess.State wifi=NetworkAccess.inspect(activity);rows.add(new Row(PhoneSettings.Target.WIFI,"현재 출석 Wi-Fi",false,wifi.allowed(),wifi.allowed()?"연결됨":wifi.wifiTransportPresent()?"등록·권한 확인":"연결 필요"));
             boolean battery=activity.getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(activity.getPackageName());rows.add(new Row(PhoneSettings.Target.BATTERY,"배터리 최적화 제외",false,battery,battery?"제외됨":"최적화 적용"));
             rows.add(new Row(PhoneSettings.Target.EXTEND,"Extend Unlock",false,false,"휴대폰에서 확인"));

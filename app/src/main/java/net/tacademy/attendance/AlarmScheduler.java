@@ -25,7 +25,7 @@ public final class AlarmScheduler {
         ZonedDateTime now = ZonedDateTime.now(Policy.ZONE);
         ZonedDateTime next = Policy.nextWake(now, prefs.days(), prefs.excluded(), prefs.start(), prefs.end(),
             prefs.checkout(), prefs.retryMinutes(), prefs.checkedInToday(), prefs.checkedOutToday());
-        if (recover && prefs.phase(now) != Policy.Phase.IDLE) next = now.plusSeconds(2);
+        if (recover && prefs.monitoringNeeded(now)) next = now.plusSeconds(2);
         if (next == null) return false;
         try {
             context.getSystemService(AlarmManager.class).setExactAndAllowWhileIdle(

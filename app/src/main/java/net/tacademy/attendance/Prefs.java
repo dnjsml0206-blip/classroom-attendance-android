@@ -35,6 +35,14 @@ public final class Prefs {
     public String end() { return raw.getString("end", "09:30"); }
     public String checkout() { return raw.getString("checkout", "17:50"); }
     public int retryMinutes() { return raw.getInt("checkout_retry_minutes", 10); }
+    public boolean classroomSeenToday() {
+        return checkedInToday() || LocalDate.now(Policy.ZONE).toString().equals(raw.getString("departure_seen_day",""));
+    }
+    public boolean departureWatching(ZonedDateTime now) {
+        return phase(now) == Policy.Phase.CHECKOUT && hasLocation()
+            && !now.withZoneSameInstant(Policy.ZONE).toLocalDate().toString().equals(raw.getString("departure_notified_day",""));
+    }
+    public boolean monitoringNeeded(ZonedDateTime now) { return phase(now) != Policy.Phase.IDLE; }
     public boolean checkedInToday() { return today() && !raw.getString("in", "").isEmpty(); }
     public boolean checkedOutToday() { return checkedInToday() && !raw.getString("out", "").isEmpty(); }
     private boolean today() { return LocalDate.now(Policy.ZONE).toString().equals(raw.getString("record_day", "")); }

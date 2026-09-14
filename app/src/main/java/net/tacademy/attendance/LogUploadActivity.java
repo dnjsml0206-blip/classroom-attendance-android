@@ -26,8 +26,8 @@ public final class LogUploadActivity extends Activity {
         content.addView(text("테스트 결과 전달",12,ACCENT,true));space(content,8);content.addView(text("GitHub에 로그 올리기",26,INK,true));space(content,8);
         content.addView(text("기록을 올린 뒤 Codex 대화에 ‘로그 분석해줘’라고 알려 주세요. 방식별 결과와 멈춘 단계를 확인할 수 있습니다.",14,MUTED,false));space(content,18);
         LinearLayout report=card("1. 올릴 기록 확인");summary=text("",13,INK,false);report.addView(summary);
-        report.addView(text("최근 최대 11회 · 기기 정보, 시험 시각, 앱 기록, 직접 남긴 판정과 메모가 포함됩니다. 위치 좌표와 Chrome 쿠키는 수집하지 않습니다. 메모에 개인 정보가 없는지 확인하세요.",12,MUTED,false));
-        add(report,"로그 내용 미리보기",false,()->showText("업로드할 JSON 로그",payload.isEmpty()?"테스트 후 다시 열어 주세요.":payload));
+        report.addView(text("마지막 성공 업로드 이후 새로 생기거나 수정된 로그만 올립니다. 최근 최대 11회 중 미업로드 기록이 대상입니다. 기기 정보, 시험 시각, 앱 기록, 직접 남긴 판정과 메모가 포함됩니다. 위치 좌표와 Chrome 쿠키는 수집하지 않습니다. 메모에 개인 정보가 없는지 확인하세요.",12,MUTED,false));
+        add(report,"로그 내용 미리보기",false,()->showText("업로드할 JSON 로그",payload.isEmpty()?"새로 올릴 로그가 없습니다.":payload));
         reload=add(report,"최신 기록 불러오기",false,this::load);
         LinearLayout github=card("2. GitHub 연결 · 처음 한 번");github.addView(text(GitHubLogClient.REPO+"\n비공개 저장소 · 테스트 로그 전용 공간",12,MUTED,false));connection=text("",14,INK,true);space(github,8);github.addView(connection);
         connect=add(github,"GitHub 업로드 연결 설정",false,this::credentials);
@@ -38,10 +38,18 @@ public final class LogUploadActivity extends Activity {
         add(send,"업로드 링크 복사",false,()->{String url=lastUrl();if(url.isEmpty()){toast("아직 완료된 업로드가 없습니다.");return;}getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("잠금 테스트 로그",url));toast("링크를 복사했습니다. Codex 대화에 붙여 넣어 주세요.");});
         add(content,"테스트 메뉴로 돌아가기",false,this::finish);load();
     }
-    private void load(){try{payload=LogUploadStore.prepare(this);summary.setText(LockLogExport.summary(new JSONObject(payload).getJSONArray("records")));}catch(Exception e){payload="";summary.setText(e instanceof IllegalStateException?e.getMessage():"로그를 준비하지 못했습니다. 테스트 메뉴에서 기록을 확인해 주세요.");}update();}
+    private void load(){
+        try{
+            payload=LogUploadStore.prepare(this);
+            summary.setText(getString(R.string.log_upload_summary,LogUploadStore.periodLabel(this),payload.isEmpty()?"새로 올릴 로그가 없습니다.":LockLogExport.summary(new JSONObject(payload).getJSONArray("records"))));
+        }catch(Exception e){payload="";summary.setText(e instanceof IllegalStateException?e.getMessage():"로그를 준비하지 못했습니다. 테스트 메뉴에서 기록을 확인해 주세요.");}
+        update();
+    }
     private String lastUrl(){String value=LogUploadStore.prefs(this).getString("last_url","");return value.startsWith("https://github.com/"+GitHubLogClient.REPO+"/blob/"+GitHubLogClient.BRANCH+"/logs/lock-tests/")?value:"";}
-    private void update(){if(status==null)return;boolean busy=LogUploadStore.busy();boolean configured=new GitHubTokenStore(this).configured();connection.setText(configured?"연결 정보 저장됨 · 전송할 때 권한 확인":"최초 연결이 필요합니다");
-        upload.setEnabled(!busy&&!payload.isEmpty());connect.setEnabled(!busy);disconnect.setEnabled(!busy&&configured);reload.setEnabled(!busy);
+    private void update(){if(status==null)return;boolean busy=LogUploadStore.busy();
+        if(!busy&&!payload.isEmpty()&&!payload.equals(LogUploadStore.prefs(this).getString("payload",""))){load();return;}
+        boolean configured=new GitHubTokenStore(this).configured();connection.setText(configured?"연결 정보 저장됨 · 전송할 때 권한 확인":"최초 연결이 필요합니다");
+        upload.setEnabled(!busy&&!payload.isEmpty());upload.setAlpha(upload.isEnabled()?1f:.45f);connect.setEnabled(!busy);disconnect.setEnabled(!busy&&configured);reload.setEnabled(!busy);upload.setText(payload.isEmpty()?"새로 올릴 로그 없음":"로그 올리기");
         String value=LogUploadStore.prefs(this).getString("status","기록을 준비한 뒤 로그 올리기를 누르세요.");
         status.setText(!busy&&value.equals("GitHub에 전송 중…")?"이전 전송 결과가 미확인입니다. 다시 누르면 같은 파일부터 확인합니다.":value);
     }

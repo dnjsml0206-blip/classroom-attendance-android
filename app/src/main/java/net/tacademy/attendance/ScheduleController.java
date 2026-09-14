@@ -16,7 +16,8 @@ public final class ScheduleController {
     public static void reconcile(Context context) {
         Prefs prefs = new Prefs(context);
         AlarmScheduler.arm(context, false);
-        if (prefs.phase(ZonedDateTime.now(Policy.ZONE)) == Policy.Phase.IDLE) {
+        if (!prefs.enabled() || prefs.checkedOutToday()) Notices.clearDeparture(context,java.time.LocalDate.now(Policy.ZONE).toString());
+        if (!prefs.monitoringNeeded(ZonedDateTime.now(Policy.ZONE))) {
             ChromeAttendanceService.cancelWork();
             context.stopService(new Intent(context, MonitorService.class));
             if (!prefs.enabled() || prefs.checkedOutToday()) Notices.checkoutAttention(context, false, "");
@@ -26,7 +27,7 @@ public final class ScheduleController {
         try { context.startForegroundService(new Intent(context, MonitorService.class)); }
         catch (RuntimeException e) {
             prefs.status("예약 실행 권한 확인 필요", "연결 탭에서 위치 항상 허용과 알람 권한을 확인해 주세요");
-            if (prefs.phase(ZonedDateTime.now(Policy.ZONE)) == Policy.Phase.CHECKOUT)
+            if (prefs.phase(ZonedDateTime.now(Policy.ZONE)) != Policy.Phase.ENTRY)
                 Notices.checkoutAttention(context, true, "자동 실행 권한을 확인한 뒤 앱에서 다시 확인해 주세요");
             else Notices.alert(context, "입실 감시를 시작하지 못했습니다", "앱을 열어 위치 항상 허용과 알람 권한을 확인해 주세요");
         }

@@ -34,7 +34,7 @@ public final class LockLab {
     static synchronized String prepareCheckout(Context c,LockTestPolicy.Mode mode){
         if(mode==LockTestPolicy.Mode.NETWORK)throw new IllegalStateException("서버 연결 진단은 퇴실을 처리하지 않습니다. Chrome 테스트 방법을 선택해 주세요.");
         ZonedDateTime now=ZonedDateTime.now(Policy.ZONE);
-        long due=now.toLocalDate().atTime(LocalTime.parse(new Prefs(c).checkout())).atZone(Policy.ZONE).toInstant().toEpochMilli();
+        long due=now.toLocalDate().atTime(Policy.checkoutStartTime(new Prefs(c).checkout())).atZone(Policy.ZONE).toInstant().toEpochMilli();
         if(due<=System.currentTimeMillis())throw new IllegalStateException("오늘 퇴실 시각이 지났습니다. 시간 설정을 확인해 주세요.");
         return prepareAt(c,mode,true,due,true,true);
     }
@@ -57,7 +57,7 @@ public final class LockLab {
         if(scheduled){
             try{c.getSystemService(AlarmManager.class).setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,due,alarm(c,token));}
             catch(SecurityException e){finish(c,token,"정확한 알람 권한 없음");throw new IllegalStateException("알람 및 리마인더를 허용해 주세요.");}
-            notice(c,checkout?"오늘 퇴실 테스트 예약":"잠금 테스트 예약",checkout?"오늘 "+new Prefs(c).checkout()+" · "+mode.label+" · 실제 퇴실을 한 번 시험합니다. 실행 시 설정과 Wi-Fi를 다시 확인합니다.":"예약 시각 전에 화면을 꺼 주세요. 기존 출결 예약과 별도인 일회성 테스트입니다.",false);
+            notice(c,checkout?"오늘 퇴실 테스트 예약":"잠금 테스트 예약",checkout?"오늘 "+Policy.checkoutStartTime(new Prefs(c).checkout())+" · "+mode.label+" · 실제 퇴실을 한 번 시험합니다. 실행 시 설정과 Wi-Fi를 다시 확인합니다.":"예약 시각 전에 화면을 꺼 주세요. 기존 출결 예약과 별도인 일회성 테스트입니다.",false);
         }
         return token;
     }

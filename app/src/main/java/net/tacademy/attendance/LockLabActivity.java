@@ -107,7 +107,7 @@ public final class LockLabActivity extends Activity {
     }
     private void checkoutTrial(){
         if(!actual.isChecked()){showProblems("‘잠금 해제 후 실제 출결도 시도’를 켜 주세요. 조회 테스트로는 퇴실 버튼을 누르지 않습니다.");return;}
-        try{LockLab.prepareCheckout(this,selected());update();Toast.makeText(this,"오늘 "+new Prefs(this).checkout()+" 퇴실 테스트를 예약했습니다",Toast.LENGTH_LONG).show();}
+        try{LockLab.prepareCheckout(this,selected());update();Toast.makeText(this,"오늘 "+Policy.checkoutStartTime(new Prefs(this).checkout())+" 퇴실 테스트를 예약했습니다",Toast.LENGTH_LONG).show();}
         catch(IllegalStateException e){showProblems(e.getMessage());}
     }
     private void showProblems(String message){
@@ -148,7 +148,7 @@ public final class LockLabActivity extends Activity {
         readiness.setText(actual.isChecked()?"실제 출결 시도 · 조건을 만족하면 버튼을 누릅니다":"조회 전용 · 입실·퇴실 버튼을 누르지 않습니다");setupStatus.refresh();
         reserve.setText(actual.isChecked()?"실제 출결 테스트 예약":"조회 테스트 예약");
         immediate.setText(actual.isChecked()?"지금 실제 출결 테스트":"지금 조회 테스트");
-        checkout.setText(getString(R.string.checkout_trial_button,new Prefs(this).checkout()));
+        checkout.setText(getString(R.string.checkout_trial_button,Policy.checkoutStartTime(new Prefs(this).checkout()).toString()));
         current.setText(getString(R.string.lock_lab_state,LockLab.snapshot(this),ChromeAttendanceService.available()?"연결됨":"연결 필요",AlarmScheduler.allowed(this)?"허용":"미허용"));
         long seconds=Math.max(0,(LockLab.prefs(this).getLong("due",0)-System.currentTimeMillis()+999)/1000);
         String stage=LockLab.prefs(this).getString("stage","아직 실행하지 않았습니다.");

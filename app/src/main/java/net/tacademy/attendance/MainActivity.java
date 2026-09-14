@@ -218,25 +218,15 @@ public final class MainActivity extends Activity {
         times.addView(right, new LinearLayout.LayoutParams(0, -2, 1)); state.addView(times);
         gap(state, 10);
         state.addView(button("달력에서 출결 조회  ›", true, this::attendanceCalendar), new LinearLayout.LayoutParams(-1, -2));
-        LinearLayout log = card("오늘 로그");
+        LinearLayout log = card("오늘 출석 기록");
         todayLog = text("", 13, homeTheme.muted, false); todayLog.setLineSpacing(dp(8), 1); log.addView(todayLog);
         updateHome();
     }
 
     private void attendanceCalendar() {
         LocalDate today = ZonedDateTime.now(homeClock).withZoneSameInstant(Policy.ZONE).toLocalDate();
-        new DatePickerDialog(this, (view, y, m, d) -> showAttendance(LocalDate.of(y, m+1, d)),
-            today.getYear(), today.getMonthValue()-1, today.getDayOfMonth()).show();
-    }
-    private void showAttendance(LocalDate day) {
-        Policy.Record record = prefs.history(day);
-        String body = record == null ? "앱에서 확인한 기록이 없습니다.\n이전 기록은 Chrome 출결 화면에서 확인해 주세요."
-            : "입실  " + (record.in().isEmpty() ? "확인된 기록 없음" : record.in()) + "\n퇴실  " +
-                (record.out().isEmpty() ? "확인된 기록 없음" : record.out());
-        if (prefs.excluded().contains(day.toString())) body += "\n등록한 휴강일입니다.";
-        new AlertDialog.Builder(this).setTitle(day + " 출결").setMessage(body)
-            .setPositiveButton("닫기", null).setNeutralButton("다른 날짜", (d,w) -> attendanceCalendar())
-            .setNegativeButton("Chrome 출결 조회", (d,w) -> ChromeAttendanceService.openChrome(this, SiteProtocol.PAGE)).show();
+        startActivity(new Intent(this,AttendanceCalendarActivity.class)
+            .putExtra("initial_date",today.toString()).putExtra("theme",homeTheme.name()));
     }
 
     private void setIfChanged(TextView view, String value) { if (!view.getText().toString().equals(value)) view.setText(value); }
@@ -252,17 +242,21 @@ public final class MainActivity extends Activity {
         String title = !exit.isEmpty() ? "오늘 출결 완료" : !entry.isEmpty() ? "입실 완료"
             : MonitorService.running ? prefs.raw.getString("status", "입실 확인 중")
             : prefs.enabled() ? "출석 예약 대기" : "출석 예약 꺼짐";
-        String description = prefs.enabled() ? "입실 " + prefs.start() + "–" + prefs.end() + " · 퇴실 " + prefs.checkout()
+        String description = prefs.enabled() ? "입실 " + prefs.start() + "–" + prefs.end() + " · 퇴실 " + Policy.checkoutStartTime(prefs.checkout())
             : "설정에서 출석 예약을 켜 주세요.";
         if (MonitorService.running) description = prefs.raw.getString("detail", description);
         setIfChanged(status, title); setIfChanged(detail, description);
         setIfChanged(inTime, entry.isEmpty() ? "—" : entry); setIfChanged(outTime, exit.isEmpty() ? "—" : exit);
-        String log = prefs.raw.getString("log:" + now.toLocalDate(), "");
-        setIfChanged(todayLog, log.isEmpty() ? "아직 오늘 기록이 없습니다." : log);
+        // Show confirmed attendance times; operational diagnostics stay in their existing log.
+        String log = exit.isEmpty() ? "" : exit + "  퇴실 완료";
+        if (!entry.isEmpty()) log += (log.isEmpty() ? "" : "\n") + entry + "  입실 완료";
+        setIfChanged(todayLog, log.isEmpty() ? "아직 확인된 출석 기록이 없습니다." : log);
     }
 
-    private void toggleMonitor() {
-        if (prefs.enabled()) {
+    private void setAttendanceReservation(boolean enabled) {
+        pendingStart = false;
+        if (enabled == prefs.enabled()) { render(1); return; }
+        if (!enabled) {
             prefs.enabled(false); ScheduleController.reconcile(this);
             Notices.wifi(this, false, ""); prefs.log("출석 예약 꺼짐"); render(1); return;
         }
@@ -279,20 +273,26 @@ public final class MainActivity extends Activity {
         ScheduleController.reconcile(this); render(1);
     }
 
-    private void settings() {
-        LinearLayout checks=card("설정 확인");setupStatus=new SetupStatusView(this,false);checks.addView(setupStatus);
-        LinearLayout lab = card("임시 메뉴");
-        note(lab,"화면 깨우기 · Extend Unlock · 신뢰 방식 · 시스템 인증 · 서버 연결을 직접 시험하고 결과를 기록합니다.");
-        action(lab,"잠금 상태 테스트 열기",true,() -> startActivity(new Intent(this,LockLabActivity.class)));
-        LinearLayout schedule = card("출석 시간");
-        schedule.addView(text("입실 " + prefs.start() + "–" + prefs.end() + "\n퇴실 " + prefs.checkout(), 21, INK, true));
-        note(schedule, "입실 완료 또는 입실 종료 시 감시를 끕니다. 퇴실은 예약 시각에 다시 확인하고 완료하면 종료합니다.");
-        note(schedule, "퇴실 재시도: 최대 " + prefs.retryMinutes() + "분 · 한국 시간");
-        note(schedule, "오늘 화면: 따뜻한 일러스트 → " + HomeTheme.nightStarts(prefs.end(), prefs.checkout()) + "부터 야간 테마. 퇴실 1시간 전에 전환하며 입실 시간과 겹치면 입실 종료 후 전환합니다. 자정에 밝은 테마로 돌아옵니다.");
-        action(schedule, "요일 · 입실 · 퇴실 시간 변경", false, this::editSchedule);
-        action(schedule, "달력에서 휴강일 등록 (" + prefs.excluded().size() + "일)", false, this::editExcluded);
+    private void reservationSettings() {
         LinearLayout automation = card("출석 예약");automation.setTag("automation");
-        action(automation, prefs.enabled() ? "출석 예약 끄기" : "출석 예약 켜기", true, this::toggleMonitor);
+        LinearLayout choices = new LinearLayout(this);
+        for (boolean enabled : new boolean[]{true,false}) {
+            boolean active = prefs.enabled() == enabled;
+            String label = enabled ? "켜기" : "끄기";
+            Button choice = button(label,active,() -> setAttendanceReservation(enabled));
+            choice.setTag(enabled ? "reservation-on" : "reservation-off");
+            choice.setSelected(active);
+            choice.setContentDescription("출석 예약 " + label + (active ? " · 선택됨" : ""));
+            choice.setStateListAnimator(null); choice.setElevation(0);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0,-2,1);
+            if (!enabled) params.leftMargin = dp(8);
+            choices.addView(choice,params);
+        }
+        automation.addView(choices);
+        note(automation,prefs.enabled() ? "예약 켜짐 · 출석 시간에 자동 시작" : "예약 꺼짐");
+        String checkoutEnd = LocalTime.parse(prefs.checkout()).plusMinutes(prefs.retryMinutes()).format(DateTimeFormatter.ofPattern("HH:mm"));
+        note(automation,"자동 감시는 수업일의 아래 시간에만 작동합니다.\n입실 " + prefs.start() + "–" + prefs.end()
+            + " · 퇴실 " + Policy.checkoutStartTime(prefs.checkout()) + "–" + checkoutEnd + "\n출석 완료 또는 시간 종료 시 GPS 감시도 멈춥니다.");
         Switch auto = new Switch(this); auto.setText(R.string.automatic_chrome_click); auto.setTextSize(16); auto.setTextColor(INK); auto.setMinHeight(dp(48));
         auto.setChecked(prefs.auto()); automation.addView(auto);
         note(automation, "기존 Chrome 인증을 사용합니다. 화면 잠금 중에는 출석 알림을 눌러 잠금을 해제해 주세요. 자동 클릭을 끄면 조회만 합니다.");
@@ -302,6 +302,28 @@ public final class MainActivity extends Activity {
             ScheduleController.reconcile(this);
         });
         action(automation, "Chrome에서 지금 확인", false, () -> startActivity(new Intent(this, ChromeLaunchActivity.class)));
+    }
+
+    private void settings() {
+        reservationSettings();
+        LinearLayout checks=card("설정 확인");setupStatus=new SetupStatusView(this,false);checks.addView(setupStatus);
+        LinearLayout lab = card("임시 메뉴");
+        note(lab,"화면 깨우기 · Extend Unlock · 신뢰 방식 · 시스템 인증 · 서버 연결을 직접 시험하고 결과를 기록합니다.");
+        action(lab,"잠금 상태 테스트 열기",true,() -> startActivity(new Intent(this,LockLabActivity.class)));
+        LinearLayout schedule = card("출석 시간");
+        note(schedule, "변경할 항목을 선택하세요. 모든 시간은 한국 시간입니다.");
+        action(schedule, "입실 시간  ›\n" + prefs.start() + "–" + prefs.end(), false, () -> editSchedule(ScheduleSection.ENTRY));
+        action(schedule, "퇴실 시간  ›\n" + prefs.checkout() + " · 최대 " + prefs.retryMinutes() + "분 재시도", false, () -> editSchedule(ScheduleSection.CHECKOUT));
+        note(schedule, getString(R.string.checkout_delay_notice,Policy.CHECKOUT_DELAY_SECONDS));
+        note(schedule, "입실·퇴실 완료를 확인하면 해당 감시를 종료합니다.");
+        note(schedule, "퇴실 재시도 시간 안에서, 퇴실 미확인 상태로 강의실을 벗어나면 알립니다.");
+        note(schedule, "오늘 화면은 " + HomeTheme.nightStarts(prefs.end(), prefs.checkout()) + "부터 야간 테마로 전환합니다.");
+        LinearLayout classDays = card("수업일");
+        String[] weekdayLabels = {"월","화","수","목","금","토","일"};
+        List<String> weekdays = new ArrayList<>();
+        for (int i=0; i<weekdayLabels.length; i++) if (prefs.days().contains(i+1)) weekdays.add(weekdayLabels[i]);
+        action(classDays, "수업 요일 선택  ›\n" + (weekdays.isEmpty() ? "선택 필요" : String.join(" · ", weekdays)), false, () -> editSchedule(ScheduleSection.DAYS));
+        action(classDays, "달력에서 휴강일 등록 (" + prefs.excluded().size() + "일)", false, this::editExcluded);
         LinearLayout notifications = card("알림");
         notifications.addView(text("입실 · 퇴실 완료 알림 항상 표시",17,INK,true));
         note(notifications,"완료를 확인할 때마다 입실과 퇴실 알림을 따로 남깁니다. 앱을 열거나 감시가 끝나도 유지되며 직접 지울 수 있습니다.");
@@ -325,7 +347,7 @@ public final class MainActivity extends Activity {
         });
         LinearLayout location = card("강의실 위치");
         location.addView(text(prefs.hasLocation() ? "반경 " + prefs.radius() + "m" : "기본 반경 30m · 위치 미등록", 19, INK, true));
-        note(location, "입실 시간에 주변인데 Wi-Fi가 연결되지 않으면 알려드립니다. 위치 정확도가 반경보다 나쁘면 도착으로 판단하지 않습니다.");
+        note(location, "입실 시간에는 주변에서 Wi-Fi 미연결을 알리고, 퇴실 재시도 시간에는 미확인 상태로 강의실을 벗어나면 알립니다. GPS 오차가 큰 위치는 판단에 사용하지 않습니다.");
         action(location, "현재 위치로 등록", true, this::currentLocation);
         action(location, "좌표와 반경 변경", false, () -> editLocation(null));
         if (prefs.hasLocation()) action(location, "강의실 위치 삭제", false, () -> {
@@ -396,47 +418,90 @@ public final class MainActivity extends Activity {
         } catch (SecurityException e) { toast("정확한 위치 권한을 허용해 주세요"); }
     }
 
-    private void editSchedule() {
+    private enum ScheduleSection {
+        ENTRY("입실 시간"), CHECKOUT("퇴실 시간"), DAYS("수업 요일");
+        final String title;
+        ScheduleSection(String title) { this.title = title; }
+    }
+    private void editSchedule(ScheduleSection section) {
         LinearLayout view = form(); Set<String> chosen = new HashSet<>();
-        String[] days = {"월","화","수","목","금","토","일"};
-        LinearLayout row = new LinearLayout(this);
-        for (int i=0; i<7; i++) {
-            final String day = String.valueOf(i+1);
-            CheckBox check = new CheckBox(this); check.setText(days[i]); check.setTextSize(13);
-            check.setButtonDrawable((android.graphics.drawable.Drawable)null); check.setGravity(Gravity.CENTER);
-            check.setChecked(prefs.days().contains(i+1)); if (check.isChecked()) chosen.add(day);
-            check.setBackground(shape(check.isChecked() ? 0xFFCDEDE4 : 0xFFF0F3F2, 8));
-            check.setOnCheckedChangeListener((v, yes) -> { if (yes) chosen.add(day); else chosen.remove(day); check.setBackground(shape(yes ? 0xFFCDEDE4 : 0xFFF0F3F2, 8)); });
-            row.addView(check,new LinearLayout.LayoutParams(0,dp(48),1));
+        for (int day : prefs.days()) chosen.add(String.valueOf(day));
+        note(view, switch (section) {
+            case ENTRY -> "입실을 처리할 시작·종료 시각을 선택하세요. 이 시간 안에서 입실이 확인되면 감시를 종료합니다.";
+            case CHECKOUT -> "퇴실 시각에 처리를 시작합니다. 완료를 확인하면 종료하고, 실패하면 선택한 시간 동안 다시 시도합니다.";
+            case DAYS -> "입실·퇴실을 처리할 수업 요일을 선택하세요. 등록한 휴강일은 제외합니다.";
+        });
+        if (section == ScheduleSection.DAYS) {
+            String[] days = {"월","화","수","목","금","토","일"};
+            LinearLayout row = new LinearLayout(this);
+            for (int i=0; i<7; i++) {
+                final String day = String.valueOf(i+1);
+                CheckBox check = new CheckBox(this); check.setText(days[i]); check.setTextSize(13);
+                check.setButtonDrawable((android.graphics.drawable.Drawable)null); check.setGravity(Gravity.CENTER);
+                check.setChecked(chosen.contains(day));
+                check.setBackground(shape(check.isChecked() ? 0xFFCDEDE4 : 0xFFF0F3F2, 8));
+                check.setOnCheckedChangeListener((v, yes) -> { if (yes) chosen.add(day); else chosen.remove(day); check.setBackground(shape(yes ? 0xFFCDEDE4 : 0xFFF0F3F2, 8)); });
+                row.addView(check,new LinearLayout.LayoutParams(0,dp(48),1));
+            }
+            gap(view,10); view.addView(row);
         }
-        view.addView(row);
         String[] times = {prefs.start(),prefs.end(),prefs.checkout()};
-        String[] labels = {"입실 시작","입실 종료","퇴실 시작"};
-        for (int i=0; i<3; i++) {
-            final int index = i;
-            Button time = button(labels[i] + "  " + times[i], false, () -> {});
+        String[] labels = {"입실 시작","입실 종료","퇴실 시각"};
+        int[] indices = switch (section) {
+            case ENTRY -> new int[]{0,1};
+            case CHECKOUT -> new int[]{2};
+            case DAYS -> new int[]{};
+        };
+        for (int index : indices) {
+            Button time = button(getString(R.string.time_picker_label, labels[index], times[index]), false, () -> {});
             time.setOnClickListener(v -> {
                 LocalTime initial = LocalTime.parse(times[index]);
-                new TimePickerDialog(this, (picker,h,m) -> {
+                TimePickerDialog picker = new TimePickerDialog(this, (selectedTime,h,m) -> {
                     times[index] = String.format(Locale.ROOT,"%02d:%02d",h,m);
                     time.setText(getString(R.string.time_picker_label, labels[index], times[index]));
-                }, initial.getHour(), initial.getMinute(), true).show();
+                }, initial.getHour(), initial.getMinute(), true);
+                picker.setTitle(labels[index]); picker.show();
             });
-            gap(view,10); view.addView(time,new LinearLayout.LayoutParams(-1,dp(50)));
+            gap(view,10); view.addView(time,new LinearLayout.LayoutParams(-1,-2));
         }
-        note(view,"퇴실 실패 시 재시도할 시간 (1–60분)");
-        EditText retry = input("재시도 분",String.valueOf(prefs.retryMinutes()),true); view.addView(retry);
+        Spinner retry = new Spinner(this);
+        if (section == ScheduleSection.CHECKOUT) {
+            note(view,getString(R.string.checkout_delay_notice,Policy.CHECKOUT_DELAY_SECONDS));
+            gap(view,10); note(view,"퇴실 실패 시 재시도할 시간");
+            String[] options = new String[60];
+            for (int i=0; i<options.length; i++) options[i] = (i+1) + "분";
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, options);
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            retry.setAdapter(adapter); retry.setSelection(prefs.retryMinutes()-1);
+            retry.setContentDescription("퇴실 재시도 시간"); view.addView(retry,new LinearLayout.LayoutParams(-1,dp(50)));
+            note(view,"이 시간 안에서만 퇴실 재시도와 강의실 이탈 알림을 확인합니다. 퇴실 완료 또는 시간 종료 시 감시를 멈춥니다.");
+            note(view,"이탈 알림에는 강의실 위치와 위치 항상 허용이 필요합니다.");
+            if (!Notices.attentionNotificationsAllowed(this)) action(view,"이탈 알림 허용 설정",false,() -> PhoneSettings.open(this,PhoneSettings.Target.TEST_NOTIFICATIONS));
+        }
+        TextView error = text("",13,0xFFB3261E,false); error.setVisibility(View.GONE); view.addView(error);
         ScrollView scroll = new ScrollView(this); scroll.addView(view);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("수업 일정 · 한국 시간").setView(scroll)
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(section.title + " · 한국 시간").setView(scroll)
             .setPositiveButton("저장",null).setNegativeButton("취소",null).create();
         dialog.setOnShowListener(v -> dialog.getButton(-1).setOnClickListener(b -> {
-            try {
-                int minutes = Integer.parseInt(retry.getText().toString());
-                if (chosen.isEmpty() || !Policy.validSchedule(times[0],times[1],times[2],minutes)) throw new IllegalArgumentException();
-                prefs.raw.edit().putStringSet("days",chosen).putString("start",times[0]).putString("end",times[1])
-                    .putString("checkout",times[2]).putInt("checkout_retry_minutes",minutes).apply();
-                prefs.log("출석 시간 변경"); ScheduleController.reconcile(this); dialog.dismiss(); render(1);
-            } catch (RuntimeException e) { toast("입실 시작 < 종료 ≤ 퇴실, 재시도 1–60분으로 자정 이전까지 설정해 주세요"); }
+            String entryStart = section == ScheduleSection.ENTRY ? times[0] : prefs.start();
+            String entryEnd = section == ScheduleSection.ENTRY ? times[1] : prefs.end();
+            String checkout = section == ScheduleSection.CHECKOUT ? times[2] : prefs.checkout();
+            int minutes = section == ScheduleSection.CHECKOUT ? retry.getSelectedItemPosition()+1 : prefs.retryMinutes();
+            if (chosen.isEmpty() || !Policy.validSchedule(entryStart,entryEnd,checkout,minutes)) {
+                error.setText(switch (section) {
+                    case ENTRY -> "입실 시작은 종료보다 빨라야 하며, 종료는 퇴실 " + checkout + "보다 늦을 수 없습니다.";
+                    case CHECKOUT -> "퇴실은 입실 종료 " + entryEnd + "와 같거나 늦어야 하며, 재시도는 자정 전에 끝나야 합니다.";
+                    case DAYS -> "수업 요일을 하나 이상 선택해 주세요.";
+                });
+                error.setVisibility(View.VISIBLE); return;
+            }
+            SharedPreferences.Editor edit = prefs.raw.edit();
+            switch (section) {
+                case ENTRY -> edit.putString("start",entryStart).putString("end",entryEnd);
+                case CHECKOUT -> edit.putString("checkout",checkout).putInt("checkout_retry_minutes",minutes);
+                case DAYS -> edit.putStringSet("days",chosen);
+            }
+            edit.apply(); prefs.log(section.title + " 변경"); ScheduleController.reconcile(this); dialog.dismiss(); render(1);
         }));
         dialog.show();
     }
@@ -520,6 +585,6 @@ public final class MainActivity extends Activity {
         boolean precise = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         boolean start = pendingStart, locate = pendingLocation; pendingStart = pendingLocation = false;
         if (!precise) { toast("정확한 위치 권한이 있어야 Wi-Fi 이름을 확인할 수 있습니다"); render(selected); return; }
-        if (start) toggleMonitor(); else if (locate) currentLocation(); else render(selected);
+        if (start) setAttendanceReservation(true); else if (locate) currentLocation(); else render(selected);
     }
 }

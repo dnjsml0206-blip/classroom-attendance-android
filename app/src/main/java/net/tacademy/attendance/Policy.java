@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 /** Pure scheduling and protocol rules; all attendance times use Korea time. */
 public final class Policy {
     public static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
+    public static final int CHECKOUT_DELAY_SECONDS = 10;
     private static final Pattern TIME = Pattern.compile("(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d)?");
     public enum Phase { IDLE, ENTRY, CHECKOUT }
     private Policy() {}
@@ -51,10 +52,11 @@ public final class Policy {
         LocalTime time = now.withZoneSameInstant(ZONE).toLocalTime();
         return !time.isBefore(LocalTime.parse(start)) && time.isBefore(LocalTime.parse(end));
     }
+    public static LocalTime checkoutStartTime(String checkout) { return LocalTime.parse(checkout).plusSeconds(CHECKOUT_DELAY_SECONDS); }
     public static boolean checkoutDue(ZonedDateTime now, String checkout, int retryMinutes) {
         ZonedDateTime local = now.withZoneSameInstant(ZONE);
         ZonedDateTime start = local.toLocalDate().atTime(LocalTime.parse(checkout)).atZone(ZONE);
-        return !local.isBefore(start) && local.isBefore(start.plusMinutes(retryMinutes));
+        return !local.isBefore(start.plusSeconds(CHECKOUT_DELAY_SECONDS)) && local.isBefore(start.plusMinutes(retryMinutes));
     }
     public static Phase phase(ZonedDateTime now, Set<Integer> days, Set<String> excluded,
             String start, String end, String checkout, int retryMinutes, boolean checkedIn, boolean checkedOut) {
@@ -78,7 +80,7 @@ public final class Policy {
             }
             if (offset > 0 || !checkedOut) {
                 ZonedDateTime out = day.atTime(LocalTime.parse(checkout)).atZone(ZONE);
-                candidates.add(out); candidates.add(out.plusMinutes(retryMinutes));
+                candidates.add(out.plusSeconds(CHECKOUT_DELAY_SECONDS)); candidates.add(out.plusMinutes(retryMinutes));
             }
             for (ZonedDateTime candidate : candidates) if (candidate.isAfter(local)) return candidate;
         }

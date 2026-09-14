@@ -112,7 +112,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         List<AccessibilityNodeInfo> nodes = new ArrayList<>(); collect(root, nodes, 0);
         String text = allText(nodes);
         if (confirmationExpected && !confirmationClicked && ChromePage.checkoutConfirmation(text)) {
-            if (!prefs.auto()) { finishWork(); return; }
+            if (!prefs.auto() || prefs.phase(ZonedDateTime.now(Policy.ZONE)) != phase) { finishWork(); return; }
             AccessibilityNodeInfo confirm = exactButton(nodes, "확인", "OK");
             if (confirm != null && click(confirm)) { confirmationClicked = true; traceLock("퇴실 확인 대화상자 클릭 요청 전달됨"); }
             return;
@@ -158,6 +158,8 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if (button == null || !button.isEnabled()) { traceLock("출결 버튼 대기 · 클릭 가능한 "+(phase==Policy.Phase.ENTRY?"입실":"퇴실")+" 버튼을 읽지 못함"); return; }
         if (prefs.phase(ZonedDateTime.now(Policy.ZONE)) != phase || !NetworkAccess.inspect(this).allowed()) return;
         if (!prefs.raw.edit().putString("chrome_pending", key).commit()) { fail("처리 상태 저장 실패", "앱에서 상태를 확인해 주세요"); return; }
+        // Recheck after the durable write in case the phone clock changed while saving.
+        if (prefs.phase(ZonedDateTime.now(Policy.ZONE)) != phase) { prefs.raw.edit().remove("chrome_pending").apply(); finishWork(); return; }
         clicked = click(button);
         traceLock((phase==Policy.Phase.ENTRY?"입실":"퇴실")+(clicked?" 버튼 클릭 요청 전달됨 · 사이트 기록 확인 전":" 버튼 클릭 요청 실패"));
         confirmationExpected = clicked && phase == Policy.Phase.CHECKOUT;

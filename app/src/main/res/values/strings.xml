@@ -9,4 +9,7 @@
     <string name="checkout_trial_waiting">오늘 %1$s 퇴실 테스트 예약됨 · 기존 출석 감시는 유지됩니다</string>
     <string name="setup_summary">기본 설정 %1$d / %2$d 완료</string>
     <string name="setup_state">%1$s %2$s  ›</string>
+    <string name="calendar_summary">완료 %1$d일 · 입실 %2$d일 · 미확인 %3$d일</string>
+    <string name="log_upload_summary">%1$s\n\n%2$s</string>
+    <string name="checkout_delay_notice">퇴실은 조기 처리를 피하도록 설정 시각보다 %1$d초 뒤에 시작합니다. 재시도 종료 시각은 유지합니다.</string>
 </resources>

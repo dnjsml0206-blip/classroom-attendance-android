@@ -18,6 +18,7 @@ public final class ThemeChecks {
     ThemeChecks(Instrumentation instrumentation) { this.instrumentation=instrumentation; }
     private Context context;
     private MainActivity activity;
+    private Activity calendar;
     private Map<String,?> saved;
     private MutableClock clock;
     private int checks;
@@ -33,29 +34,47 @@ public final class ThemeChecks {
                     .putStringSet("ssids",Set.of("__EMULATOR_NO_MATCH__"))
                     .putString("start","08:30").putString("end","09:30").putString("checkout","17:50")
                     .putString("record:"+day,"08:42:00|")
-                    .putString("log:"+day,"08:42  입실 완료\n08:30  입실 감시 시작")
+                    .putString("log:"+day,"08:42  입실 완료\n08:30  입실 감시 시작\n08:20  Wi-Fi 추가\n08:10  출석 시간 변경")
+                    .putStringSet("days",Set.of("1","2","3","4","5")).putStringSet("excluded",Set.of(day.minusDays(2).toString()))
+                    .putString("record:"+day.minusDays(1),"08:40:00|17:50:00")
+                    .remove("record:"+day.minusDays(2)).remove("record:"+day.minusDays(3)).remove("record_day").remove("in").remove("out")
                     .remove("record:"+day.plusDays(1)).remove("log:"+day.plusDays(1)).commit();
             });
-            activity = (MainActivity)instrumentation.startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            activity = (MainActivity)instrumentation.startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
             clock = new MutableClock(day.atTime(8,45).atZone(Policy.ZONE).toInstant());
             runOnMainSync(() -> setField("homeClock",clock)); settle();
             check(theme()==HomeTheme.WARM && value("inTime").equals("08:42:00") && value("outTime").equals("—"),
                 "Morning theme preserves confirmed entry and does not invent an exit");
+            check(!value("todayLog").contains("감시")&&!value("todayLog").contains("변경")&&!value("todayLog").contains("Wi-Fi"),"Today lists confirmed attendance only, excluding operational and setting logs");
             capture("today-warm.png");
             at(day,16,49,59); check(theme()==HomeTheme.WARM,"Warm immediately before the boundary");
             at(day,16,50,0);
             check(theme()==HomeTheme.NIGHT && value("inTime").equals("08:42:00") && value("todayLog").contains("입실 완료"),
                 "Visible screen switches automatically and preserves records and logs");
             capture("today-night.png");
-            runOnMainSync(() -> clickText("달력에서 출결 조회  ›")); settle();
-            AccessibilityNodeInfo active = instrumentation.getUiAutomation().getRootInActiveWindow();
-            check(active!=null && !active.findAccessibilityNodeInfosByText("2026").isEmpty(),"Calendar opens from the night screen");
-            capture("calendar-night.png"); instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK); settle();
+            android.app.Instrumentation.ActivityMonitor calendarMonitor=instrumentation.addMonitor(AttendanceCalendarActivity.class.getName(),null,false);
+            runOnMainSync(() -> clickText("달력에서 출결 조회  ›"));
+            calendar=instrumentation.waitForMonitorWithTimeout(calendarMonitor,5000);instrumentation.removeMonitor(calendarMonitor);settle();
+            check(calendar!=null && calendarValue("calendar-month").equals("2026년 9월"),"Monthly attendance calendar opens from Today");
+            check(String.valueOf(calendar.getWindow().getDecorView().findViewWithTag("calendar-day:"+day).getContentDescription()).contains("입실")
+                && String.valueOf(calendar.getWindow().getDecorView().findViewWithTag("calendar-day:"+day.minusDays(1)).getContentDescription()).contains("완료")
+                && String.valueOf(calendar.getWindow().getDecorView().findViewWithTag("calendar-day:"+day.minusDays(2)).getContentDescription()).contains("휴강"),"Calendar dates show entry, completion and holiday states");
+            capture("calendar-night.png");
+            runOnMainSync(()->calendar.getWindow().getDecorView().findViewWithTag("calendar-day:"+day.minusDays(1)).performClick());settle();
+            check(calendarValue("calendar-in").equals("08:40:00")&&calendarValue("calendar-out").equals("17:50:00"),"Selecting a completed date shows its actual entry and exit times");
+            capture("calendar-detail.png");
+            runOnMainSync(()->calendar.getWindow().getDecorView().findViewWithTag("calendar-day:"+day.minusDays(3)).performClick());settle();
+            check(calendarValue("calendar-in").equals("—")&&calendarValue("calendar-out").equals("—")&&calendarValue("calendar-selected-status").equals("미확인"),"Missing observations show unknown status without fabricated times or absence");
+            runOnMainSync(()->calendar.getWindow().getDecorView().findViewWithTag("calendar-prev").performClick());settle();
+            check(calendarValue("calendar-month").equals("2026년 8월"),"Previous month navigation works");
+            runOnMainSync(()->calendar.getWindow().getDecorView().findViewWithTag("calendar-next").performClick());settle();
+            check(calendarValue("calendar-month").equals("2026년 9월"),"Next month navigation works");
+            runOnMainSync(()->calendar.finish());calendar=null;settle();
             runOnMainSync(() -> prefs.raw.edit().putString("checkout","19:20").commit()); settle();
             check(theme()==HomeTheme.WARM,"A changed checkout time updates the visible theme");
             at(day,18,20,0); check(theme()==HomeTheme.NIGHT,"Custom checkout boundary switches to night");
             at(day.plusDays(1),0,0,0);
-            check(theme()==HomeTheme.WARM && value("inTime").equals("—") && value("todayLog").equals("아직 오늘 기록이 없습니다."),
+            check(theme()==HomeTheme.WARM && value("inTime").equals("—") && value("todayLog").equals("아직 확인된 출석 기록이 없습니다."),
                 "Midnight resets the theme and loads the new day's records");
             runOnMainSync(() -> activity.moveTaskToBack(true));
             clock.instant=day.atTime(20,0).atZone(Policy.ZONE).toInstant();
@@ -82,8 +101,9 @@ public final class ThemeChecks {
     private Object field(String name) { try { Field f=MainActivity.class.getDeclaredField(name); f.setAccessible(true); return f.get(activity); } catch(Exception e) { throw new AssertionError(e); } }
     private void setField(String name,Object value) { try { Field f=MainActivity.class.getDeclaredField(name); f.setAccessible(true); f.set(activity,value); } catch(Exception e) { throw new AssertionError(e); } }
     private HomeTheme theme() { return (HomeTheme)field("homeTheme"); }
+    private String calendarValue(String tag) { return ((TextView)calendar.getWindow().getDecorView().findViewWithTag(tag)).getText().toString(); }
     private String value(String name) { return ((TextView)field(name)).getText().toString(); }
-    private void check(boolean ok,String message) { if(!ok)throw new AssertionError(message); checks++; }
+    private void check(boolean ok,String message) { if(!ok)throw new AssertionError(message); checks++; Bundle progress=new Bundle();progress.putString("stream","PASS: "+message+"\n");instrumentation.sendStatus(0,progress); }
     private TextView findText(View view,String label) {
         if(view instanceof TextView && ((TextView)view).getText().toString().equals(label))return (TextView)view;
         if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++){TextView found=findText(((ViewGroup)view).getChildAt(i),label);if(found!=null)return found;}
@@ -110,7 +130,7 @@ public final class ThemeChecks {
                 else if(v instanceof Set)edit.putStringSet(k,new HashSet<>((Set<String>)v));
             }
             if(!edit.commit())throw new AssertionError("Could not restore emulator preferences");
-            if(activity!=null)activity.finish(); AlarmScheduler.arm(context,false);
+            if(calendar!=null)calendar.finish();if(activity!=null)activity.finish(); AlarmScheduler.arm(context,false);
         });
     }
     private static final class MutableClock extends Clock {
