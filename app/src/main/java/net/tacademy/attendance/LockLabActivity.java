@@ -23,7 +23,7 @@ public final class LockLabActivity extends Activity {
     private Switch actual;
     private final Runnable refresh=new Runnable(){@Override public void run(){update();handler.postDelayed(this,1000);}};
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);
+        super.onCreate(state);if(!CreatorTools.testsVisible(this)){finish();return;}
         if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(0xFFF4F7F6);
         content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(22),dp(22),dp(22),dp(30));scroll.addView(content);
@@ -71,12 +71,12 @@ public final class LockLabActivity extends Activity {
         add(phone,"위치 항상 허용 설정",false,()->PhoneSettings.open(this,PhoneSettings.Target.LOCATION_PERMISSION));
         add(phone,"테스트 알림 설정",false,()->PhoneSettings.open(this,PhoneSettings.Target.TEST_NOTIFICATIONS));
         add(phone,"서버 인증 · API 준비 상태",false,()->new AlertDialog.Builder(this).setTitle("서버 직접 처리 · 미연동")
-            .setMessage("Chrome 인증은 앱의 서버 인증으로 공유되지 않습니다. 현재 잠금 유지 테스트는 등록 Wi-Fi에서 HTTPS 연결 응답만 확인합니다.\n\n앱 전용 인증 방법과 출결 API가 확보되어야 잠금 상태의 실제 출결 처리를 연결할 수 있습니다. 연결 응답이 와도 인증·출결 성공으로 표시하지 않습니다.")
+            .setMessage("Chrome 인증은 앱의 서버 인증으로 공유되지 않습니다. 현재 연결 진단은 휴대폰의 Wi-Fi 조건만 확인하며 서버에 접속하지 않습니다.\n\n앱 전용 인증 방법과 출결 API가 확보되어야 잠금 상태의 실제 출결 처리를 연결할 수 있습니다. 기기 조건 확인을 인증·출결 성공으로 표시하지 않습니다.")
             .setPositiveButton("확인",null).show());
 
         LinearLayout results=card("4. 테스트 기록");log=text("",12,INK,false);log.setTextIsSelectable(true);results.addView(log);
         add(results,"성공 · 부분 성공 · 실패 기록",true,this::verdict);
-        add(results,"로그 올리기 · GitHub",true,()->startActivity(new Intent(this,LogUploadActivity.class)));
+        results.addView(text("로그 업로드는 설정 상단의 ‘진단 · 제작자용’에서 할 수 있습니다.",12,MUTED,false));
         add(results,"결과 전체 복사",false,()->{getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("출석 메이트 잠금 테스트",LockLab.allReports(this)));Toast.makeText(this,"이전 결과를 포함해 복사했습니다",Toast.LENGTH_SHORT).show();});
         add(results,"이전 테스트 함께 보기",false,()->{TextView reports=text(LockLab.allReports(this),13,INK,false);reports.setTextIsSelectable(true);reports.setPadding(dp(20),dp(12),dp(20),dp(12));ScrollView all=new ScrollView(this);all.addView(reports);new AlertDialog.Builder(this).setTitle("최근 테스트 · 최대 11회").setView(all).setPositiveButton("닫기",null).show();});
         add(content,"설정으로 돌아가기",false,this::finish);describe();update();
@@ -123,7 +123,7 @@ public final class LockLabActivity extends Activity {
         TextView value=text("",14,INK,false);parent.addView(value);return value;
     }
     private void firstHelp(){new AlertDialog.Builder(this).setTitle("처음 한 번 확인할 설정")
-        .setMessage("1. 아래 ‘휴대폰 상태와 신뢰 설정’에서 Chrome 접근성·위치 항상 허용·알람 및 리마인더·테스트 알림을 허용하세요.\n\n2. Chrome에서 평소 출결 주소가 열리는지 확인하세요. 서버 연결 진단은 등록 Wi-Fi에 연결하세요.\n\n3. 조회만 확인할 때는 실제 출결 스위치를 OFF로 두세요. 입실·퇴실까지 시험하려면 출석 예약과 Chrome 자동 클릭, 실제 출결 스위치를 모두 켜세요. 예약한 뒤 전원 버튼으로 화면을 끄고, 자동 동작을 확인할 때까지 알림이나 화면을 누르지 마세요. 시스템 인증 방식은 인증 요청이 뜨면 직접 인증하세요.\n\n4. 예약 시각이 지나도 반응이 없으면 최대 2분 뒤 앱으로 돌아와 기록을 확인하세요. 결과 입력에서 직접 화면 켬·잠금 해제·알림 누름·무조작 중 해당 항목을 기록하세요. 예약에서 진입했다는 표시는 자동 잠금 해제 성공을 뜻하지 않습니다.")
+        .setMessage("1. 아래 ‘휴대폰 상태와 신뢰 설정’에서 Chrome 접근성·위치 항상 허용·알람 및 리마인더·테스트 알림을 허용하세요.\n\n2. Chrome에서 평소 출결 주소가 열리는지 확인하세요. 연결 진단은 휴대폰 설정만 확인하며 서버에는 접속하지 않습니다.\n\n3. 조회만 확인할 때는 실제 출결 스위치를 OFF로 두세요. 입실·퇴실까지 시험하려면 출석 예약과 Chrome 자동 클릭, 실제 출결 스위치를 모두 켜세요. 예약한 뒤 전원 버튼으로 화면을 끄고, 자동 동작을 확인할 때까지 알림이나 화면을 누르지 마세요. 시스템 인증 방식은 인증 요청이 뜨면 직접 인증하세요.\n\n4. 예약 시각이 지나도 반응이 없으면 최대 2분 뒤 앱으로 돌아와 기록을 확인하세요. 결과 입력에서 직접 화면 켬·잠금 해제·알림 누름·무조작 중 해당 항목을 기록하세요. 예약에서 진입했다는 표시는 자동 잠금 해제 성공을 뜻하지 않습니다.")
         .setPositiveButton("확인",null).show();}
     private void trustHelp(){new AlertDialog.Builder(this).setTitle("Extend Unlock · 신뢰 방식")
         .setMessage("먼저 PIN 등으로 한 번 잠금을 해제한 후 시험하세요.\n\n• 신뢰 기기: 등록한 Bluetooth 기기 연결\n• 신뢰 장소: 휴대폰에 등록한 장소에 머무르기\n• 신체 활동 감지: 휴대 중과 책상 위 상태 비교\n\n지원 항목과 설정 경로는 기기마다 다릅니다. 신뢰 유지 시간은 제한되어 있으며 잠금 모드·재부팅·재인증 요구 뒤에는 다시 인증이 필요할 수 있습니다.\n\n앱은 보안 설정을 자동으로 켜거나 변경하지 않습니다.")

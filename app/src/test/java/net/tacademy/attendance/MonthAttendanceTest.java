@@ -27,4 +27,24 @@ public final class MonthAttendanceTest {
         List<LocalDate> february=MonthAttendance.cells(YearMonth.of(2024,2));
         assertEquals(35,february.size());assertEquals(LocalDate.of(2024,2,29),february.get(32));assertNull(february.get(34));
     }
+    @Test public void PastAnnotationsSupplyAllStatusesWithoutInventingTimes() {
+        LocalDate start=LocalDate.of(2026,8,31);
+        assertEquals(MonthAttendance.State.ATTENDED,MonthAttendance.state(start,today,null,MonthAttendance.ManualStatus.PRESENT,weekdays,Set.of()));
+        assertEquals(MonthAttendance.State.EARLY_LEAVE,MonthAttendance.state(start,today,null,MonthAttendance.ManualStatus.EARLY_LEAVE,weekdays,Set.of()));
+        assertEquals(MonthAttendance.State.ABSENT,MonthAttendance.state(start,today,null,MonthAttendance.ManualStatus.ABSENT,weekdays,Set.of()));
+        assertEquals(MonthAttendance.State.UNKNOWN,MonthAttendance.state(start,today,null,null,weekdays,Set.of()));
+    }
+    @Test public void HistoricalCorrectionOverridesCurrentSettingsAndObservedCompletion() {
+        LocalDate past=today.minusDays(1);
+        Policy.Record observed=new Policy.Record("08:40","15:30");
+        assertEquals(MonthAttendance.State.EARLY_LEAVE,MonthAttendance.state(past,today,observed,MonthAttendance.ManualStatus.EARLY_LEAVE,Set.of(),Set.of(past.toString())));
+        assertEquals(MonthAttendance.State.COMPLETE,MonthAttendance.state(past,today,observed,null,Set.of(),Set.of(past.toString())));
+        assertEquals("08:40",observed.in());assertEquals("15:30",observed.out());
+    }
+    @Test public void TodayAndFutureNeverUseManualAnnotations() {
+        assertEquals(MonthAttendance.State.UNKNOWN,MonthAttendance.state(today,today,null,MonthAttendance.ManualStatus.ABSENT,weekdays,Set.of()));
+        LocalDate future=today.plusDays(3);
+        assertEquals(MonthAttendance.State.PLANNED,MonthAttendance.state(future,today,null,MonthAttendance.ManualStatus.PRESENT,weekdays,Set.of()));
+    }
+
 }

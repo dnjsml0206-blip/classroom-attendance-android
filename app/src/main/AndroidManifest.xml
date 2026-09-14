@@ -27,10 +27,10 @@
         </activity>
         <activity android:name=".AttendanceCalendarActivity" android:exported="false"/>
         <activity android:name=".ChromeLaunchActivity" android:exported="false"/>
-        <activity android:name=".LockLabActivity" android:exported="false"/>
-        <activity android:name=".LogUploadActivity" android:exported="false"/>
-        <activity android:name=".LockTrialActivity" android:exported="false" android:excludeFromRecents="true"/>
-        <receiver android:name=".LockTestReceiver" android:exported="false"/>
+        <activity android:name=".LockLabActivity" android:exported="false" android:enabled="${creatorToolsEnabled}"/>
+        <activity android:name=".LogUploadActivity" android:exported="false" android:enabled="${creatorToolsEnabled}"/>
+        <activity android:name=".LockTrialActivity" android:exported="false" android:enabled="${creatorToolsEnabled}" android:excludeFromRecents="true"/>
+        <receiver android:name=".LockTestReceiver" android:exported="false" android:enabled="${creatorToolsEnabled}"/>
         <service android:name=".ChromeAttendanceService" android:exported="true"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:label="@string/chrome_accessibility_label">

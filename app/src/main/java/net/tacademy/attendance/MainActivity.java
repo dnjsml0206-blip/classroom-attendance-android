@@ -304,17 +304,31 @@ public final class MainActivity extends Activity {
         action(automation, "Chrome에서 지금 확인", false, () -> startActivity(new Intent(this, ChromeLaunchActivity.class)));
     }
 
+    private void creatorPanel(){
+        if(CreatorTools.enabled()){
+            LinearLayout diagnostics=card("진단 · 제작자용");
+            note(diagnostics,"일반 출결 동작과 잠금 테스트 기록을 확인하고 직접 업로드합니다.");
+            action(diagnostics,"로그 확인 · GitHub 업로드",true,()->startActivity(new Intent(this,LogUploadActivity.class)));
+            if(CreatorTools.testsVisible(this)){
+                action(diagnostics,"잠금 상태 테스트 열기",false,()->startActivity(new Intent(this,LockLabActivity.class)));
+                action(diagnostics,"테스트 완료 · 임시 메뉴 숨기기",false,()->{CreatorTools.completeTests(this);render(1);});
+            } else {
+                note(diagnostics,"테스트 메뉴 숨김 · 제작자 로그 업로드는 계속 사용할 수 있습니다.");
+                action(diagnostics,"임시 테스트 메뉴 다시 켜기",false,()->{CreatorTools.enableTests(this);render(1);});
+            }
+        }
+    }
+
     private void settings() {
+        creatorPanel();
         reservationSettings();
         LinearLayout checks=card("설정 확인");setupStatus=new SetupStatusView(this,false);checks.addView(setupStatus);
-        LinearLayout lab = card("임시 메뉴");
-        note(lab,"화면 깨우기 · Extend Unlock · 신뢰 방식 · 시스템 인증 · 서버 연결을 직접 시험하고 결과를 기록합니다.");
-        action(lab,"잠금 상태 테스트 열기",true,() -> startActivity(new Intent(this,LockLabActivity.class)));
         LinearLayout schedule = card("출석 시간");
         note(schedule, "변경할 항목을 선택하세요. 모든 시간은 한국 시간입니다.");
         action(schedule, "입실 시간  ›\n" + prefs.start() + "–" + prefs.end(), false, () -> editSchedule(ScheduleSection.ENTRY));
         action(schedule, "퇴실 시간  ›\n" + prefs.checkout() + " · 최대 " + prefs.retryMinutes() + "분 재시도", false, () -> editSchedule(ScheduleSection.CHECKOUT));
         note(schedule, getString(R.string.checkout_delay_notice,Policy.CHECKOUT_DELAY_SECONDS));
+        note(schedule,"자동 접속은 입실·퇴실 각 최대 3회입니다. 오류나 결과 확인 시간 초과 시 자동 재접속을 멈춥니다. 모든 사이트 열기는 최소 3초 간격, 하루 최대 20회입니다.");
         note(schedule, "입실·퇴실 완료를 확인하면 해당 감시를 종료합니다.");
         note(schedule, "퇴실 재시도 시간 안에서, 퇴실 미확인 상태로 강의실을 벗어나면 알립니다.");
         note(schedule, "오늘 화면은 " + HomeTheme.nightStarts(prefs.end(), prefs.checkout()) + "부터 야간 테마로 전환합니다.");
@@ -566,8 +580,8 @@ public final class MainActivity extends Activity {
                 .setMessage("보류를 해제하면 설정한 시간 안에서 다시 클릭할 수 있습니다.").setNegativeButton("취소",null)
                 .setPositiveButton("확인했고 해제",(d,w) -> { prefs.raw.edit().remove("chrome_pending").apply(); render(2); }).show());
         }
-        LinearLayout info = card("출석 메이트 0.5.2");
-        note(info,"출결 달력에는 앱이 Chrome에서 확인한 기록을 표시합니다. 이전 전체 기록은 Chrome 출결 화면에서 확인하세요.");
+        LinearLayout info = card("출석 메이트 " + BuildConfig.VERSION_NAME + (BuildConfig.CREATOR_TOOLS ? " · 제작자용" : ""));
+        note(info,"출결 달력에서 사이트 확인 기록을 보고, 지난 날짜는 출석·조퇴·결석을 직접 입력할 수 있습니다. 직접 입력은 앱에만 저장됩니다.");
     }
 
     private void permissions() {

@@ -32,6 +32,12 @@ public final class ChromePage {
         if (Pattern.compile(label + "\\s*시간\\s*:").matcher(text).find()) throw new IllegalArgumentException("Unknown time format");
         return "";
     }
+    public static boolean serverUnavailable(String text){
+        String value=text.toUpperCase(java.util.Locale.ROOT);
+        return value.contains("ERR_CONNECTION_TIMED_OUT")||value.contains("ERR_CONNECTION_REFUSED")||value.contains("ERR_NAME_NOT_RESOLVED")
+            ||value.contains("HTTP ERROR 500")||value.contains("HTTP ERROR 502")||value.contains("HTTP ERROR 503")||value.contains("HTTP ERROR 504")
+            ||value.contains("502 BAD GATEWAY")||value.contains("503 SERVICE UNAVAILABLE")||value.contains("504 GATEWAY TIMEOUT");
+    }
     public static boolean checkoutConfirmation(String text) {
         return text.contains("정말로 퇴실 하시겠습니까?");
     }

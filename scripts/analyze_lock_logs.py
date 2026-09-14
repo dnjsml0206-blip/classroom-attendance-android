@@ -10,7 +10,7 @@ import subprocess
 REPO = "dnjsml0206-blip/classroom-attendance-android"
 BRANCH = "codex/device-logs"
 MODES = {"WAKE": "화면 깨우기", "EXTEND": "Extend Unlock", "DEVICE": "Bluetooth 기기",
-         "PLACE": "신뢰 장소", "BODY": "신체 활동", "AUTH": "시스템 인증", "NETWORK": "서버 연결 진단"}
+         "PLACE": "신뢰 장소", "BODY": "신체 활동", "AUTH": "시스템 인증", "NETWORK": "연결 진단"}
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -87,6 +87,8 @@ def conclusion(mode, rows):
 
 
 def render(rows, skipped):
+    events = [r for r in rows if r.get("record_type") == "attendance_event"]
+    rows = [r for r in rows if r.get("record_type") != "attendance_event"]
     lines = ["# 잠금 테스트 로그 분석", "", f"중복을 제외한 시험 {len(rows)}회. 검증용 업로드 {skipped}개 제외.", "",
              "| 방식 | 시험 | 사용자 판정: 성공 / 부분 / 실패 / 미확인 | 앱 관찰 해석 |",
              "|---|---:|---|---|"]
@@ -95,6 +97,14 @@ def render(rows, skipped):
         counts = Counter(r.get("user_verdict", "미확인") for r in group)
         values = " / ".join(str(counts[v]) for v in ("성공", "부분 성공", "실패", "미확인"))
         lines.append(f"| {label} | {len(group)} | {values} | {conclusion(mode, group)} |")
+    if events:
+        counts = Counter(r.get("event_code", "UNKNOWN") for r in events)
+        labels = {"CHROME_OPEN_REQUEST": "Chrome 열기 시도", "CHROME_OPEN_DISPATCHED": "Chrome 실행 전달",
+                  "ACCESS_BLOCKED": "반복 접속 차단", "BUTTON_REQUEST": "출결 버튼 동작 요청",
+                  "RECORD_CONFIRMED": "사이트 시각 확인", "AUTOMATIC_PAUSED": "자동 재접속 중단"}
+        lines += ["", "## 일반 출결 동작", "", f"일반 동작 {len(events)}건. Chrome 내부 HTTP 요청 건수와 다릅니다."]
+        for code, label in labels.items():
+            lines.append(f"- {label}: {counts[code]}건")
     lines += ["", "## 시험별 조건", "", "| 방식 | 접근성 연결 | 위치 항상 허용 | 출석 예약 / 자동 클릭 / 실제 출결 | Wi-Fi 진단 | 진입 지연 | 직접 조작 기록 |", "|---|---|---|---|---|---|---|"]
     def flag(value):
         return "켜짐" if value is True else "꺼짐" if value is False else "기록 없음"
@@ -115,7 +125,7 @@ def render(rows, skipped):
     lines += ["", "Chrome 주소 확인·HTTPS 응답을 실제 입실/퇴실 완료로 취급하지 않습니다. 시스템 해제 성공도 PIN·지문 입력을 직접 증명하지 않습니다.",
               "이전 automatic_entry 필드는 예약 호출 경로일 뿐 자동 잠금 해제 성공이 아닙니다. user_interaction은 사용자 진술이며 앱 관찰과 구분합니다.",
               "과거 legacy 기록은 날짜·환경 정보가 없으며 동일한 원문은 한 번만 집계합니다. 사용자 판정과 앱 관찰이 다르면 원본 메모·이벤트를 함께 확인하세요.", "", "## 원본"]
-    for source in sorted({r["source"] for r in rows}):
+    for source in sorted({r["source"] for r in rows + events}):
         lines.append(f"- {source}")
     return "\n".join(lines) + "\n"
 

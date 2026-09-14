@@ -38,7 +38,7 @@
     <string-array name="lock_guide_network">
         <item>TACADEMY_5G 또는 앱에 등록한 Wi-Fi에 연결하세요.</item>
         <item>예약 후 화면을 끈 채 기다리세요. 예약 시각이 지난 다음 직접 잠금을 풀어 테스트 기록을 확인하세요.</item>
-        <item>기록에 HTTPS 응답 코드가 남고 화면 깨우기·Chrome 실행이 없었다면 연결 진단 성공입니다.</item>
-        <item>사이트 인증·출결 성공을 뜻하지 않습니다. 앱 전용 인증/API가 연결되기 전에는 출결을 처리하지 않습니다.</item>
+        <item>기록의 Wi-Fi 조건 확인 결과를 보세요. 화면 깨우기·Chrome 실행·서버 접속 없이 진단합니다.</item>
+        <item>휴대폰 설정만 확인한 결과입니다. 서버 상태·사이트 인증·출결 성공을 뜻하지 않습니다.</item>
     </string-array>
 </resources>

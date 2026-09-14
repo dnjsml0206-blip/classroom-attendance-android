@@ -62,6 +62,7 @@ final class LockLogExport {
             JSONArray old=new JSONArray(LockLab.prefs(c).getString("history","[]"));
             JSONArray details=new JSONArray(LockLab.prefs(c).getString("history_details","[]"));
             for(int i=0;i<Math.min(old.length(),10);i++){JSONObject item=details.optJSONObject(i);result.put(sanitize(item==null?legacy(old.getString(i)):item));}
+            JSONArray events=DiagnosticLog.records(c);for(int i=0;i<events.length();i++)result.put(events.get(i));
             return result;
         }
     }
@@ -76,7 +77,8 @@ final class LockLogExport {
     }
     private static JSONObject cleanObject(JSONObject in)throws JSONException{JSONObject out=new JSONObject();Iterator<String> keys=in.keys();while(keys.hasNext()){String k=keys.next();Object v=in.get(k);out.put(k,v instanceof String?LogEvidence.redact((String)v):v instanceof JSONObject?cleanObject((JSONObject)v):v);}return out;}
     static String summary(JSONArray records){
-        StringBuilder out=new StringBuilder();for(LockTestPolicy.Mode m:LockTestPolicy.Mode.values()){
+        int eventCount=0;for(int i=0;i<records.length();i++)if("attendance_event".equals(records.optJSONObject(i).optString("record_type")))eventCount++;
+        StringBuilder out=new StringBuilder("일반 출결 동작 · "+eventCount+"건\n");for(LockTestPolicy.Mode m:LockTestPolicy.Mode.values()){
             int count=0,good=0,partial=0,bad=0;for(int i=0;i<records.length();i++){JSONObject r=records.optJSONObject(i);if(r!=null&&m.name().equals(r.optString("mode"))){count++;switch(r.optString("user_verdict")){case "성공":good++;break;case "부분 성공":partial++;break;case "실패":bad++;break;}}}
             out.append(m.label).append(" · ").append(count==0?"기록 없음":count+"회 / 성공 "+good+" · 부분 "+partial+" · 실패 "+bad+" · 미확인 "+(count-good-partial-bad)).append('\n');
         }return out.toString().trim();
@@ -85,6 +87,6 @@ final class LockLogExport {
     static JSONObject document(Context c,JSONArray records,String id)throws JSONException{
         return new JSONObject().put("schema_version",2).put("report_id",id).put("exported_at",Instant.now().toString()).put("timezone","Asia/Seoul")
             .put("export_environment",environment(c)).put("records",records)
-            .put("analysis_note","사용자 판정과 앱 관찰을 구분하세요. 예약 경로의 화면 진입은 자동 잠금 해제 증거가 아닙니다. user_interaction과 entry_delay_ms를 함께 확인하세요. Chrome 주소 확인은 출결 성공이 아니며, 서버 응답은 인증 성공이 아닙니다. 과거 legacy 기록의 날짜와 기기 설정은 알 수 없습니다. 메모는 사용자 입력입니다.");
+            .put("analysis_note","attendance_event는 앱 동작 기록이며 Chrome 실제 HTTP 요청 건수가 아닙니다. 과거 버전의 일반 출결 동작은 복원할 수 없습니다. 사용자 판정과 앱 관찰을 구분하세요. 예약 경로의 화면 진입은 자동 잠금 해제 증거가 아닙니다. user_interaction과 entry_delay_ms를 함께 확인하세요. Chrome 주소 확인은 출결 성공이 아니며, 서버 응답은 인증 성공이 아닙니다. 과거 legacy 기록의 날짜와 기기 설정은 알 수 없습니다. 메모는 사용자 입력입니다.");
     }
 }

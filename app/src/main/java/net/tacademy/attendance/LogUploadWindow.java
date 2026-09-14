@@ -21,11 +21,16 @@ final class LogUploadWindow {
         String id=record.optString("test_id","");
         return !id.isEmpty()&&!record.isNull("test_id") ? "test:"+id : "legacy:"+LockLogExport.digest(canonical(record));
     }
+    private static String fingerprint(JSONObject record)throws JSONException{
+        JSONObject source=new JSONObject(record.toString());source.remove("evidence");
+        if(source.has("events"))source.put("events",source.optString("events").stripTrailing());
+        return LockLogExport.digest(canonical(source));
+    }
     static JSONObject remember(JSONArray records,long at) throws JSONException {
         JSONObject result=new JSONObject();
         for(int i=0;i<records.length();i++){
             JSONObject record=records.getJSONObject(i);
-            result.put(key(record),new JSONObject().put("hash",LockLogExport.digest(canonical(record))).put("at_ms",at));
+            result.put(key(record),new JSONObject().put("hash",fingerprint(record)).put("hash_version",2).put("at_ms",at));
         }
         return result;
     }
@@ -36,10 +41,11 @@ final class LogUploadWindow {
         long changedAt=Math.max(now,newest+1),through=Math.max(now,after);
         JSONObject observed=new JSONObject();JSONArray selected=new JSONArray();
         for(int i=0;i<records.length();i++){
-            JSONObject record=records.getJSONObject(i);String key=key(record),hash=LockLogExport.digest(canonical(record));
+            JSONObject record=records.getJSONObject(i);String key=key(record),hash=fingerprint(record);
             JSONObject old=previous.optJSONObject(key);
-            long at=old!=null&&hash.equals(old.optString("hash")) ? old.optLong("at_ms",changedAt) : changedAt;
-            observed.put(key,new JSONObject().put("hash",hash).put("at_ms",at));
+            boolean same=old!=null&&(hash.equals(old.optString("hash")) || old.optInt("hash_version",1)==1&&LockLogExport.digest(canonical(record)).equals(old.optString("hash")));
+            long at=same?old.optLong("at_ms",changedAt):changedAt;
+            observed.put(key,new JSONObject().put("hash",hash).put("hash_version",2).put("at_ms",at));
             if(at>after){selected.put(record);through=Math.max(through,at);}
         }
         return new Selection(selected,observed,through);

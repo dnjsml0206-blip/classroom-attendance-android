@@ -34,7 +34,7 @@ final class LogUploadStore {
         if(!edit.commit())throw new IOException("업로드 기간을 저장하지 못했습니다. 다시 시도해 주세요.");
     }
     static synchronized String prepare(Context c)throws Exception{
-        SharedPreferences p=prefs(c);if(busy)return p.getString("payload","");
+        CreatorTools.require();SharedPreferences p=prefs(c);if(busy)return p.getString("payload","");
         migrate(c);
         // An interrupted request must settle its original file before a newer snapshot replaces it.
         if(p.getBoolean("pending_attempted",false)&&!p.getString("payload","").isEmpty())return p.getString("payload","");
@@ -62,7 +62,7 @@ final class LogUploadStore {
     static synchronized void start(Context context){start(context,null);}
     /** An injected client lets device tests exercise the same transaction without network or a real credential. */
     static synchronized void start(Context context,GitHubLogClient client){
-        if(busy)return;Context c=context.getApplicationContext();SharedPreferences p=prefs(c);
+        CreatorTools.require();if(busy)return;Context c=context.getApplicationContext();SharedPreferences p=prefs(c);
         String path=p.getString("path",""),payload=p.getString("payload","");long through=p.getLong("pending_until_ms",0);
         if(!GitHubLogClient.validPath(path)||payload.isEmpty()||through<=0)return;
         if(!p.edit().putBoolean("pending_attempted",true).putString("status","GitHub에 전송 중…").commit())return;

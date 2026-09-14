@@ -1,5 +1,5 @@
 import unittest
-from analyze_lock_logs import collect, conclusion
+from analyze_lock_logs import collect, conclusion, render
 
 class AnalysisTests(unittest.TestCase):
     def test_latest_verdict_replaces_duplicate(self):
@@ -32,6 +32,14 @@ class AnalysisTests(unittest.TestCase):
     def test_schema_two_and_untouched_report(self):
         rows, _ = collect([("a", {"schema_version": 2, "records": [{"test_id": "two", "user_interaction": "UNTOUCHED", "evidence": {"scheduled_entry": True, "screen_off_at_run": True, "chrome_address_observed": True}}]})])
         self.assertIn("무조작", conclusion("EXTEND", rows))
+
+    def test_attendance_events_are_not_counted_as_lock_trials(self):
+        rows, skipped = collect([("source", {"schema_version": 2, "records": [
+            {"test_id": "event:one", "record_type": "attendance_event", "event_code": "CHROME_OPEN_REQUEST"}]} )])
+        report = render(rows, skipped)
+        self.assertIn("시험 0회", report)
+        self.assertIn("Chrome 열기 시도: 1건", report)
+        self.assertNotIn("방식을 식별하지 못한 기록", report)
 
 if __name__ == "__main__":
     unittest.main()

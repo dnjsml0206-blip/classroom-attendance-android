@@ -81,6 +81,19 @@ public final class Prefs {
         if (value == null) return null;
         try { return Policy.parseRecord(value); } catch (IllegalArgumentException e) { return null; }
     }
+    public MonthAttendance.ManualStatus manualAttendance(LocalDate day) {
+        try { return MonthAttendance.ManualStatus.valueOf(raw.getString("manual_attendance:"+day,"")); }
+        catch (IllegalArgumentException e) { return null; }
+    }
+    @android.annotation.SuppressLint("ApplySharedPref") // Report durable save failures before closing the editor.
+    public boolean saveManualAttendance(LocalDate day, MonthAttendance.ManualStatus status) {
+        if (day==null || !day.isBefore(LocalDate.now(Policy.ZONE)))
+            throw new IllegalArgumentException("지난 날짜만 직접 기록할 수 있습니다.");
+        SharedPreferences.Editor edit=raw.edit();
+        String key="manual_attendance:"+day;
+        if (status==null) edit.remove(key); else edit.putString(key,status.name());
+        return edit.commit();
+    }
     public String todayLog() { return raw.getString("log:" + LocalDate.now(Policy.ZONE), ""); }
     public void log(String message) {
         ZonedDateTime now = ZonedDateTime.now(Policy.ZONE);

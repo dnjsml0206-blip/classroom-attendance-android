@@ -51,12 +51,22 @@ public final class ChromeAttendanceService extends AccessibilityService {
         }
     }
     public static boolean openChrome(Context context, String url) {
+        return openChrome(context,url,AccessPolicy.Kind.MANUAL);
+    }
+    private static boolean openChrome(Context context,String url,AccessPolicy.Kind kind){
+        AccessPolicy.Decision decision=TrafficGuard.claim(context,kind,Policy.Phase.IDLE);
+        if(!decision.allowed()){Toast.makeText(context,TrafficGuard.message(decision),Toast.LENGTH_LONG).show();return false;}
+        return launchChrome(context,url,kind,Policy.Phase.IDLE);
+    }
+    private static boolean launchChrome(Context context,String url,AccessPolicy.Kind kind,Policy.Phase phase){
+        DiagnosticLog.add(context,DiagnosticLog.Event.CHROME_OPEN_REQUEST,phase,kind.name());
         try {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage("com.android.chrome")
                 .putExtra("com.android.browser.application_id", context.getPackageName())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(intent); return true;
+            context.startActivity(intent); DiagnosticLog.add(context,DiagnosticLog.Event.CHROME_OPEN_DISPATCHED,phase,kind.name()); return true;
         } catch (ActivityNotFoundException e) {
+            DiagnosticLog.add(context,DiagnosticLog.Event.CHROME_OPEN_FAILED,phase,"CHROME_UNAVAILABLE");
             Toast.makeText(context, "Google Chrome을 설치하거나 사용 설정해 주세요", Toast.LENGTH_LONG).show(); return false;
         }
     }
@@ -64,6 +74,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if (LockLab.readOnlyActive(context)) { if (done != null) done.run(); return; }
         Prefs prefs = new Prefs(context);
         if (instance == null) {
+            DiagnosticLog.add(context,DiagnosticLog.Event.WAITING,prefs.phase(ZonedDateTime.now(Policy.ZONE)),"ACCESSIBILITY_UNAVAILABLE");
             prefs.status("Chrome 접근성 연결 필요", "연결 탭에서 출석 메이트 접근성을 켜 주세요");
             Notices.chromeAction(context, true, "접근성을 켜면 기존 Chrome 인증으로 출석 버튼을 처리합니다");
             if (done != null) done.run(); return;
@@ -71,6 +82,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if (instance.working || instance.navigatingWifi || instance.settingsTarget!=null) { if (done != null) done.run(); return; }
         if (context.getSystemService(KeyguardManager.class).isKeyguardLocked() ||
                 !context.getSystemService(PowerManager.class).isInteractive()) {
+            DiagnosticLog.add(context,DiagnosticLog.Event.WAITING,prefs.phase(ZonedDateTime.now(Policy.ZONE)),"SCREEN_LOCKED");
             prefs.status("잠금 해제 후 Chrome에서 확인", "출석 알림을 눌러 화면 잠금을 해제해 주세요");
             Notices.chromeAction(context, true, "잠금을 해제하고 알림을 누르면 기존 Chrome으로 출석을 확인합니다");
             if (done != null) done.run(); return;
@@ -78,6 +90,12 @@ public final class ChromeAttendanceService extends AccessibilityService {
         ChromeAttendanceService service = instance;
         service.phase = prefs.phase(ZonedDateTime.now(Policy.ZONE));
         if (service.phase == Policy.Phase.IDLE) { if (done != null) done.run(); return; }
+        AccessPolicy.Decision admission=TrafficGuard.claim(context,AccessPolicy.Kind.AUTOMATIC,service.phase);
+        if(!admission.allowed()){
+            String message=TrafficGuard.message(admission);prefs.status("자동 접속 제한",message);
+            if(admission.reason()!=AccessPolicy.Reason.COOLDOWN)Notices.chromeAction(context,true,message);
+            if(done!=null)done.run();return;
+        }
         service.day = LocalDate.now(Policy.ZONE).toString();
         service.key = service.day + ":" + service.phase.name();
         service.lockAttendanceToken = LockLab.live(context,LockLab.id(context)) && LockLab.prefs(context).getBoolean("allow_attendance",false) ? LockLab.id(context) : "";
@@ -87,7 +105,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         service.events(true);
         prefs.status("Chrome 출석 화면 확인 중", "기존 Chrome의 인증 상태를 사용합니다");
         Context launch = context instanceof Activity ? context : service;
-        if (!openChrome(launch, SiteProtocol.PAGE)) { service.fail("Chrome 실행 실패", "Google Chrome 사용 설정을 확인해 주세요"); return; }
+        if (!launchChrome(launch,SiteProtocol.PAGE,AccessPolicy.Kind.AUTOMATIC,service.phase)) { service.fail("Chrome 실행 실패", "Google Chrome 사용 설정을 확인해 주세요"); return; }
         service.handler.postDelayed(service.timeout, 35000);
         service.handler.postDelayed(service.tick, 1200);
     }
@@ -114,7 +132,13 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if (confirmationExpected && !confirmationClicked && ChromePage.checkoutConfirmation(text)) {
             if (!prefs.auto() || prefs.phase(ZonedDateTime.now(Policy.ZONE)) != phase) { finishWork(); return; }
             AccessibilityNodeInfo confirm = exactButton(nodes, "확인", "OK");
-            if (confirm != null && click(confirm)) { confirmationClicked = true; traceLock("퇴실 확인 대화상자 클릭 요청 전달됨"); }
+            if (confirm != null) {
+                confirmationClicked = true; // A rejected UI action may still have reached Chrome; never repeat it.
+                boolean accepted=click(confirm);
+                DiagnosticLog.add(this,accepted?DiagnosticLog.Event.CONFIRM_REQUEST:DiagnosticLog.Event.BUTTON_FAILED,phase,accepted?"UI_ACTION_ACCEPTED":"CONFIRM_ACTION_REJECTED");
+                if(accepted)traceLock("퇴실 확인 대화상자 클릭 요청 전달됨");
+                else fail("퇴실 확인 결과 미확인","확인 버튼을 다시 누르지 않습니다. Chrome에서 출결 기록을 확인해 주세요.");
+            }
             return;
         }
         boolean correctAddress = false;
@@ -122,6 +146,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
             if ("com.android.chrome:id/url_bar".equals(node.getViewIdResourceName()) &&
                     ChromePage.attendanceAddress(string(node.getText()))) correctAddress = true;
         if (!correctAddress) { traceLock("Chrome 주소 확인 대기 · 지정 출결 주소를 읽지 못함"); return; }
+        if(ChromePage.serverUnavailable(text)){fail("사이트 오류 화면 확인","자동 재접속을 멈췄습니다. 사이트 복구 후 Chrome에서 직접 확인해 주세요.","SITE_ERROR_SCREEN");return;}
         traceLock("Chrome 출결 주소 표시 확인 · 실제 출결 기록 확인 중");
         if (text.contains("인증절차를 진행한후") || text.contains("인증절차를 진행한 후")) {
             fail("Chrome 인증 확인 필요", "평소 인증해 둔 Chrome 일반 탭에서 출석 화면이 열리는지 확인해 주세요"); return;
@@ -142,6 +167,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
                 String time = phase == Policy.Phase.ENTRY ? record.in() : record.out();
                 prefs.status(title + " · 감시 종료", "Chrome 사이트 기록 " + time);
                 prefs.log(title + " " + time);
+                DiagnosticLog.add(this,DiagnosticLog.Event.RECORD_CONFIRMED,phase,"SITE_TIME_OBSERVED");
                 Notices.attendanceCompleted(this, day, phase, record);
                 Notices.chromeAction(this, false, "");
                 if (record.checkedOut()) Notices.checkoutAttention(this, false, "");
@@ -161,9 +187,10 @@ public final class ChromeAttendanceService extends AccessibilityService {
         // Recheck after the durable write in case the phone clock changed while saving.
         if (prefs.phase(ZonedDateTime.now(Policy.ZONE)) != phase) { prefs.raw.edit().remove("chrome_pending").apply(); finishWork(); return; }
         clicked = click(button);
+        DiagnosticLog.add(this,clicked?DiagnosticLog.Event.BUTTON_REQUEST:DiagnosticLog.Event.BUTTON_FAILED,phase,clicked?"UI_ACTION_ACCEPTED":"UI_ACTION_REJECTED");
         traceLock((phase==Policy.Phase.ENTRY?"입실":"퇴실")+(clicked?" 버튼 클릭 요청 전달됨 · 사이트 기록 확인 전":" 버튼 클릭 요청 실패"));
         confirmationExpected = clicked && phase == Policy.Phase.CHECKOUT;
-        if (!clicked) prefs.raw.edit().remove("chrome_pending").apply();
+        if (!clicked) fail("출결 버튼 결과 미확인","버튼을 다시 누르지 않습니다. Chrome에서 출결 기록을 확인해 주세요.");
     }
     private AccessibilityNodeInfo focusedRoot() {
         for (AccessibilityWindowInfo window : getWindows()) if (window.isFocused()) {
@@ -199,10 +226,12 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private void traceLock(String message) {
         if(!lockAttendanceToken.isEmpty()&&LockLab.live(this,lockAttendanceToken)&&lockTrace.add(message))LockLab.event(this,lockAttendanceToken,message);
     }
-    private void fail(String title, String detail) {
+    private void fail(String title,String detail){fail(title,detail,"RESULT_UNCONFIRMED");}
+    private void fail(String title, String detail,String reason) {
         if (!working) return;
         if (LockLab.readOnlyActive(this) || (!lockAttendanceToken.isEmpty() && !LockLab.live(this,lockAttendanceToken))) { finishWork(); return; }
         Prefs prefs = new Prefs(this);
+        TrafficGuard.pause(this,phase,reason);
         traceLock("Chrome 처리 중단: "+title+" · "+detail);
         prefs.status(title, detail);
         String failureKey = day + ":" + phase + ":" + title;
@@ -233,7 +262,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if(service.working||service.navigatingWifi||service.settingsTarget!=null){LockLab.finish(context,token,"다른 Chrome/설정 작업 진행 중 · 테스트 보류");return;}
         service.endLockProbe(null);service.lockProbe=token;service.lockProbeUntil=SystemClock.elapsedRealtime()+20000;service.events(true);
         LockLab.stage(context,token,"Chrome 실행 요청 · 출결 주소 표시 확인 중");
-        if(!openChrome(context,SiteProtocol.PAGE)){service.endLockProbe("Chrome 실행 실패");return;}
+        if(!openChrome(context,SiteProtocol.PAGE,AccessPolicy.Kind.TEST)){service.endLockProbe("Chrome 접속 제한 또는 실행 불가 · 연속 테스트를 멈춰 주세요");return;}
         service.handler.postDelayed(service.lockProbeTick,600);
     }
     private final Runnable lockProbeTick=new Runnable(){@Override public void run(){

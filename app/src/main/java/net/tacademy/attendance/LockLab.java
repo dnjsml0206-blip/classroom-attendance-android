@@ -18,7 +18,7 @@ public final class LockLab {
     static String id(Context c){return prefs(c).getString("id","");}
     static LockTestPolicy.Mode mode(Context c){try{return LockTestPolicy.Mode.valueOf(prefs(c).getString("mode","WAKE"));}catch(Exception e){return LockTestPolicy.Mode.WAKE;}}
     static boolean actual(Context c){return prefs(c).getBoolean("actual",false) && mode(c)!=LockTestPolicy.Mode.NETWORK;}
-    static boolean live(Context c,String id){SharedPreferences p=prefs(c);return LockTestPolicy.live(id,p.getString("id",""),System.currentTimeMillis(),p.getLong("created",0),p.getLong("expires",0),p.getBoolean("active",false));}
+    static boolean live(Context c,String id){if(!CreatorTools.testsVisible(c))return false;SharedPreferences p=prefs(c);return LockTestPolicy.live(id,p.getString("id",""),System.currentTimeMillis(),p.getLong("created",0),p.getLong("expires",0),p.getBoolean("active",false));}
     public static boolean readOnlyActive(Context c){return live(c,id(c)) && (!prefs(c).getBoolean("checkout_trial",false) || System.currentTimeMillis()>=prefs(c).getLong("due",0)) && !prefs(c).getBoolean("allow_attendance",false);}
     static String snapshot(Context c){
         KeyguardManager k=c.getSystemService(KeyguardManager.class);
@@ -32,13 +32,14 @@ public final class LockLab {
         return prepareAt(c,mode,actual,System.currentTimeMillis()+delaySeconds*1000L,delaySeconds>0,false);
     }
     static synchronized String prepareCheckout(Context c,LockTestPolicy.Mode mode){
-        if(mode==LockTestPolicy.Mode.NETWORK)throw new IllegalStateException("서버 연결 진단은 퇴실을 처리하지 않습니다. Chrome 테스트 방법을 선택해 주세요.");
+        if(mode==LockTestPolicy.Mode.NETWORK)throw new IllegalStateException("기기 연결 진단은 퇴실을 처리하지 않습니다. Chrome 테스트 방법을 선택해 주세요.");
         ZonedDateTime now=ZonedDateTime.now(Policy.ZONE);
         long due=now.toLocalDate().atTime(Policy.checkoutStartTime(new Prefs(c).checkout())).atZone(Policy.ZONE).toInstant().toEpochMilli();
         if(due<=System.currentTimeMillis())throw new IllegalStateException("오늘 퇴실 시각이 지났습니다. 시간 설정을 확인해 주세요.");
         return prepareAt(c,mode,true,due,true,true);
     }
     private static synchronized String prepareAt(Context c,LockTestPolicy.Mode mode,boolean actual,long due,boolean scheduled,boolean checkout){
+        if(!CreatorTools.testsVisible(c))throw new IllegalStateException("제작자용 앱에서 임시 테스트 메뉴를 켜 주세요.");
         expire(c);
         List<String> issues=TrialReadiness.problems(c,mode,actual,due,scheduled);
         if(!issues.isEmpty())throw new IllegalStateException(String.join("\n",issues));
@@ -85,7 +86,11 @@ public final class LockLab {
         }
     }
     static void cancel(Context c){boolean owns=live(c,id(c))&&prefs(c).getBoolean("allow_attendance",false);expire(c);if(live(c,id(c)))finish(c,id(c),"사용자가 테스트 취소");ChromeAttendanceService.cancelLockProbe();if(owns)ChromeAttendanceService.cancelWork();}
-    static void resetAfterRestart(Context c){if(prefs(c).getBoolean("active",false)){event(c,id(c),"재부팅 또는 앱 업데이트로 테스트 종료");prefs(c).edit().putBoolean("active",false).putString("stage","재부팅/업데이트로 종료").commit();}}
+    static void resetAfterRestart(Context c){
+        if(prefs(c).getBoolean("active",false)){event(c,id(c),"재부팅 또는 앱 업데이트로 테스트 종료");prefs(c).edit().putBoolean("active",false).putString("stage","재부팅/업데이트로 종료").commit();}
+        c.getSystemService(AlarmManager.class).cancel(alarm(c,""));
+        c.getSystemService(NotificationManager.class).cancel(NOTICE);
+    }
     static synchronized void fireCheckoutIfDue(Context c){
         if(live(c,id(c))&&prefs(c).getBoolean("checkout_trial",false)&&System.currentTimeMillis()>=prefs(c).getLong("due",Long.MAX_VALUE))
             fire(c,id(c),"예약 요청에서 진입 · 무조작 여부 미확인");
@@ -94,7 +99,7 @@ public final class LockLab {
         if(!live(c,token)){expire(c);return;}
         if(prefs(c).getBoolean("fired",false))return;
         prefs(c).edit().putBoolean("fired",true).putLong("fired_at_ms",System.currentTimeMillis()).putLong("fired_elapsed_ms",SystemClock.elapsedRealtime()).putString("execution_environment",LockLogExport.environment(c).toString()).commit();event(c,token,"실행 당시: "+snapshot(c));
-        if(mode(c)==LockTestPolicy.Mode.NETWORK){stage(c,token,"화면을 깨우지 않고 서버 연결 진단");return;}
+        if(mode(c)==LockTestPolicy.Mode.NETWORK){stage(c,token,"화면을 깨우지 않고 기기 연결 진단");return;}
         if(!ChromeAttendanceService.available()){finish(c,token,"Chrome 접근성 연결 끊김 · 연결 탭에서 다시 켜 주세요");return;}
         stage(c,token,"테스트 화면 실행 요청 · 실제 표시 여부는 별도 확인");
         notice(c,"잠금 테스트 진행","화면이 열리지 않으면 알림을 눌러 비교하세요. 수동 진입은 따로 기록합니다.",true);

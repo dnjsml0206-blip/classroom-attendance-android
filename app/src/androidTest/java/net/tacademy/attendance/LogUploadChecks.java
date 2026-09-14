@@ -13,12 +13,13 @@ import java.util.*;
 /** Emulator-only export, encryption and HTTP contract checks. No live token or server request. */
 final class LogUploadChecks {
     private final Instrumentation test;private Context c;private Activity activity;private int count;
-    private Map<String,?> savedLab,savedUpload;private GitHubTokenStore vault;
+    private Map<String,?> savedLab,savedUpload,savedDiagnostics;private GitHubTokenStore vault;
     LogUploadChecks(Instrumentation test){this.test=test;}
     private void check(boolean ok,String name){if(!ok)throw new AssertionError(name);count++;Bundle progress=new Bundle();progress.putString("stream","PASS: "+name+"\n");test.sendStatus(0,progress);}
     void run(){Bundle result=new Bundle();try{
         if(!Build.HARDWARE.equals("ranchu")&&!Build.HARDWARE.equals("goldfish"))throw new AssertionError("Emulator only");
         c=test.getTargetContext();savedLab=new HashMap<>(LockLab.prefs(c).getAll());savedUpload=new HashMap<>(LogUploadStore.prefs(c).getAll());
+        savedDiagnostics=new HashMap<>(DiagnosticLog.prefs(c).getAll());DiagnosticLog.prefs(c).edit().clear().commit();
         vault=new GitHubTokenStore(c,"github_upload_test");
         String fake="github_pat_"+"syntheticForEncryptionTestOnly123456";
         vault.save(fake);check(fake.equals(vault.read())&&!c.getSharedPreferences("github_upload_test",0).getAll().toString().contains(fake),"Keystore encrypts and decrypts without storing token plaintext");
@@ -147,6 +148,6 @@ final class LogUploadChecks {
     private void awaitUpload(){long until=SystemClock.elapsedRealtime()+10000;while(LogUploadStore.busy()&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(20);if(LogUploadStore.busy())throw new AssertionError("Upload thread did not finish");}
     private static GitHubLogClient.Response response(int code,JSONObject json){return new GitHubLogClient.Response(code,json);}
     private TextView find(View view,String label){if(view instanceof TextView&&((TextView)view).getText().toString().equals(label))return (TextView)view;if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++){TextView found=find(((ViewGroup)view).getChildAt(i),label);if(found!=null)return found;}return null;}
-    private void restore(){if(c==null)return;test.runOnMainSync(()->{if(activity!=null)activity.finish();restorePrefs(LockLab.prefs(c),savedLab);restorePrefs(LogUploadStore.prefs(c),savedUpload);});try{if(vault!=null)vault.clear();}catch(Exception ignored){}}
+    private void restore(){if(c==null)return;test.runOnMainSync(()->{if(activity!=null)activity.finish();restorePrefs(LockLab.prefs(c),savedLab);restorePrefs(LogUploadStore.prefs(c),savedUpload);restorePrefs(DiagnosticLog.prefs(c),savedDiagnostics);});try{if(vault!=null)vault.clear();}catch(Exception ignored){}}
     @SuppressWarnings("unchecked")private void restorePrefs(SharedPreferences p,Map<String,?> values){if(values==null)return;SharedPreferences.Editor e=p.edit().clear();for(Map.Entry<String,?> item:values.entrySet()){Object v=item.getValue();String k=item.getKey();if(v instanceof String)e.putString(k,(String)v);else if(v instanceof Boolean)e.putBoolean(k,(Boolean)v);else if(v instanceof Integer)e.putInt(k,(Integer)v);else if(v instanceof Long)e.putLong(k,(Long)v);else if(v instanceof Float)e.putFloat(k,(Float)v);else if(v instanceof Set)e.putStringSet(k,new HashSet<>((Set<String>)v));}e.commit();}
 }

@@ -21,6 +21,7 @@ public final class AttendanceEngine {
         nextRead = SystemClock.elapsedRealtime() + 60000;
         NetworkAccess.State wifi = NetworkAccess.inspect(context);
         if (!wifi.allowed()) {
+            DiagnosticLog.add(context,DiagnosticLog.Event.WAITING,prefs.phase(ZonedDateTime.now(Policy.ZONE)),wifi.code());
             prefs.status("Wi-Fi 연결 대기", wifi.reason());
             if (finished != null) finished.run(); return;
         }

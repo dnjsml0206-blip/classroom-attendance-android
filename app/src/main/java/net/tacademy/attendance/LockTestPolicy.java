@@ -5,7 +5,7 @@ public final class LockTestPolicy {
     public enum Mode {
         WAKE("화면 깨우기",false), EXTEND("Extend Unlock",true), DEVICE("신뢰하는 Bluetooth 기기",true),
         PLACE("신뢰하는 장소",true), BODY("신체 활동 감지",true), AUTH("PIN·지문 등 시스템 인증",false),
-        NETWORK("잠금 유지 · 서버 연결 진단",false);
+        NETWORK("잠금 유지 · 기기 연결 진단",false);
         public final String label; public final boolean trustedOnly;
         Mode(String label,boolean trustedOnly){this.label=label;this.trustedOnly=trustedOnly;}
     }

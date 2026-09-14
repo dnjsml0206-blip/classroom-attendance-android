@@ -64,6 +64,7 @@ public final class MonitorService extends Service implements LocationListener {
                 };
                 connectivity.registerNetworkCallback(new NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), callback);
             } catch (SecurityException e) { prefs.status("권한 확인 필요", "위치 권한을 다시 확인해 주세요"); }
+            DiagnosticLog.add(this,DiagnosticLog.Event.MONITOR_STARTED,phase,"SCHEDULE_WINDOW");
             prefs.log(phase == Policy.Phase.ENTRY ? "입실 시간 감시 시작" : "퇴실 시간 확인 시작");
             AlarmScheduler.arm(this, false);
             handler.post(loop);
@@ -149,6 +150,7 @@ public final class MonitorService extends Service implements LocationListener {
         Prefs prefs = new Prefs(this);
         if (!prefs.enabled() || prefs.checkedOutToday()) Notices.checkoutAttention(this, false, "");
         AlarmScheduler.arm(this, false);
+        DiagnosticLog.add(this,DiagnosticLog.Event.MONITOR_STOPPED,prefs.phase(ZonedDateTime.now(Policy.ZONE)),"WINDOW_OR_COMPLETION");
         prefs.log("출석 감시 종료 · 다음 예약 대기");
         stopForeground(STOP_FOREGROUND_REMOVE);
         stopSelf();
