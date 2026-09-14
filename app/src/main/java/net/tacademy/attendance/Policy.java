@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 /** Pure scheduling and protocol rules; all attendance times use Korea time. */
 public final class Policy {
     public static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
-    public static final int CHECKOUT_DELAY_SECONDS = 10;
+    public static final int CHECKOUT_DELAY_SECONDS = 5;
     private static final Pattern TIME = Pattern.compile("(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d)?");
     public enum Phase { IDLE, ENTRY, CHECKOUT }
     private Policy() {}

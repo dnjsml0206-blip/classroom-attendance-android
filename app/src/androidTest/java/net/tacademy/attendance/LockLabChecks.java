@@ -53,7 +53,7 @@ public final class LockLabChecks {
         check(LockLab.actual(c)&&LockLab.prefs(c).getBoolean("checkout_trial",false)&&LockLab.prefs(c).getLong("due",0)>System.currentTimeMillis()+120000,"Today checkout uses configured time and explicit real-attendance mode");
         long safeDue=java.time.LocalDate.now(Policy.ZONE).atTime(Policy.checkoutStartTime(checkoutTime)).atZone(Policy.ZONE).toInstant().toEpochMilli();
         main(()->AlarmScheduler.arm(c,false));
-        check(LockLab.prefs(c).getLong("due",0)==safeDue&&prefs.raw.getLong("next_alarm",0)==safeDue,"Normal reservation and checkout trial both use the same ten-second margin");
+        check(LockLab.prefs(c).getLong("due",0)==safeDue&&prefs.raw.getLong("next_alarm",0)==safeDue,"Normal reservation and checkout trial both use the same five-second margin");
         check(!LockLab.readOnlyActive(c),"Future checkout reservation leaves normal attendance running");
         main(()->LockLab.fireCheckoutIfDue(c));
         check(!LockLab.prefs(c).getBoolean("fired",true),"Other attendance alarms cannot fire a future checkout test early");
