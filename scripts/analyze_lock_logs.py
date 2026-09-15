@@ -1,7 +1,8 @@
 """Read uploaded lock-test reports as data; never execute log text or infer attendance from Chrome."""
 import argparse
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import re
 import hashlib
 import json
 from pathlib import Path
@@ -101,10 +102,30 @@ def render(rows, skipped):
         counts = Counter(r.get("event_code", "UNKNOWN") for r in events)
         labels = {"CHROME_OPEN_REQUEST": "Chrome 열기 시도", "CHROME_OPEN_DISPATCHED": "Chrome 실행 전달",
                   "ACCESS_BLOCKED": "반복 접속 차단", "BUTTON_REQUEST": "출결 버튼 동작 요청",
-                  "RECORD_CONFIRMED": "사이트 시각 확인", "AUTOMATIC_PAUSED": "자동 재접속 중단"}
+                  "RECORD_CONFIRMED": "사이트 시각 확인", "AUTOMATIC_PAUSED": "자동 재접속 중단",
+                  "ALARM_ARMED": "다음 알람 예약", "ALARM_FIRED": "알람 수신", "ALARM_FAILED": "알람 예약 실패",
+                  "MONITOR_START_REQUEST": "감시 시작 요청", "MONITOR_START_RECEIVED": "감시 서비스 진입", "MONITOR_START_FAILED": "감시 시작 실패",
+                  "MONITOR_STARTED": "감시 시작", "MONITOR_STOPPED": "감시 종료", "WAITING": "조건 대기",
+                  "CHROME_OPEN_DISPATCHED": "Chrome 실행 전달", "CHROME_OPEN_FAILED": "Chrome 실행 실패", "CHROME_STAGE": "Chrome 판독 단계",
+                  "CLICK_PLANNED": "클릭 직전 기록", "BUTTON_FAILED": "클릭 요청 거절", "CONFIRM_REQUEST": "퇴실 확인 요청",
+                  "WAKE_REQUESTED": "화면 깨우기 요청", "WAKE_VISIBLE": "깨우기 화면 포커스", "WAKE_BLOCKED": "화면 깨우기 차단",
+                  "WAKE_AUTH_REQUIRED": "사용자 인증 필요", "WAKE_DISMISS_REQUEST": "시스템 잠금 해제 요청",
+                  "WAKE_DISMISS_RESULT": "시스템 잠금 해제 응답", "WAKE_FINISHED": "잠금 처리 종료"}
         lines += ["", "## 일반 출결 동작", "", f"일반 동작 {len(events)}건. Chrome 내부 HTTP 요청 건수와 다릅니다."]
         for code, label in labels.items():
             lines.append(f"- {label}: {counts[code]}건")
+        def event_time(row):
+            value=row.get("occurred_at_ms")
+            return value if isinstance(value,(int,float)) and not isinstance(value,bool) else 0
+        lines += ["", "| 한국 시각 | 출결 단계 | 동작 | 사유 코드 |", "|---|---|---|---|"]
+        for event in sorted(events,key=event_time):
+            try: stamp=datetime.fromtimestamp(event_time(event)/1000,timezone.utc).astimezone(timezone(timedelta(hours=9))).strftime("%m/%d %H:%M:%S") if event_time(event)>0 else "시각 없음"
+            except (ValueError,OverflowError,OSError): stamp="시각 없음"
+            reason=event.get("reason_code","")
+            if not isinstance(reason,str) or not re.fullmatch(r"[A-Z][A-Z0-9_:]{0,99}",reason): reason="UNKNOWN"
+            phase={"ENTRY":"입실","CHECKOUT":"퇴실","IDLE":"대기"}.get(event.get("phase"),"미확인")
+            lines.append(f"| {stamp} | {phase} | {labels.get(event.get('event_code'),'기타 동작')} | {reason} |")
+        lines += ["", "클릭 직전 기록은 클릭 실행 증거가 아니며, UI 클릭 접수와 서버 출결 완료를 구분합니다. 화면 포커스·시스템 해제 응답만으로 무인 인증 성공을 판정하지 않습니다."]
     lines += ["", "## 시험별 조건", "", "| 방식 | 접근성 연결 | 위치 항상 허용 | 출석 예약 / 자동 클릭 / 실제 출결 | Wi-Fi 진단 | 진입 지연 | 직접 조작 기록 |", "|---|---|---|---|---|---|---|"]
     def flag(value):
         return "켜짐" if value is True else "꺼짐" if value is False else "기록 없음"

@@ -1,4 +1,4 @@
-# v0.7.0 구조
+# v0.8.0 구조
 
 `enabled`는 미래 출석 예약의 사용 여부다. 감시 서비스가 계속 실행 중이라는 의미가 아니다.
 
@@ -51,3 +51,13 @@ LockLogExport는 잠금 시험과 DiagnosticLog의 일반 출결 동작을 JSON�
 ## 출결 페이지 접속 제한
 
 모든 앱 내 Chrome 출결·인증 열기는 TrafficGuard를 통과한다. AccessPolicy는 공통 3초 간격·하루 20회, 자동 입실·퇴실 각각 3회와 2분·5분 대기를 계산한다. 실행 전에 저장해 재시작이나 예약 토글로 우회하지 않는다. 사이트 오류·결과 불명확·클릭 거절은 해당 날짜와 단계의 자동 접속을 중단한다. 페이지 열기 횟수는 사이트 내부 HTTP 요청 수와 구분한다. 상세 정책은 [접속 제한](server-load-and-creator-tools.md)을 참고한다.
+
+## 일반 예약의 잠금 해제 연결
+
+ScheduledUnlock은 제작자용 LockLab과 별개인 저장소에 날짜·단계·선택 방식·토큰·부팅 횟수·경과 시각을 저장한다. 일반 설정의 scheduled_lock_mode가 NOTICE이면 기존 알림 동작을 유지한다. 다른 방식은 출석 시간·자동 클릭·등록 Wi-Fi 및 TrafficGuard의 읽기 전용 예비 검사를 통과한 뒤 날짜·단계별 한 번만 요청한다. Activity는 setTurnScreenOn과 Android Keyguard API만 사용하고 인증정보를 받지 않는다.
+
+실제 포커스 확보를 별도 기록한다. 8초 표시 확인, 120초 세션 기한, 날짜/단계/모드 변경, 재부팅, 예약 비활성화와 Wi-Fi 조건을 검사하고 기한이 끝난 콜백은 Chrome으로 연결하지 않는다. 해제 후 기존 AttendanceEngine과 TrafficGuard를 그대로 거치므로 화면 깨우기가 사이트 접속·중복 클릭 제한을 우회하지 않는다. 임시 테스트가 실행 중이면 경쟁하지 않는다.
+
+DiagnosticLog는 알람·감시 시작·잠금 흐름과 Chrome 판독 단계를 고정 코드로 남긴다. Chrome 판독은 시도별로 같은 단계를 중복 기록하지 않는다. 클릭 직전·클릭 접수·실패는 동기 저장하고, 클릭 전 durable marker와 서버 확인 기록을 별개로 다룬다. AutomationSnapshot은 시간 설정·알람·모니터·잠금 방식·파싱한 보류 표식만 내보내며 임의의 SharedPreferences 덤프를 만들지 않는다.
+
+[동작과 제약](normal-unlock-v0.8.0.md)

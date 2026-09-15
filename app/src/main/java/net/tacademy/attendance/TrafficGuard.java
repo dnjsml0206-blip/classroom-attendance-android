@@ -13,6 +13,12 @@ final class TrafficGuard {
         return claim(c,kind,phase,System.currentTimeMillis(),SystemClock.elapsedRealtime(),Settings.Global.getInt(c.getContentResolver(),Settings.Global.BOOT_COUNT,-1));
     }
     static synchronized AccessPolicy.Decision claim(Context c,AccessPolicy.Kind kind,Policy.Phase phase,long wall,long elapsed,int boot){
+        return decide(c,kind,phase,wall,elapsed,boot,true);
+    }
+    static synchronized AccessPolicy.Decision peek(Context c,AccessPolicy.Kind kind,Policy.Phase phase){
+        return decide(c,kind,phase,System.currentTimeMillis(),SystemClock.elapsedRealtime(),Settings.Global.getInt(c.getContentResolver(),Settings.Global.BOOT_COUNT,-1),false);
+    }
+    private static AccessPolicy.Decision decide(Context c,AccessPolicy.Kind kind,Policy.Phase phase,long wall,long elapsed,int boot,boolean claim){
         SharedPreferences p=prefs(c);String today=Instant.ofEpochMilli(wall).atZone(Policy.ZONE).toLocalDate().toString();
         String previous=p.getString("day","");boolean newDay=today.compareTo(previous)>0;
         String key=phase.name();int total=newDay?0:p.getInt("total",0),count=newDay?0:p.getInt("count:"+key,0);
@@ -20,14 +26,14 @@ final class TrafficGuard {
         long common=AccessPolicy.remaining(wall,elapsed,boot,p.getLong("last_wall",0),p.getLong("last_elapsed",0),p.getInt("last_boot",-1),AccessPolicy.GLOBAL_GAP_MS);
         long automatic=newDay?0:AccessPolicy.remaining(wall,elapsed,boot,p.getLong("wall:"+key,0),p.getLong("elapsed:"+key,0),p.getInt("boot:"+key,-1),AccessPolicy.retryGap(count));
         AccessPolicy.Decision decision=AccessPolicy.decide(kind,total,count,paused,common,automatic);
-        if(decision.allowed()){
+        if(claim&&decision.allowed()){
             SharedPreferences.Editor edit=p.edit();
             if(newDay)edit.clear().putString("day",today);
             edit.putInt("total",total+1).putLong("last_wall",wall).putLong("last_elapsed",elapsed).putInt("last_boot",boot);
             if(kind==AccessPolicy.Kind.AUTOMATIC)edit.putInt("count:"+key,count+1).putLong("wall:"+key,wall).putLong("elapsed:"+key,elapsed).putInt("boot:"+key,boot);
             if(!edit.commit())decision=new AccessPolicy.Decision(AccessPolicy.Reason.STORAGE_ERROR,0);
         }
-        if(!decision.allowed())DiagnosticLog.add(c,DiagnosticLog.Event.ACCESS_BLOCKED,phase,kind+":"+decision.reason());
+        if(claim&&!decision.allowed())DiagnosticLog.add(c,DiagnosticLog.Event.ACCESS_BLOCKED,phase,kind+":"+decision.reason());
         return decision;
     }
     static void pause(Context c,Policy.Phase phase){pause(c,phase,"RESULT_UNCONFIRMED");}

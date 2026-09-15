@@ -6,7 +6,7 @@ public final class RestoreReceiver extends BroadcastReceiver {
         if (!Intent.ACTION_BOOT_COMPLETED.equals(action) && !Intent.ACTION_MY_PACKAGE_REPLACED.equals(action) &&
             !Intent.ACTION_TIME_CHANGED.equals(action) && !Intent.ACTION_TIMEZONE_CHANGED.equals(action) &&
             !"android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED".equals(action)) return;
-        if (Intent.ACTION_BOOT_COMPLETED.equals(action) || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) LockLab.resetAfterRestart(context);
+        if (Intent.ACTION_BOOT_COMPLETED.equals(action) || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {LockLab.resetAfterRestart(context);ScheduledUnlock.cancel(context,"APP_OR_DEVICE_RESTARTED");}
         // Restore an alarm only. Location monitoring starts at the next eligible alarm.
         if (new Prefs(context).enabled()) AlarmScheduler.arm(context, true);
     }

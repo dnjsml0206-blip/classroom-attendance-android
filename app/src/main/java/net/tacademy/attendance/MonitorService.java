@@ -26,11 +26,12 @@ public final class MonitorService extends Service implements LocationListener {
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         Prefs prefs = new Prefs(this);
         if (intent != null && "STOP".equals(intent.getAction())) {
-            prefs.enabled(false); AlarmScheduler.cancel(this); Notices.checkoutAttention(this, false, ""); Notices.clearDeparture(this,LocalDate.now(Policy.ZONE).toString());
+            prefs.enabled(false); ScheduledUnlock.cancel(this,"RESERVATION_DISABLED"); AlarmScheduler.cancel(this); Notices.checkoutAttention(this, false, ""); Notices.clearDeparture(this,LocalDate.now(Policy.ZONE).toString());
             stopSelf(); return START_NOT_STICKY;
         }
         ZonedDateTime now = ZonedDateTime.now(Policy.ZONE);
         Policy.Phase phase = prefs.phase(now);
+        if(!started)DiagnosticLog.add(this,DiagnosticLog.Event.MONITOR_START_RECEIVED,phase,"ON_START_COMMAND");
         try {
             if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)
                 throw new SecurityException();
@@ -44,6 +45,7 @@ public final class MonitorService extends Service implements LocationListener {
             if (Build.VERSION.SDK_INT >= 29) startForeground(Notices.MONITOR, Notices.monitor(this, line), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
             else startForeground(Notices.MONITOR, Notices.monitor(this, line));
         } catch (RuntimeException e) {
+            DiagnosticLog.add(this,DiagnosticLog.Event.MONITOR_START_FAILED,phase,DiagnosticLog.failureCode(e));
             if (phase == Policy.Phase.IDLE) { stopSelf(); return START_NOT_STICKY; }
             prefs.status("위치 권한 확인 필요", "연결 탭에서 위치 항상 허용을 설정해 주세요");
             if (phase != Policy.Phase.ENTRY) Notices.checkoutAttention(this, true, "위치 항상 허용과 Wi-Fi 연결을 확인해 주세요");

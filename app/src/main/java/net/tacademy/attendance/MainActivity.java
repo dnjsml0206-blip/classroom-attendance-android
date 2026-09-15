@@ -295,13 +295,34 @@ public final class MainActivity extends Activity {
             + " · 퇴실 " + Policy.checkoutStartTime(prefs.checkout()) + "–" + checkoutEnd + "\n출석 완료 또는 시간 종료 시 GPS 감시도 멈춥니다.");
         Switch auto = new Switch(this); auto.setText(R.string.automatic_chrome_click); auto.setTextSize(16); auto.setTextColor(INK); auto.setMinHeight(dp(48));
         auto.setChecked(prefs.auto()); automation.addView(auto);
-        note(automation, "기존 Chrome 인증을 사용합니다. 화면 잠금 중에는 출석 알림을 눌러 잠금을 해제해 주세요. 자동 클릭을 끄면 조회만 합니다.");
+        note(automation, "기존 Chrome 인증을 사용합니다. 화면이 꺼지거나 잠긴 경우 아래 ‘잠금 중 처리 방식’을 사용합니다. 자동 클릭을 끄면 조회만 합니다.");
         auto.setOnCheckedChangeListener((v, checked) -> {
             if (checked && !ChromeAttendanceService.available()) { auto.setChecked(false); toast("연결 탭에서 Chrome 접근성을 먼저 켜 주세요"); return; }
             prefs.raw.edit().putBoolean("auto", checked).apply(); prefs.log(checked ? "Chrome 자동 클릭 켜짐" : "Chrome 조회 모드");
             ScheduleController.reconcile(this);
         });
         action(automation, "Chrome에서 지금 확인", false, () -> startActivity(new Intent(this, ChromeLaunchActivity.class)));
+    }
+
+    private void unlockSettings(){
+        LinearLayout box=card("잠금 중 처리 방식");box.setTag("scheduled-unlock-settings");
+        note(box,"일반 입실·퇴실 예약에 적용됩니다. 임시 테스트 메뉴를 숨겨도 유지됩니다.");
+        RadioGroup modes=new RadioGroup(this);UnlockPolicy.Mode selected=ScheduledUnlock.mode(this);
+        for(UnlockPolicy.Mode mode:UnlockPolicy.Mode.values()){
+            RadioButton option=new RadioButton(this);option.setId(View.generateViewId());option.setTag(mode.name());option.setText(mode.label);option.setTextColor(INK);option.setTextSize(15);option.setMinHeight(dp(48));modes.addView(option);
+            if(mode==selected)modes.check(option.getId());
+        }
+        box.addView(modes);
+        TextView state=text("선택됨 · "+selected.label,14,TEAL,true);box.addView(state);
+        modes.setOnCheckedChangeListener((group,id)->{
+            RadioButton chosen=group.findViewById(id);if(chosen==null)return;
+            prefs.raw.edit().putString("scheduled_lock_mode",chosen.getTag().toString()).apply();
+            ScheduledUnlock.cancel(this,"MODE_CHANGED");state.setText(getString(R.string.unlock_selected,ScheduledUnlock.mode(this).label));
+        });
+        note(box,"출석 예약·자동 클릭·등록 Wi-Fi 조건이 맞을 때 입실/퇴실마다 하루 한 번 화면을 깨웁니다. 최대 2분 안에 종료하며, PIN·지문이 필요하면 직접 인증해야 합니다. 휴대폰이 화면 표시를 막으면 알림으로 안내합니다.");
+        action(box,"Extend Unlock 설정 열기",false,()->PhoneSettings.open(this,PhoneSettings.Target.EXTEND));
+        action(box,"앱 배터리 설정 열기",false,()->PhoneSettings.open(this,PhoneSettings.Target.BATTERY));
+        note(box,"Extend Unlock의 실제 신뢰 활성 여부는 휴대폰에서 확인해 주세요. ‘알림 후 직접 해제’는 화면을 자동으로 깨우지 않습니다.");
     }
 
     private void creatorPanel(){
@@ -322,6 +343,7 @@ public final class MainActivity extends Activity {
     private void settings() {
         creatorPanel();
         reservationSettings();
+        unlockSettings();
         LinearLayout checks=card("설정 확인");setupStatus=new SetupStatusView(this,false);checks.addView(setupStatus);
         LinearLayout schedule = card("출석 시간");
         note(schedule, "변경할 항목을 선택하세요. 모든 시간은 한국 시간입니다.");
@@ -574,11 +596,15 @@ public final class MainActivity extends Activity {
         note(alarm,"입실·퇴실 시간 밖에서는 감시를 종료합니다. 재부팅 후 예약을 복구하며 앱 강제 중지 후에는 앱을 다시 열어 주세요.");
         if (!prefs.raw.getString("chrome_pending","").isEmpty()) {
             LinearLayout pending = card("클릭 결과 확인");
-            note(pending,"중복 클릭을 막기 위해 이전 요청을 보류했습니다. Chrome에서 실제 기록을 먼저 확인해 주세요.");
+            PendingClick saved=PendingClick.parse(prefs.raw.getString("chrome_pending",""));
+            note(pending,saved==null?"날짜·출결 단계 미확인":saved.label()+" 요청 · 결과 확인 필요");
+            long at=prefs.raw.getLong("chrome_pending_at",0);
+            note(pending,at>0?"클릭 전 저장: "+Instant.ofEpochMilli(at).atZone(Policy.ZONE).format(DateTimeFormatter.ofPattern("M/d HH:mm:ss")):"이전 버전의 요청 시각은 기록되지 않았습니다.");
+            note(pending,"클릭 직전 저장한 표시이며 클릭 성공·서버 처리 완료를 뜻하지 않습니다. Chrome에서 실제 기록을 먼저 확인해 주세요.");
             action(pending,"Chrome에서 기록 확인",false,() -> ChromeAttendanceService.openChrome(this,SiteProtocol.PAGE));
             action(pending,"확인 후 보류 해제",false,() -> new AlertDialog.Builder(this).setTitle("Chrome에서 기록을 확인했나요?")
-                .setMessage("보류를 해제하면 설정한 시간 안에서 다시 클릭할 수 있습니다.").setNegativeButton("취소",null)
-                .setPositiveButton("확인했고 해제",(d,w) -> { prefs.raw.edit().remove("chrome_pending").apply(); render(2); }).show());
+                .setMessage("이전 클릭 보류 표시를 지웁니다. 오류로 중단된 오늘의 자동 접속과 접속 횟수 한도는 유지됩니다. 필요한 출결은 Chrome에서 직접 확인해 주세요.").setNegativeButton("취소",null)
+                .setPositiveButton("확인했고 해제",(d,w) -> { prefs.raw.edit().remove("chrome_pending").remove("chrome_pending_at").apply(); render(2); }).show());
         }
         LinearLayout info = card("출석 메이트 " + BuildConfig.VERSION_NAME + (BuildConfig.CREATOR_TOOLS ? " · 제작자용" : ""));
         note(info,"출결 달력에서 사이트 확인 기록을 보고, 지난 날짜는 출석·조퇴·결석을 직접 입력할 수 있습니다. 직접 입력은 앱에만 저장됩니다.");

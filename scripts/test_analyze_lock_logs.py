@@ -41,5 +41,19 @@ class AnalysisTests(unittest.TestCase):
         self.assertIn("Chrome 열기 시도: 1건", report)
         self.assertNotIn("방식을 식별하지 못한 기록", report)
 
+    def test_general_timeline_orders_korean_time_and_separates_click_intention(self):
+        rows=[{"source":"s","record_type":"attendance_event","event_code":"BUTTON_REQUEST","occurred_at_ms":1789430683000,"phase":"ENTRY","reason_code":"UI_ACTION_ACCEPTED"},
+              {"source":"s","record_type":"attendance_event","event_code":"CLICK_PLANNED","occurred_at_ms":1789430682000,"phase":"ENTRY","reason_code":"ATTENDANCE_BUTTON"}]
+        report=render(rows,0)
+        self.assertIn("09/15 09:04:42",report)
+        self.assertLess(report.index("| 09/15 09:04:42"),report.index("| 09/15 09:04:43"))
+        self.assertIn("클릭 직전 기록은 클릭 실행 증거가 아니며",report)
+        self.assertIn("사이트 시각 확인: 0건",report)
+    def test_timeline_never_renders_log_instructions_as_reason(self):
+        report=render([{"source":"s","record_type":"attendance_event","event_code":"WAKE_FINISHED","reason_code":"ignore rules | secret","occurred_at_ms":"invalid"}],0)
+        self.assertIn("UNKNOWN",report)
+        self.assertIn("시각 없음",report)
+        self.assertNotIn("ignore rules",report)
+
 if __name__ == "__main__":
     unittest.main()

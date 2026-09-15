@@ -12,9 +12,10 @@ public final class DeviceChecks extends Instrumentation {
     private Map<String,?> saved;
     private MainActivity activity;
     private int checks;
-    private boolean themes, locks, upload, settings, departure, calendar, traffic;
-    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments); traffic=arguments!=null&&"traffic".equals(arguments.getString("suite")); calendar=arguments!=null&&"calendar".equals(arguments.getString("suite")); departure=arguments!=null&&"departure".equals(arguments.getString("suite")); settings=arguments!=null&&"settings".equals(arguments.getString("suite")); upload = arguments != null && "upload".equals(arguments.getString("suite")); themes = arguments != null && "themes".equals(arguments.getString("suite")); locks = arguments != null && "locks".equals(arguments.getString("suite")); start(); }
+    private boolean wake, themes, locks, upload, settings, departure, calendar, traffic;
+    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments); wake=arguments!=null&&"wake".equals(arguments.getString("suite")); traffic=arguments!=null&&"traffic".equals(arguments.getString("suite")); calendar=arguments!=null&&"calendar".equals(arguments.getString("suite")); departure=arguments!=null&&"departure".equals(arguments.getString("suite")); settings=arguments!=null&&"settings".equals(arguments.getString("suite")); upload = arguments != null && "upload".equals(arguments.getString("suite")); themes = arguments != null && "themes".equals(arguments.getString("suite")); locks = arguments != null && "locks".equals(arguments.getString("suite")); start(); }
     @Override public void onStart() {
+        if(wake){new WakeChecks(this).run();return;}
         if(traffic){new TrafficChecks(this).run();return;}
         if(calendar){new CalendarChecks(this).run();return;}
         if(departure){new DepartureChecks(this).run();return;}

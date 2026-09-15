@@ -12,4 +12,9 @@
     <string name="calendar_summary">출석 %1$d일 · 조퇴 %2$d일 · 결석 %3$d일\n입실 %4$d일 · 미확인 %5$d일</string>
     <string name="log_upload_summary">%1$s\n\n%2$s</string>
     <string name="checkout_delay_notice">퇴실은 조기 처리를 피하도록 설정 시각보다 %1$d초 뒤에 시작합니다. 재시도 종료 시각은 유지합니다.</string>
+    <string name="unlock_selected">선택됨 · %1$s</string>
+    <string name="trial_actual_purpose">실제 입실·퇴실 시험</string>
+    <string name="unlock_initial_status">화면과 잠금 상태를 확인하고 있습니다.\n%1$s</string>
+    <string name="trial_preview_purpose">Chrome 열기만 시험 · 출결 안 함</string>
+    <string name="trial_real_success">Chrome이 열린 뒤 오늘 입실·퇴실 시각이 사이트에 표시되고 앱 완료 알림이 남는지 확인하세요. Chrome이 열린 것만으로 출결 성공은 아닙니다.</string>
 </resources>

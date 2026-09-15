@@ -43,6 +43,7 @@ public final class LockLab {
         expire(c);
         List<String> issues=TrialReadiness.problems(c,mode,actual,due,scheduled);
         if(!issues.isEmpty())throw new IllegalStateException(String.join("\n",issues));
+        if(ScheduledUnlock.active(c))throw new IllegalStateException("예약 출석의 잠금 해제가 진행 중입니다. 완료 후 테스트해 주세요.");
         if(ChromeAttendanceService.busy())throw new IllegalStateException("출결 처리 중입니다. 완료 후 테스트해 주세요.");
         if(scheduled && !AlarmScheduler.allowed(c))throw new IllegalStateException("휴대폰에서 알람 및 리마인더를 허용해 주세요.");
         if(live(c,id(c)))finish(c,id(c),"다음 테스트로 교체됨");
