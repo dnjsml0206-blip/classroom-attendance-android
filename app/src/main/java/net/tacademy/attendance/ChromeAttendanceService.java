@@ -20,6 +20,8 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private String lockProbe="", lockAttendanceToken="";
     private final Set<String> lockTrace=new HashSet<>();
     private long lockProbeUntil;
+    private LocalClickPage localClickPage;
+    private boolean localClickRequested,localClickAccepted;
     private PhoneSettings.Target settingsTarget;
     private int settingsStep, settingsScrolls;
     private long settingsUntil, settingsActionAt;
@@ -267,6 +269,25 @@ public final class ChromeAttendanceService extends AccessibilityService {
         LockLab.event(context,intent.getStringExtra(LockLab.TOKEN),instance!=null?"접근성 서비스에서 화면 진입 시도":"앱에서 화면 진입 시도 · Android 제한 가능");
         source.startActivity(intent);
     }
+    public static void probeLocalClick(Context context,String token){
+        if(!LockLab.live(context,token)||!LockLab.localClick(context))return;
+        if(instance==null){LockLab.finish(context,token,"접근성 연결이 없어 시험 버튼을 누르지 못했습니다");return;}
+        ChromeAttendanceService s=instance;
+        if(s.working||s.navigatingWifi||s.settingsTarget!=null){LockLab.finish(context,token,"다른 작업이 진행 중입니다");return;}
+        s.endLockProbe(null);s.lockProbe=token;s.localClickRequested=false;s.localClickAccepted=false;
+        LockLab.stage(context,token,"대체 클릭 시험 준비 · 실제 출결 없음");
+        new Thread(()->{
+            try{LocalClickPage page=new LocalClickPage(token);s.handler.post(()->{
+                if(instance!=s||!token.equals(s.lockProbe)||!LockLab.live(s,token)){page.close();return;}
+                s.localClickPage=page;s.lockProbeUntil=SystemClock.elapsedRealtime()+30000;s.events(true);
+                try{
+                    s.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(page.url())).setPackage("com.android.chrome")
+                        .putExtra("com.android.browser.application_id",s.getPackageName()+".click-test").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    LockLab.stage(s,token,"Chrome 시험 화면과 자동 클릭 대기 · 실제 출결 없음");s.handler.postDelayed(s.lockProbeTick,600);
+                }catch(RuntimeException e){s.endLockProbe("Chrome 시험 화면 실행 실패 · "+DiagnosticLog.failureCode(e));}
+            });}catch(Exception e){s.handler.post(()->{if(token.equals(s.lockProbe))s.endLockProbe("휴대폰 내부 시험 페이지 준비 실패");});}
+        },"prepare-click-test").start();
+    }
     public static void probeLockChrome(Context context,String token) {
         if(!LockLab.live(context,token))return;
         if(instance==null){
@@ -281,10 +302,11 @@ public final class ChromeAttendanceService extends AccessibilityService {
     }
     private final Runnable lockProbeTick=new Runnable(){@Override public void run(){
         if(lockProbe.isEmpty())return;
-        if(!LockLab.live(ChromeAttendanceService.this,lockProbe)){endLockProbe(null);return;}
+        if(!LockLab.live(ChromeAttendanceService.this,lockProbe)){LockLab.expire(ChromeAttendanceService.this);endLockProbe(null);return;}
         if(getSystemService(KeyguardManager.class).isKeyguardLocked() || !getSystemService(PowerManager.class).isInteractive()){
             endLockProbe("Chrome 연결 중 다시 잠김 또는 화면 꺼짐");return;
         }
+        if(localClickPage!=null){inspectLocalClick();return;}
         AccessibilityNodeInfo root=focusedRoot();
         if(root!=null && "com.android.chrome".equals(string(root.getPackageName()))){
             List<AccessibilityNodeInfo> nodes=new ArrayList<>();collect(root,nodes,0);
@@ -295,8 +317,37 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if(SystemClock.elapsedRealtime()>=lockProbeUntil){endLockProbe("Chrome 출결 화면 미확인 · 실행 제한/주소 표시/인증 페이지를 확인하세요");return;}
         handler.postDelayed(this,600);
     }};
+    private void inspectLocalClick(){
+        if(SystemClock.elapsedRealtime()>=lockProbeUntil){endLockProbe(localClickRequested?"시험 클릭 후 화면 변경을 확인하지 못했습니다":"Chrome 시험 페이지·버튼을 확인하지 못했습니다");return;}
+        AccessibilityNodeInfo root=focusedRoot();
+        if(root!=null&&"com.android.chrome".equals(string(root.getPackageName()))){
+            List<AccessibilityNodeInfo> nodes=new ArrayList<>();collect(root,nodes,0);boolean address=false;
+            for(AccessibilityNodeInfo node:nodes)if("com.android.chrome:id/url_bar".equals(node.getViewIdResourceName())&&localClickPage.matches(string(node.getText())))address=true;
+            String text=allText(nodes);
+            if(address){
+                if(text.contains(localClickPage.confirmed())){
+                    if(localClickRequested&&localClickAccepted){
+                        LockLab.prefs(this).edit().putLong("click_confirmed_at_ms",System.currentTimeMillis()).commit();
+                        endLockProbe("대체 버튼 자동 클릭과 화면 변경 확인 · 실제 출결 없음");
+                    }else endLockProbe("자동 클릭 전에 버튼이 이미 눌렸습니다. 직접 누르지 말고 다시 시험하세요");
+                    return;
+                }
+                if(!localClickRequested&&text.contains(localClickPage.ready())){
+                    AccessibilityNodeInfo button=exactButton(nodes,LocalClickPage.BUTTON);
+                    if(button!=null&&button.isEnabled()){
+                        localClickRequested=true;LockLab.prefs(this).edit().putLong("click_requested_at_ms",System.currentTimeMillis()).commit();
+                        localClickAccepted=click(button);LockLab.prefs(this).edit().putBoolean("click_accepted",localClickAccepted).commit();
+                        LockLab.event(this,lockProbe,localClickAccepted?"대체 버튼 자동 클릭 요청 접수 · 화면 변경 확인 중":"대체 버튼 클릭 요청 거절");
+                        if(!localClickAccepted){endLockProbe("시험 버튼 클릭 요청이 거절됐습니다");return;}
+                    }
+                }
+            }
+        }
+        handler.postDelayed(lockProbeTick,400);
+    }
     private void endLockProbe(String result){
         String token=lockProbe;lockProbe="";handler.removeCallbacks(lockProbeTick);
+        if(localClickPage!=null){localClickPage.close();localClickPage=null;}
         if(!working&&!navigatingWifi&&settingsTarget==null)events(false);
         if(result!=null&&!token.isEmpty())LockLab.finish(this,token,result);
     }

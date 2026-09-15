@@ -64,7 +64,9 @@ public final class LockTrialActivity extends Activity {
         handedOff=true;LockLab.event(this,token,"Chrome 연결 전: "+LockLab.snapshot(this));
         LockLab.prefs(this).edit().putString("handoff_environment",LockLogExport.environment(this).toString()).apply();
         Prefs prefs=new Prefs(this);Policy.Phase phase=prefs.phase(ZonedDateTime.now(Policy.ZONE));
-        if(LockLab.actual(this)){
+        if(LockLab.localClick(this)){
+            ChromeAttendanceService.probeLocalClick(this,token);
+        } else if(LockLab.actual(this)){
             java.util.List<String> issues=TrialReadiness.problems(this,LockLab.mode(this),true,System.currentTimeMillis(),false);
             if(LockLab.prefs(this).getBoolean("checkout_trial",false)&&phase!=Policy.Phase.CHECKOUT)issues.add("예약한 퇴실 시간이 변경되었거나 퇴실이 이미 완료되었습니다.");
             if(!issues.isEmpty()){

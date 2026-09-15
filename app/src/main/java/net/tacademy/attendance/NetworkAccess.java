@@ -17,10 +17,10 @@ public final class NetworkAccess {
     public static State inspect(Context context) {
         ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
         WifiManager wm = (WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        boolean present=false;
+        boolean present=false;int wifiCount=0;
         try {
             Network[] networks=cm.getAllNetworks();
-            for(Network n:networks){NetworkCapabilities caps=cm.getNetworkCapabilities(n);if(caps!=null&&caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))present=true;}
+            for(Network n:networks){NetworkCapabilities caps=cm.getNetworkCapabilities(n);if(caps!=null&&caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)){present=true;wifiCount++;}}
             if(context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)
                 return new State(null,"","정확한 위치 권한이 필요합니다","FINE_LOCATION_REQUIRED",present);
             if(Build.VERSION.SDK_INT>=28&&!context.getSystemService(LocationManager.class).isLocationEnabled())
@@ -35,7 +35,9 @@ public final class NetworkAccess {
                 String ssid="";
                 if(Build.VERSION.SDK_INT>=29&&caps.getTransportInfo() instanceof WifiInfo)
                     ssid=Policy.normalizeSsid(((WifiInfo)caps.getTransportInfo()).getSSID());
-                if(ssid.isEmpty()&&network.equals(active)){
+                // With one Wi-Fi transport, WifiManager identifies it even when mobile data is the default.
+                // Never assign the primary SSID to an ambiguous secondary Wi-Fi network.
+                if(ssid.isEmpty()&&(network.equals(active)||wifiCount==1)){
                     @SuppressWarnings("deprecation") WifiInfo info=wm.getConnectionInfo();
                     if(info!=null)ssid=Policy.normalizeSsid(info.getSSID());
                 }
@@ -43,6 +45,7 @@ public final class NetworkAccess {
                 if(!ssid.isEmpty()&&new Prefs(context).ssids().contains(ssid)){
                     if(!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
                         return new State(null,ssid,"Wi-Fi 인터넷 연결을 확인해 주세요","INTERNET_UNVALIDATED",true);
+                    if(!network.equals(active))return new State(null,ssid,"Wi-Fi를 기본 인터넷 연결로 사용해 주세요","WIFI_NOT_DEFAULT",true);
                     return new State(network,ssid,"","ALLOWED",true);
                 }
             }

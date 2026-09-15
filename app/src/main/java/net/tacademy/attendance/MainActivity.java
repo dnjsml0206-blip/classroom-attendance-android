@@ -26,7 +26,7 @@ public final class MainActivity extends Activity {
     private int selected;
     private boolean pendingStart, pendingLocation;
     private SetupStatusView setupStatus;
-    private TextView status, detail, inTime, outTime, todayLog;
+    private TextView status, detail, inTime, outTime, todayLog, todayWifi;
     private HomeTheme homeTheme;
     private LocalDate homeDay;
     private String homeCheckout, homeEntryEnd;
@@ -220,6 +220,7 @@ public final class MainActivity extends Activity {
         state.addView(button("달력에서 출결 조회  ›", true, this::attendanceCalendar), new LinearLayout.LayoutParams(-1, -2));
         LinearLayout log = card("오늘 출석 기록");
         todayLog = text("", 13, homeTheme.muted, false); todayLog.setLineSpacing(dp(8), 1); log.addView(todayLog);
+        todayWifi=text("",13,homeTheme.muted,true);todayWifi.setTag("today-wifi");todayWifi.setPadding(dp(8),dp(4),dp(8),dp(16));content.addView(todayWifi);
         updateHome();
     }
 
@@ -251,6 +252,9 @@ public final class MainActivity extends Activity {
         String log = exit.isEmpty() ? "" : exit + "  퇴실 완료";
         if (!entry.isEmpty()) log += (log.isEmpty() ? "" : "\n") + entry + "  입실 완료";
         setIfChanged(todayLog, log.isEmpty() ? "아직 확인된 출석 기록이 없습니다." : log);
+        NetworkAccess.State wifi=NetworkAccess.inspect(this);
+        setIfChanged(todayWifi, "대상 Wi-Fi · "+(!wifi.ssid().isEmpty()&&prefs.ssids().contains(wifi.ssid()) ? "대기 중" : "와이파이 미연결"));
+        todayWifi.setContentDescription("대상 와이파이 인식 상태 · "+todayWifi.getText());
     }
 
     private void setAttendanceReservation(boolean enabled) {
@@ -322,12 +326,12 @@ public final class MainActivity extends Activity {
         note(box,"출석 예약·자동 클릭·등록 Wi-Fi 조건이 맞을 때 입실/퇴실마다 하루 한 번 화면을 깨웁니다. 최대 2분 안에 종료하며, PIN·지문이 필요하면 직접 인증해야 합니다. 휴대폰이 화면 표시를 막으면 알림으로 안내합니다.");
         action(box,"Extend Unlock 설정 열기",false,()->PhoneSettings.open(this,PhoneSettings.Target.EXTEND));
         action(box,"앱 배터리 설정 열기",false,()->PhoneSettings.open(this,PhoneSettings.Target.BATTERY));
-        note(box,"Extend Unlock의 실제 신뢰 활성 여부는 휴대폰에서 확인해 주세요. ‘알림 후 직접 해제’는 화면을 자동으로 깨우지 않습니다.");
+        note(box,"기본 방식은 Extend Unlock · 신뢰 상태입니다. 휴대폰 신뢰 설정을 완료해 주세요. PIN·지문 재인증이 필요하면 자동 진행이 중단되고 결과를 알립니다.");
     }
 
     private void creatorPanel(){
         if(CreatorTools.enabled()){
-            LinearLayout diagnostics=card("진단 · 제작자용");
+            LinearLayout diagnostics=card("진단 · 제작자용");diagnostics.setTag("creator-diagnostics");
             note(diagnostics,"일반 출결 동작과 잠금 테스트 기록을 확인하고 직접 업로드합니다.");
             action(diagnostics,"로그 확인 · GitHub 업로드",true,()->startActivity(new Intent(this,LogUploadActivity.class)));
             if(CreatorTools.testsVisible(this)){
@@ -341,7 +345,6 @@ public final class MainActivity extends Activity {
     }
 
     private void settings() {
-        creatorPanel();
         reservationSettings();
         unlockSettings();
         LinearLayout checks=card("설정 확인");setupStatus=new SetupStatusView(this,false);checks.addView(setupStatus);
@@ -392,6 +395,7 @@ public final class MainActivity extends Activity {
         LinearLayout help = card("Wi-Fi 자동 연결");
         note(help, "갤럭시의 인텔리전트 Wi-Fi에서 자동 켜기/끄기를 설정할 수 있습니다. 출석에 쓸 네트워크는 휴대폰에도 저장해 주세요.");
         action(help, "인텔리전트 Wi-Fi 설정", false, () -> ChromeAttendanceService.intelligentWifi(this));
+        creatorPanel();
     }
 
     private void addWifi() {

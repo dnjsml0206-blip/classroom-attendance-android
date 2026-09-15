@@ -4,16 +4,15 @@ package net.tacademy.attendance;
 final class UnlockPolicy {
     static final long VISIBLE_TIMEOUT_MS=8_000, SESSION_TIMEOUT_MS=120_000;
     enum Mode {
-        NOTICE("알림 후 직접 해제"), WAKE("화면 깨우기"), TRUST("Extend Unlock · 신뢰 상태"), AUTH("시스템 인증 요청");
+        WAKE("화면 깨우기"), TRUST("Extend Unlock · 신뢰 상태"), AUTH("시스템 인증 요청");
         final String label; Mode(String label){this.label=label;}
     }
-    static Mode mode(String value){try{return Mode.valueOf(value);}catch(RuntimeException e){return Mode.NOTICE;}}
+    static Mode mode(String value){try{return Mode.valueOf(value);}catch(RuntimeException e){return Mode.TRUST;}}
     static boolean canAttempt(String today,String previous){return today.compareTo(previous)>0;}
     static boolean live(String expected,String actual,boolean active,int boot,int savedBoot,long now,long started){
         return active&&expected!=null&&!expected.isEmpty()&&expected.equals(actual)&&boot>=0&&boot==savedBoot&&now>=started&&now-started<SESSION_TIMEOUT_MS;
     }
     static LockTestPolicy.Step next(Mode mode,boolean interactive,boolean keyguard,boolean locked){
-        if(mode==Mode.NOTICE)return LockTestPolicy.Step.NEED_AUTH;
         return LockTestPolicy.next(mode==Mode.WAKE?LockTestPolicy.Mode.WAKE:mode==Mode.TRUST?LockTestPolicy.Mode.EXTEND:LockTestPolicy.Mode.AUTH,interactive,keyguard,locked);
     }
 }

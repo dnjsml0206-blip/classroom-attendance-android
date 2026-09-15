@@ -62,6 +62,10 @@ def conclusion(mode, rows):
         return "진행 중·취소 기록만 있음. 완료된 시험 필요"
     evidence = [r.get("evidence", {}) for r in valid]
     observed = lambda e: e.get("chrome_address_observed") or e.get("attendance_record_confirmed")
+    local = [r for r in valid if r.get("purpose") == "LOCAL_CLICK"]
+    if local:
+        passed = [r for r in local if r.get("machine_result") == "SUCCESS" and r.get("click_accepted") is True and isinstance(r.get("click_confirmed_at_ms"), (int, float)) and r["click_confirmed_at_ms"] > 0]
+        return f"대체 클릭 시험 {len(local)}회 중 클릭·화면 변경 확인 {len(passed)}회. 실제 서버 출결과 무조작 잠금 해제 성공은 별도 확인"
     if mode == "NETWORK":
         codes = sorted({e["https_status"] for e in evidence if e.get("https_status") is not None})
         return ("HTTPS 응답 " + ", ".join(map(str, codes)) + " 확인. 사이트 인증·출결 성공은 판정 불가") if codes else "서버 응답 근거 없음. Wi-Fi 조건·진단 오류 확인"
@@ -135,7 +139,7 @@ def render(rows, skipped):
         seconds = f"{delay/1000:.1f}초" if isinstance(delay, (int, float)) and delay >= 0 else "기록 없음"
         gates = " / ".join(flag(v) for v in (env.get("schedule_enabled"), env.get("auto_click"), row.get("actual_attendance_requested")))
         # Table cells only use app enums or booleans, never free-form notes or site text.
-        wifi_codes = {"ALLOWED", "FINE_LOCATION_REQUIRED", "LOCATION_DISABLED", "VPN_ACTIVE", "INTERNET_UNVALIDATED", "NO_WIFI_TRANSPORT", "SSID_NOT_REGISTERED", "SSID_UNAVAILABLE", "SSID_UNAVAILABLE_BACKGROUND_PERMISSION", "PERMISSION_DENIED"}
+        wifi_codes = {"ALLOWED", "FINE_LOCATION_REQUIRED", "LOCATION_DISABLED", "VPN_ACTIVE", "INTERNET_UNVALIDATED", "WIFI_NOT_DEFAULT", "NO_WIFI_TRANSPORT", "SSID_NOT_REGISTERED", "SSID_UNAVAILABLE", "SSID_UNAVAILABLE_BACKGROUND_PERMISSION", "PERMISSION_DENIED"}
         code = env.get("wifi_check_code")
         wifi = code if code in wifi_codes else "기록 없음"
         interactions = {"UNTOUCHED": "무조작", "MANUAL_WAKE": "직접 화면 켬", "MANUAL_UNLOCK": "직접 잠금 해제", "NOTIFICATION": "알림 누름", "SYSTEM_AUTH": "시스템 인증 응답"}

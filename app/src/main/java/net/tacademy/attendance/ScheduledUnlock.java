@@ -13,7 +13,7 @@ final class ScheduledUnlock {
     static final String TOKEN="scheduled_unlock_token";
     private static final Handler MAIN=new Handler(Looper.getMainLooper());
     static SharedPreferences store(Context c){return c.getSharedPreferences("scheduled_unlock",Context.MODE_PRIVATE);}
-    static UnlockPolicy.Mode mode(Context c){return UnlockPolicy.mode(new Prefs(c).raw.getString("scheduled_lock_mode","NOTICE"));}
+    static UnlockPolicy.Mode mode(Context c){return UnlockPolicy.mode(new Prefs(c).raw.getString("scheduled_lock_mode","TRUST"));}
     private static int boot(Context c){return Settings.Global.getInt(c.getContentResolver(),Settings.Global.BOOT_COUNT,-1);}
     static String token(Context c){return store(c).getString("token","");}
     static Policy.Phase phase(Context c){try{return Policy.Phase.valueOf(store(c).getString("phase","IDLE"));}catch(RuntimeException e){return Policy.Phase.IDLE;}}
@@ -34,7 +34,7 @@ final class ScheduledUnlock {
         Context c=context.getApplicationContext();Prefs p=new Prefs(c);
         if(active(c))return;
         if(store(c).getBoolean("active",false))stop(c,token(c),"WAKE_EXPIRED",false);
-        if(mode(c)==UnlockPolicy.Mode.NOTICE||!p.auto()||phase==Policy.Phase.IDLE)return;
+        if(!p.auto()||phase==Policy.Phase.IDLE)return;
         if(p.phase(ZonedDateTime.now(Policy.ZONE))!=phase||LockLab.readOnlyActive(c)||!NetworkAccess.inspect(c).allowed())return;
         AccessPolicy.Decision access=TrafficGuard.peek(c,AccessPolicy.Kind.AUTOMATIC,phase);
         if(!access.allowed()){DiagnosticLog.add(c,DiagnosticLog.Event.WAKE_BLOCKED,phase,"ACCESS_"+access.reason());return;}
@@ -50,7 +50,7 @@ final class ScheduledUnlock {
     }
     /** Persist before dispatch. Changing modes, toggling reservations or restarting never replenishes a day. */
     static synchronized String claim(Context c,Policy.Phase phase,String day,UnlockPolicy.Mode mode){
-        if(phase==Policy.Phase.IDLE||mode==UnlockPolicy.Mode.NOTICE)return "";
+        if(phase==Policy.Phase.IDLE)return "";
         if(boot(c)<0){DiagnosticLog.add(c,DiagnosticLog.Event.WAKE_BLOCKED,phase,"BOOT_COUNT_UNAVAILABLE");return "";}
         SharedPreferences s=store(c);String key="attempted:"+phase.name();
         if(!UnlockPolicy.canAttempt(day,s.getString(key,"")))return "";

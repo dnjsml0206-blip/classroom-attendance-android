@@ -17,6 +17,7 @@ public final class LockLab {
     static SharedPreferences prefs(Context c){return c.getSharedPreferences("lock_lab",Context.MODE_PRIVATE);}
     static String id(Context c){return prefs(c).getString("id","");}
     static LockTestPolicy.Mode mode(Context c){try{return LockTestPolicy.Mode.valueOf(prefs(c).getString("mode","WAKE"));}catch(Exception e){return LockTestPolicy.Mode.WAKE;}}
+    static boolean localClick(Context c){return "LOCAL_CLICK".equals(prefs(c).getString("purpose",""));}
     static boolean actual(Context c){return prefs(c).getBoolean("actual",false) && mode(c)!=LockTestPolicy.Mode.NETWORK;}
     static boolean live(Context c,String id){if(!CreatorTools.testsVisible(c))return false;SharedPreferences p=prefs(c);return LockTestPolicy.live(id,p.getString("id",""),System.currentTimeMillis(),p.getLong("created",0),p.getLong("expires",0),p.getBoolean("active",false));}
     public static boolean readOnlyActive(Context c){return live(c,id(c)) && (!prefs(c).getBoolean("checkout_trial",false) || System.currentTimeMillis()>=prefs(c).getLong("due",0)) && !prefs(c).getBoolean("allow_attendance",false);}
@@ -29,19 +30,23 @@ public final class LockLab {
     static String device(){return Build.MANUFACTURER+" "+Build.MODEL+" · Android "+Build.VERSION.RELEASE+" / API "+Build.VERSION.SDK_INT;}
     static PendingIntent alarm(Context c,String token){return PendingIntent.getBroadcast(c,ALARM,new Intent(c,LockTestReceiver.class).putExtra(TOKEN,token),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);}
     static synchronized String prepare(Context c,LockTestPolicy.Mode mode,boolean actual,int delaySeconds){
-        return prepareAt(c,mode,actual,System.currentTimeMillis()+delaySeconds*1000L,delaySeconds>0,false);
+        return prepareAt(c,mode,actual,System.currentTimeMillis()+delaySeconds*1000L,delaySeconds>0,false,false);
     }
     static synchronized String prepareCheckout(Context c,LockTestPolicy.Mode mode){
         if(mode==LockTestPolicy.Mode.NETWORK)throw new IllegalStateException("기기 연결 진단은 퇴실을 처리하지 않습니다. Chrome 테스트 방법을 선택해 주세요.");
         ZonedDateTime now=ZonedDateTime.now(Policy.ZONE);
         long due=now.toLocalDate().atTime(Policy.checkoutStartTime(new Prefs(c).checkout())).atZone(Policy.ZONE).toInstant().toEpochMilli();
         if(due<=System.currentTimeMillis())throw new IllegalStateException("오늘 퇴실 시각이 지났습니다. 시간 설정을 확인해 주세요.");
-        return prepareAt(c,mode,true,due,true,true);
+        return prepareAt(c,mode,true,due,true,true,false);
     }
-    private static synchronized String prepareAt(Context c,LockTestPolicy.Mode mode,boolean actual,long due,boolean scheduled,boolean checkout){
+    static synchronized String prepareClick(Context c,LockTestPolicy.Mode mode,int delaySeconds){
+        return prepareAt(c,mode,false,System.currentTimeMillis()+delaySeconds*1000L,delaySeconds>0,false,mode!=LockTestPolicy.Mode.NETWORK);
+    }
+    private static synchronized String prepareAt(Context c,LockTestPolicy.Mode mode,boolean actual,long due,boolean scheduled,boolean checkout,boolean localClick){
         if(!CreatorTools.testsVisible(c))throw new IllegalStateException("제작자용 앱에서 임시 테스트 메뉴를 켜 주세요.");
         expire(c);
-        List<String> issues=TrialReadiness.problems(c,mode,actual,due,scheduled);
+        List<String> issues=localClick?new ArrayList<>():TrialReadiness.problems(c,mode,actual,due,scheduled);
+        if(localClick&&!ChromeAttendanceService.available())issues.add("Chrome 접근성 연결이 필요합니다. 연결 탭에서 켜 주세요.");
         if(!issues.isEmpty())throw new IllegalStateException(String.join("\n",issues));
         if(ScheduledUnlock.active(c))throw new IllegalStateException("예약 출석의 잠금 해제가 진행 중입니다. 완료 후 테스트해 주세요.");
         if(ChromeAttendanceService.busy())throw new IllegalStateException("출결 처리 중입니다. 완료 후 테스트해 주세요.");
@@ -52,15 +57,17 @@ public final class LockLab {
         if(!prefs(c).edit().putString("id",token).putString("mode",mode.name()).putLong("created",now).putLong("due",due)
             .putLong("expires",due+120000).putBoolean("checkout_trial",checkout).putString("target_phase",checkout?"CHECKOUT":"").putBoolean("active",true).remove("execution_environment")
             .remove("fired_at_ms").remove("fired_elapsed_ms").remove("entry_at_ms").remove("entry_delay_ms").remove("entry_environment").remove("handoff_environment").putString("entry_source","").putString("user_interaction","UNKNOWN").putBoolean("allow_attendance",false).putBoolean("started",false).putBoolean("fired",false)
+            .putString("purpose",localClick?"LOCAL_CLICK":actual?"ATTENDANCE":"PREVIEW").putString("machine_result","PENDING").remove("click_requested_at_ms").remove("click_accepted").remove("click_confirmed_at_ms")
             .putBoolean("actual",actual && mode!=LockTestPolicy.Mode.NETWORK).putString("events","").putString("stage","실행 대기")
             .putString("verdict","미확인").putString("note","").putString("environment",LockLogExport.environment(c).toString()).commit())throw new IllegalStateException("테스트 저장 실패");
-        event(c,token,mode.label+" 예약 · "+(actual(c)?"조건 충족 시 실제 출결 시도":"조회 테스트"));
+        event(c,token,mode.label+" 예약 · "+(localClick?"대체 클릭 시험 · 실제 출결 없음":actual(c)?"조건 충족 시 실제 출결 시도":"조회 테스트"));
         event(c,token,"예약 당시: "+snapshot(c));
         if(scheduled){
             try{c.getSystemService(AlarmManager.class).setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,due,alarm(c,token));}
             catch(SecurityException e){finish(c,token,"정확한 알람 권한 없음");throw new IllegalStateException("알람 및 리마인더를 허용해 주세요.");}
             notice(c,checkout?"오늘 퇴실 테스트 예약":"잠금 테스트 예약",checkout?"오늘 "+Policy.checkoutStartTime(new Prefs(c).checkout())+" · "+mode.label+" · 실제 퇴실을 한 번 시험합니다. 실행 시 설정과 Wi-Fi를 다시 확인합니다.":"예약 시각 전에 화면을 꺼 주세요. 기존 출결 예약과 별도인 일회성 테스트입니다.",false);
         }
+        new Handler(Looper.getMainLooper()).postDelayed(()->{if(token.equals(id(c)))expire(c);},Math.max(0,due-now)+120100);
         return token;
     }
     static synchronized void event(Context c,String token,String message){
@@ -74,6 +81,8 @@ public final class LockLab {
     static synchronized void stage(Context c,String token,String stage){if(live(c,token)){prefs(c).edit().putString("stage",stage).commit();event(c,token,stage);}}
     static synchronized void finish(Context c,String token,String result){
         if(!live(c,token))return;
+        if(localClick(c)){boolean success=prefs(c).getBoolean("click_accepted",false)&&prefs(c).getLong("click_confirmed_at_ms",0)>0;
+            prefs(c).edit().putString("machine_result",success?"SUCCESS":"FAILED").commit();result=(success?"성공 · ":"실패 · ")+result;}
         event(c,token,result+" · "+snapshot(c));
         prefs(c).edit().putBoolean("active",false).putString("stage",result).commit();
         c.getSystemService(AlarmManager.class).cancel(alarm(c,token));
@@ -82,13 +91,14 @@ public final class LockLab {
     static synchronized void expire(Context c){
         if(prefs(c).getBoolean("active",false)&&!live(c,id(c))){
             String reason=prefs(c).getBoolean("started",false)?"확인 시간 만료":"자동 진입 미확인 · 실행 제한 또는 알람 지연 가능";
-            event(c,id(c),reason);prefs(c).edit().putBoolean("active",false).putString("stage",reason).commit();
+            if(localClick(c))reason="실패 · "+reason;event(c,id(c),reason);prefs(c).edit().putBoolean("active",false).putString("machine_result","FAILED").putString("stage",reason).commit();
+            ChromeAttendanceService.cancelLockProbe();
             c.getSystemService(AlarmManager.class).cancel(alarm(c,id(c)));notice(c,"잠금 테스트 종료",reason,false);
         }
     }
     static void cancel(Context c){boolean owns=live(c,id(c))&&prefs(c).getBoolean("allow_attendance",false);expire(c);if(live(c,id(c)))finish(c,id(c),"사용자가 테스트 취소");ChromeAttendanceService.cancelLockProbe();if(owns)ChromeAttendanceService.cancelWork();}
     static void resetAfterRestart(Context c){
-        if(prefs(c).getBoolean("active",false)){event(c,id(c),"재부팅 또는 앱 업데이트로 테스트 종료");prefs(c).edit().putBoolean("active",false).putString("stage","재부팅/업데이트로 종료").commit();}
+        if(prefs(c).getBoolean("active",false)){event(c,id(c),"재부팅 또는 앱 업데이트로 테스트 종료");prefs(c).edit().putBoolean("active",false).putString("machine_result","FAILED").putString("stage","재부팅/업데이트로 종료").commit();}
         c.getSystemService(AlarmManager.class).cancel(alarm(c,""));
         c.getSystemService(NotificationManager.class).cancel(NOTICE);
     }
@@ -133,7 +143,7 @@ public final class LockLab {
     }
     static String report(Context c){
         SharedPreferences p=prefs(c);if(id(c).isEmpty())return "아직 테스트 기록이 없습니다.";
-        return device()+"\n방식: "+mode(c).label+"\n실제 출결 시도: "+(actual(c)?"켜짐":"꺼짐")+"\n진행 결과: "+p.getString("stage","")+
+        return device()+"\n방식: "+mode(c).label+"\n시험 목적: "+(localClick(c)?"대체 클릭 시험 · 서버 출결 없음":actual(c)?"실제 출결":"조회")+"\n자동 판정: "+p.getString("machine_result","기록 없음")+"\n실제 출결 시도: "+(actual(c)?"켜짐":"꺼짐")+"\n진행 결과: "+p.getString("stage","")+
             "\n직접 조작: "+interactionLabel(p.getString("user_interaction","UNKNOWN"))+"\n사용자 확인: "+p.getString("verdict","미확인")+"\n메모: "+p.getString("note","")+"\n\n"+p.getString("events","");
     }
     static String interactionLabel(String value){return switch(value){case "UNTOUCHED"->"아무 조작 없이 기다림";case "MANUAL_WAKE"->"직접 화면을 켬";case "MANUAL_UNLOCK"->"직접 잠금을 해제함";case "NOTIFICATION"->"알림을 직접 누름";case "SYSTEM_AUTH"->"앱의 시스템 인증 요청에 응답함";default->"아직 기록하지 않음";};}

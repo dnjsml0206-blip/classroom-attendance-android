@@ -26,7 +26,7 @@ final class WakeChecks {
         }
         Prefs p=new Prefs(c);configure(false);
         main=(MainActivity)test.startActivitySync(new Intent(c,MainActivity.class).putExtra("open_tab",1).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        check(ScheduledUnlock.mode(c)==UnlockPolicy.Mode.NOTICE,"Updating starts with the existing notification-only behavior");
+        check(ScheduledUnlock.mode(c)==UnlockPolicy.Mode.TRUST,"Updating starts with the automatic trusted-unlock default");
         View mode=main.getWindow().getDecorView().findViewWithTag("TRUST");
         check(mode instanceof RadioButton,"Normal lock settings are available in this build");
         ui(mode::performClick);
@@ -39,14 +39,10 @@ final class WakeChecks {
         check(info.enabled&&!info.exported,"Normal wake activity is enabled and private in creator and public builds");
         if(CreatorTools.enabled()){
             lab=test.startActivitySync(new Intent(c,LockLabActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            check(!find(lab.getWindow().getDecorView(),"실행 목적 선택 후 시험").isEnabled(),"No trial action is enabled until a purpose is selected");
-            ui(()->find(lab.getWindow().getDecorView(),"Chrome 열기만 시험 · 출결 안 함").performClick());
-            check(find(lab.getWindow().getDecorView(),"지금 Chrome 열기만 · 출결 안 함").isEnabled(),"Preview selection explicitly labels that no attendance is performed");
-            ui(()->find(lab.getWindow().getDecorView(),"실제 입실·퇴실 시험").performClick());
-            check(find(lab.getWindow().getDecorView(),"지금 실제 입실·퇴실 시험").isEnabled(),"Real attendance is a distinct explicit trial choice");
-            check(checkedRadios((RadioGroup)lab.getWindow().getDecorView().findViewWithTag("trial-purpose"))==1,"Trial purpose shows exactly one selected action");
-            scrollToTag(lab,"trial-purpose");snap("trial-purpose-attendance.png");
-            check(LockLab.id(c).isEmpty(),"Choosing the trial purpose alone does not create or run a trial");
+            check(find(lab.getWindow().getDecorView(),"지금 대체 클릭 시험").isEnabled(),"The test UI offers the substitute click test");
+            check(find(lab.getWindow().getDecorView(),"실제 입실·퇴실 시험")==null,"The test UI cannot submit real attendance");
+            scrollToTag(lab,"local-click-test");snap("local-click-test.png");
+            check(LockLab.id(c).isEmpty(),"Opening the test UI alone does not run a trial");
             ui(lab::finish);lab=null;
         }
         configure(true);

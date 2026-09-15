@@ -57,3 +57,14 @@ class AnalysisTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LocalClickConclusionTests(unittest.TestCase):
+    def test_substitute_is_not_real_attendance(self):
+        row={"purpose":"LOCAL_CLICK","active":False,"machine_result":"SUCCESS","click_accepted":True,"click_confirmed_at_ms":123}
+        result=conclusion("EXTEND",[row])
+        self.assertIn("클릭·화면 변경 확인 1회",result)
+        self.assertIn("실제 서버 출결",result)
+    def test_label_without_evidence_is_not_a_pass(self):
+        result=conclusion("EXTEND",[{"purpose":"LOCAL_CLICK","active":False,"machine_result":"SUCCESS"}])
+        self.assertIn("클릭·화면 변경 확인 0회",result)

@@ -2,7 +2,7 @@ package net.tacademy.attendance;
 import org.junit.Test;
 import static org.junit.Assert.*;
 public final class UnlockPolicyTest {
-    @Test public void missingOrInvalidModeStaysNotificationOnly(){assertEquals(UnlockPolicy.Mode.NOTICE,UnlockPolicy.mode("unknown"));assertEquals(UnlockPolicy.Mode.NOTICE,UnlockPolicy.mode(null));}
+    @Test public void missingLegacyOrInvalidModeUsesTrustedAutomation(){assertEquals(UnlockPolicy.Mode.TRUST,UnlockPolicy.mode("unknown"));assertEquals(UnlockPolicy.Mode.TRUST,UnlockPolicy.mode(null));assertEquals(UnlockPolicy.Mode.TRUST,UnlockPolicy.mode("NOTICE"));}
     @Test public void wakeWaitsForScreenAndNeverDismissesASecureLock(){
         assertEquals(LockTestPolicy.Step.WAIT_SCREEN,UnlockPolicy.next(UnlockPolicy.Mode.WAKE,false,false,false));
         assertEquals(LockTestPolicy.Step.NEED_AUTH,UnlockPolicy.next(UnlockPolicy.Mode.WAKE,true,true,true));

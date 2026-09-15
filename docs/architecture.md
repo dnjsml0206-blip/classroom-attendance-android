@@ -41,12 +41,12 @@ MainActivity는 화면이 보일 때 기존 2초 갱신에서 전환과 날짜 �
 
 LockLab은 출결 Prefs와 별도인 lock_lab 저장소에 일회성 ID·기한·방법·로그를 보관한다. LockTestReceiver는 알람 ID 2401로 한 번만 실행하며 LockTrialActivity는 자신의 제한된 테스트 화면을 잠금 위에 표시하고 Android KeyguardManager에 해제를 요청한다. 실제 인증은 시스템 화면에서만 수행한다. 활동 시작 요청과 실제 진입을 따로 기록하며 알림에서의 수동 진입도 표시한다.
 
-테스트 준비 중에는 ChromeAttendanceService가 출석 작업을 보류한다. 실제 출결을 선택한 경우, 잠금 해제와 기존 조건을 확인한 시점에만 보류를 풀고 기존 AttendanceEngine에 연결한다. 해당 작업은 테스트 토큰과 기한을 계속 확인하며 취소되면 종료한다. 조회 경로는 접근성으로 Chrome 주소를 확인할 뿐 버튼을 누르거나 출결 기록을 저장하지 않는다. 기한이 지났거나 재부팅/업데이트된 테스트는 재실행하지 않는다.
+v0.9.0 시험 UI는 prepareClick으로 LOCAL_CLICK 목적을 저장한다. 준비부터 완료까지 실제 출결을 보류하고, 잠금 해제 후 LocalClickPage의 loopback 임시 포트를 Chrome으로 연다. 실제 출결과 같은 exactButton·click 접근성 처리를 사용하지만 주소·시험 토큰·본문 마커가 모두 일치하는 시험 버튼만 누른다. 클릭 요청 접수와 변경된 페이지 마커를 모두 관찰해야 machine_result=SUCCESS이다. 이 경로는 AttendanceEngine이나 출결 페이지 열기를 호출하지 않는다. 이전 실제 출결·조회 경로는 기존 기록 및 내부 호환용이며 시험 UI에서 노출하지 않는다. 기한이 지났거나 재부팅/업데이트된 테스트는 재실행하지 않는다.
 
 잠금 유지 기기 연결 진단은 등록 Wi-Fi 등 로컬 조건만 확인한다. 별도의 출석 서버 HTTPS 요청은 제거했다. 서버 인증·출결 API와 연결하지 않는다. 테스트 알림은 기존 완료 알림과 별도 ID 24를 사용한다.
 ## GitHub 로그 업로드
 
-LockLogExport는 잠금 시험과 DiagnosticLog의 일반 출결 동작을 JSON으로 내보냅니다. 일반 동작은 최근 7일·최대 200건을 로컬에 저장하고 마지막 성공 업로드 이후 새 기록·수정만 전송 대상으로 삼습니다. CreatorTools는 빌드 옵션에 따라 임시 테스트와 업로드 기능을 차단하며, 제작자용에서만 설정 상단에 진단 메뉴를 표시합니다. GitHubTokenStore는 Android Keystore AES-GCM으로 기기 내부 토큰을 암호화합니다. LogUploadStore는 검토한 파일 내용과 경로를 보존하고, GitHubLogClient는 비공개 저장소와 전용 브랜치를 확인한 뒤 Contents API로 새 파일만 만듭니다. 동일한 파일은 blob SHA를 비교해 중복 쓰기를 하지 않습니다. 전송은 명시적 버튼으로만 시작하며 자동 반복·백그라운드 서비스는 추가하지 않습니다. 분석 도구는 test_id 중복을 제거하고 수동 판정과 앱 증거를 구분합니다.
+LockLogExport는 잠금 시험과 DiagnosticLog의 일반 출결 동작을 JSON으로 내보냅니다. 일반 동작은 최근 7일·최대 200건을 로컬에 저장하고 마지막 성공 업로드 이후 새 기록·수정만 전송 대상으로 삼습니다. CreatorTools는 빌드 옵션에 따라 임시 테스트와 업로드 기능을 차단하며, 제작자용에서만 설정 맨 아래에 진단 메뉴를 표시합니다. GitHubTokenStore는 Android Keystore AES-GCM으로 기기 내부 토큰을 암호화합니다. LogUploadStore는 검토한 파일 내용과 경로를 보존하고, GitHubLogClient는 비공개 저장소와 전용 브랜치를 확인한 뒤 Contents API로 새 파일만 만듭니다. 동일한 파일은 blob SHA를 비교해 중복 쓰기를 하지 않습니다. 전송은 명시적 버튼으로만 시작하며 자동 반복·백그라운드 서비스는 추가하지 않습니다. 분석 도구는 test_id 중복을 제거하고 수동 판정과 앱 증거를 구분합니다.
 
 ## 출결 페이지 접속 제한
 
@@ -54,10 +54,14 @@ LockLogExport는 잠금 시험과 DiagnosticLog의 일반 출결 동작을 JSON�
 
 ## 일반 예약의 잠금 해제 연결
 
-ScheduledUnlock은 제작자용 LockLab과 별개인 저장소에 날짜·단계·선택 방식·토큰·부팅 횟수·경과 시각을 저장한다. 일반 설정의 scheduled_lock_mode가 NOTICE이면 기존 알림 동작을 유지한다. 다른 방식은 출석 시간·자동 클릭·등록 Wi-Fi 및 TrafficGuard의 읽기 전용 예비 검사를 통과한 뒤 날짜·단계별 한 번만 요청한다. Activity는 setTurnScreenOn과 Android Keyguard API만 사용하고 인증정보를 받지 않는다.
+ScheduledUnlock은 제작자용 LockLab과 별개인 저장소에 날짜·단계·선택 방식·토큰·부팅 횟수·경과 시각을 저장한다. 일반 설정의 기본값과 이전 NOTICE 선택은 TRUST로 적용한다. 화면 깨우기·신뢰 상태·시스템 인증 방식은 출석 시간·자동 클릭·등록 Wi-Fi 및 TrafficGuard의 읽기 전용 예비 검사를 통과한 뒤 날짜·단계별 한 번만 요청한다. Activity는 setTurnScreenOn과 Android Keyguard API만 사용하고 인증정보를 받지 않는다.
 
 실제 포커스 확보를 별도 기록한다. 8초 표시 확인, 120초 세션 기한, 날짜/단계/모드 변경, 재부팅, 예약 비활성화와 Wi-Fi 조건을 검사하고 기한이 끝난 콜백은 Chrome으로 연결하지 않는다. 해제 후 기존 AttendanceEngine과 TrafficGuard를 그대로 거치므로 화면 깨우기가 사이트 접속·중복 클릭 제한을 우회하지 않는다. 임시 테스트가 실행 중이면 경쟁하지 않는다.
 
 DiagnosticLog는 알람·감시 시작·잠금 흐름과 Chrome 판독 단계를 고정 코드로 남긴다. Chrome 판독은 시도별로 같은 단계를 중복 기록하지 않는다. 클릭 직전·클릭 접수·실패는 동기 저장하고, 클릭 전 durable marker와 서버 확인 기록을 별개로 다룬다. AutomationSnapshot은 시간 설정·알람·모니터·잠금 방식·파싱한 보류 표식만 내보내며 임의의 SharedPreferences 덤프를 만들지 않는다.
 
 [동작과 제약](normal-unlock-v0.8.0.md)
+
+LocalClickPage는 127.0.0.1에만 바인딩하고 해당 UUID 경로의 GET과 Host 헤더만 허용한다. 외부 리소스·폼·프레임·스크립트 연결을 CSP로 차단한다. 제공 스레드는 최대 40초·24개 연결·8KB 헤더로 제한하고, 시험 종료·취소 시 소켓을 닫는다. 클릭은 한 번만 요청하며 재클릭하지 않는다. 로그 내보내기는 목적, 자동 결과, 클릭 요청/접수/화면 확인 시각을 포함하며 출석 성공 로그로 변환하지 않는다.
+
+Wi-Fi 이름의 보조 조회는 Wi-Fi 전송망이 하나일 때만 해당 연결에 적용한다. 대상 SSID를 인식했어도 인터넷 검증이 없거나 Chrome이 사용할 기본 인터넷 연결이 Wi-Fi가 아니면 실제 출결은 차단한다. 오늘 화면은 인식 상태만 표시한다.

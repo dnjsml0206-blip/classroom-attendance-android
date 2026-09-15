@@ -41,7 +41,7 @@ final class LockLogExport {
         out.put("active",Boolean.TRUE.equals(p.get("active"))).put("actual_attendance_requested",Boolean.TRUE.equals(p.get("actual")));
         out.put("stage",p.get("stage")).put("user_verdict",p.get("verdict")).put("user_note",p.get("note"));
         out.put("events",p.get("events")).put("user_interaction",p.getOrDefault("user_interaction",null));
-        for(String key:new String[]{"fired_at_ms","entry_at_ms","entry_delay_ms","entry_source","checkout_trial","target_phase"})out.put(key,p.containsKey(key)?p.get(key):JSONObject.NULL);
+        for(String key:new String[]{"purpose","machine_result","click_requested_at_ms","click_accepted","click_confirmed_at_ms","fired_at_ms","entry_at_ms","entry_delay_ms","entry_source","checkout_trial","target_phase"})out.put(key,p.containsKey(key)?p.get(key):JSONObject.NULL);
         for(String key:new String[]{"entry_environment","handoff_environment"}){String value=(String)p.get(key);out.put(key,value==null?JSONObject.NULL:new JSONObject(value));}
         String env=(String)p.get("environment");out.put("environment",env==null?JSONObject.NULL:new JSONObject(env));
         String execution=(String)p.get("execution_environment");out.put("execution_environment",execution==null?JSONObject.NULL:new JSONObject(execution));

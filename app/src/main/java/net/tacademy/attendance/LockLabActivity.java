@@ -17,14 +17,10 @@ public final class LockLabActivity extends Activity {
     private final Handler handler=new Handler(Looper.getMainLooper());
     private LinearLayout content;
     private TextView current, progress, log, preparation, procedure, expected, guideNote, readiness;
-    private Button reserve, immediate, checkout;
+    private Button reserve, immediate;
     private String methodExpected="";
     private SetupStatusView setupStatus;
     private Spinner methods, delay;
-    private RadioGroup purpose;
-    private RadioButton previewPurpose,attendancePurpose;
-    private boolean actualSelected(){return purpose!=null&&purpose.getCheckedRadioButtonId()==attendancePurpose.getId();}
-    private boolean purposeSelected(){return purpose!=null&&purpose.getCheckedRadioButtonId()!=-1;}
     private final Runnable refresh=new Runnable(){@Override public void run(){update();handler.postDelayed(this,1000);}};
     @Override public void onCreate(Bundle state){
         super.onCreate(state);if(!CreatorTools.testsVisible(this)){finish();return;}
@@ -39,7 +35,7 @@ public final class LockLabActivity extends Activity {
         });setContentView(root);
         content.addView(text("임시 메뉴 · 기기에서 직접 확인",12,ACCENT,true));space(content,8);
         content.addView(text("잠금 상태 테스트",28,INK,true));space(content,8);
-        content.addView(text("설정 확인 → 조회 또는 실제 출결 선택 → 예약 → 결과 기록\n화면 켜짐·잠금 해제 상태에서도 시험할 수 있습니다.",14,MUTED,false));space(content,18);
+        content.addView(text("설정 확인 → 대체 클릭 시험 → 성공·실패 자동 확인\n화면 켜짐·잠금 해제 상태에서도 시험할 수 있습니다.",14,MUTED,false));space(content,18);
 
         LinearLayout setup=card("실행 준비");readiness=text("",14,INK,true);setup.addView(readiness);
         setupStatus=new SetupStatusView(this,true);setup.addView(setupStatus);
@@ -57,18 +53,14 @@ public final class LockLabActivity extends Activity {
 
         LinearLayout run=card("2. 실행");
         delay=new Spinner(this);delay.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"15초 후 실행","30초 후 실행","60초 후 실행"}));run.addView(delay,new LinearLayout.LayoutParams(-1,dp(48)));
-        run.addView(text("먼저 실행 목적을 선택하세요",16,INK,true));
-        purpose=new RadioGroup(this);purpose.setTag("trial-purpose");
-        previewPurpose=new RadioButton(this);previewPurpose.setId(View.generateViewId());previewPurpose.setText(R.string.trial_preview_purpose);previewPurpose.setTextColor(INK);previewPurpose.setMinHeight(dp(54));purpose.addView(previewPurpose);
-        attendancePurpose=new RadioButton(this);attendancePurpose.setId(View.generateViewId());attendancePurpose.setText(R.string.trial_actual_purpose);attendancePurpose.setTextColor(INK);attendancePurpose.setMinHeight(dp(54));purpose.addView(attendancePurpose);run.addView(purpose);
-        if(state!=null&&state.containsKey("trial_actual"))purpose.check(state.getBoolean("trial_actual")?attendancePurpose.getId():previewPurpose.getId());
-        run.addView(text("위의 기본 설정 완료와 별개인 선택입니다. ‘Chrome 열기만 시험’은 입실·퇴실 버튼을 누르지 않습니다. 실제 시험은 출석 예약·시간·Wi-Fi·자동 클릭 조건을 그대로 확인합니다.",12,MUTED,false));
-        reserve=add(run,"조회 테스트 예약",true,()->startTrial(new int[]{15,30,60}[delay.getSelectedItemPosition()]));
-        immediate=add(run,"지금 조회 테스트",false,()->startTrial(0));
-        checkout=add(run,"오늘 퇴실 테스트 예약",true,this::checkoutTrial);
-        run.addView(text("오늘 퇴실 예약은 설정한 퇴실 시각에 한 번 실행합니다. 대기 중에는 기존 출석을 보류하지 않으며, 실행 시각부터 최대 2분간 시험합니다. Extend Unlock 시험은 먼저 PIN·지문으로 한 번 해제하고 신뢰 조건을 유지한 뒤 화면을 끄세요. 예약 시각까지 앱을 강제 종료하지 마세요.",12,MUTED,false));
-        purpose.setOnCheckedChangeListener((group,id)->update());add(run,"예약·테스트 취소",false,()->{LockLab.cancel(this);update();});
-        progress=text("",13,ACCENT,true);space(run,12);run.addView(progress);
+        run.setTag("local-click-test");
+        run.addView(text("대체 클릭 시험 · 실제 출결 없음",16,INK,true));
+        run.addView(text("Chrome의 휴대폰 내부 시험 페이지에서 버튼을 자동으로 누르고 화면 변경까지 확인합니다. 출석 시간·강의실 Wi-Fi와 무관하게 시험할 수 있습니다. 버튼은 직접 누르지 마세요.",13,MUTED,false));
+        reserve=add(run,"대체 클릭 시험 예약",true,()->startTrial(new int[]{15,30,60}[delay.getSelectedItemPosition()]));reserve.setTag("click-test-reserve");
+        immediate=add(run,"지금 대체 클릭 시험",false,()->startTrial(0));immediate.setTag("click-test-now");
+        run.addView(text("예약한 뒤 전원 버튼으로 화면을 끄고 기다리세요. 완료하면 성공·실패와 이유를 알림과 이 화면에 표시합니다. 실제 출결 서버의 인증·버튼 형식은 별도 확인이 필요합니다.",12,MUTED,false));
+        add(run,"예약·테스트 취소",false,()->{LockLab.cancel(this);update();});
+        progress=text("",13,ACCENT,true);progress.setTag("click-test-result");space(run,12);run.addView(progress);
 
         LinearLayout phone=card("3. 휴대폰 상태와 신뢰 설정");phone.addView(text(LockLab.device(),14,INK,true));current=text("",13,MUTED,false);space(phone,8);phone.addView(current);
         phone.addView(text("Extend Unlock은 예전 Smart Lock입니다. 휴대폰에서 신뢰하는 기기·장소·신체 활동 감지를 직접 설정한 뒤 각각 시험하세요. 앱에서는 활성화된 신뢰 방식을 판별할 수 없습니다.",13,MUTED,false));
@@ -84,7 +76,7 @@ public final class LockLabActivity extends Activity {
 
         LinearLayout results=card("4. 테스트 기록");log=text("",12,INK,false);log.setTextIsSelectable(true);results.addView(log);
         add(results,"성공 · 부분 성공 · 실패 기록",true,this::verdict);
-        results.addView(text("로그 업로드는 설정 상단의 ‘진단 · 제작자용’에서 할 수 있습니다.",12,MUTED,false));
+        results.addView(text("로그 업로드는 설정 맨 아래의 ‘진단 · 제작자용’에서 할 수 있습니다.",12,MUTED,false));
         add(results,"결과 전체 복사",false,()->{getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("출석 메이트 잠금 테스트",LockLab.allReports(this)));Toast.makeText(this,"이전 결과를 포함해 복사했습니다",Toast.LENGTH_SHORT).show();});
         add(results,"이전 테스트 함께 보기",false,()->{TextView reports=text(LockLab.allReports(this),13,INK,false);reports.setTextIsSelectable(true);reports.setPadding(dp(20),dp(12),dp(20),dp(12));ScrollView all=new ScrollView(this);all.addView(reports);new AlertDialog.Builder(this).setTitle("최근 테스트 · 최대 11회").setView(all).setPositiveButton("닫기",null).show();});
         add(content,"설정으로 돌아가기",false,this::finish);describe();update();
@@ -103,23 +95,15 @@ public final class LockLabActivity extends Activity {
         };
         String[] steps=getResources().getStringArray(guide);
         preparation.setText(steps[0]);procedure.setText(steps[1]);methodExpected=steps[2];expected.setText(methodExpected);guideNote.setText(steps[3]);
-        if(purpose!=null){boolean available=selected()!=LockTestPolicy.Mode.NETWORK;attendancePurpose.setEnabled(available);
-            previewPurpose.setText(available?"Chrome 열기만 시험 · 출결 안 함":"기기 연결만 진단 · 출결 안 함");
-            if(!available)purpose.check(previewPurpose.getId());update();}
+        update();
     }
     private void startTrial(int seconds){
-        if(!purposeSelected()){Toast.makeText(this,"실행 목적을 먼저 선택해 주세요",Toast.LENGTH_SHORT).show();return;}
         try{
-            String token=LockLab.prepare(this,selected(),actualSelected(),seconds);
+            String token=LockLab.prepareClick(this,selected(),seconds);
             if(seconds==0){LockLab.fire(this,token,"앱에서 즉시 실행");if(selected()==LockTestPolicy.Mode.NETWORK)new Thread(()->LockTestReceiver.diagnose(getApplicationContext(),token),"lock-network-diagnostic").start();}
             else Toast.makeText(this,seconds+"초 안에 전원 버튼으로 화면을 꺼 주세요",Toast.LENGTH_LONG).show();
             update();
         }catch(IllegalStateException e){showProblems(e.getMessage());}
-    }
-    private void checkoutTrial(){
-        if(!actualSelected()){showProblems("‘실제 입실·퇴실 시험’을 선택해 주세요. Chrome 열기만 시험하면 퇴실 버튼을 누르지 않습니다.");return;}
-        try{LockLab.prepareCheckout(this,selected());update();Toast.makeText(this,"오늘 "+Policy.checkoutStartTime(new Prefs(this).checkout())+" 퇴실 테스트를 예약했습니다",Toast.LENGTH_LONG).show();}
-        catch(IllegalStateException e){showProblems(e.getMessage());}
     }
     private void showProblems(String message){
         java.util.List<PhoneSettings.Target> targets=new java.util.ArrayList<>();java.util.List<String> labels=new java.util.ArrayList<>();
@@ -133,8 +117,8 @@ public final class LockLabActivity extends Activity {
         space(parent,12);parent.addView(text(title,12,ACCENT,true));space(parent,3);
         TextView value=text("",14,INK,false);parent.addView(value);return value;
     }
-    private void firstHelp(){new AlertDialog.Builder(this).setTitle("처음 한 번 확인할 설정")
-        .setMessage("1. 아래 ‘휴대폰 상태와 신뢰 설정’에서 Chrome 접근성·위치 항상 허용·알람 및 리마인더·테스트 알림을 허용하세요.\n\n2. Chrome에서 평소 출결 주소가 열리는지 확인하세요. 연결 진단은 휴대폰 설정만 확인하며 서버에는 접속하지 않습니다.\n\n3. 조회만 확인할 때는 ‘Chrome 열기만 시험’을 선택하세요. 입실·퇴실까지 시험하려면 출석 예약과 Chrome 자동 클릭을 켜고 ‘실제 입실·퇴실 시험’을 선택하세요. 예약한 뒤 전원 버튼으로 화면을 끄고, 자동 동작을 확인할 때까지 알림이나 화면을 누르지 마세요. 시스템 인증 방식은 인증 요청이 뜨면 직접 인증하세요.\n\n4. 예약 시각이 지나도 반응이 없으면 최대 2분 뒤 앱으로 돌아와 기록을 확인하세요. 결과 입력에서 직접 화면 켬·잠금 해제·알림 누름·무조작 중 해당 항목을 기록하세요. 예약에서 진입했다는 표시는 자동 잠금 해제 성공을 뜻하지 않습니다.")
+    private void firstHelp(){new AlertDialog.Builder(this).setTitle("대체 클릭 시험 방법")
+        .setMessage("1. Chrome 접근성을 연결하세요. 예약 시험에는 알람 및 리마인더도 허용하세요.\n\n2. 시험 방법을 선택하고 ‘대체 클릭 시험 예약’을 누른 뒤 화면을 끄세요. Extend Unlock은 신뢰 설정 후 먼저 한 번 인증해야 합니다.\n\n3. 시험 버튼이나 알림을 직접 누르지 말고 기다리세요. Chrome 내부 시험 페이지의 버튼을 앱이 누르고 화면 변경을 확인합니다.\n\n4. 결과 알림과 이 화면에서 성공·실패를 확인하세요. 직접 잠금 해제나 시스템 인증을 했다면 ‘직접 확인한 결과’에 기록하세요. 클릭 성공만으로 무조작 잠금 해제나 실제 서버 출결 성공을 뜻하지는 않습니다.")
         .setPositiveButton("확인",null).show();}
     private void trustHelp(){new AlertDialog.Builder(this).setTitle("Extend Unlock · 신뢰 방식")
         .setMessage("먼저 PIN 등으로 한 번 잠금을 해제한 후 시험하세요.\n\n• 신뢰 기기: 등록한 Bluetooth 기기 연결\n• 신뢰 장소: 휴대폰에 등록한 장소에 머무르기\n• 신체 활동 감지: 휴대 중과 책상 위 상태 비교\n\n지원 항목과 설정 경로는 기기마다 다릅니다. 신뢰 유지 시간은 제한되어 있으며 잠금 모드·재부팅·재인증 요구 뒤에는 다시 인증이 필요할 수 있습니다.\n\n앱은 보안 설정을 자동으로 켜거나 변경하지 않습니다.")
@@ -156,12 +140,10 @@ public final class LockLabActivity extends Activity {
         }).show();
     }
     private void update(){if(progress==null)return;LockLab.expire(this);
-        readiness.setText(!purposeSelected()?"실행 목적 미선택 · 아래에서 선택하세요":actualSelected()?"실제 출결 시험 · 조건을 만족하면 입실·퇴실 버튼을 누릅니다":"조회 전용 · 입실·퇴실 버튼을 누르지 않습니다");setupStatus.refresh();
-        expected.setText(actualSelected()?getString(R.string.trial_real_success):methodExpected);
-        reserve.setEnabled(purposeSelected());immediate.setEnabled(purposeSelected());checkout.setEnabled(actualSelected());
-        reserve.setText(!purposeSelected()?"실행 목적 선택 후 예약":actualSelected()?"실제 입실·퇴실 시험 예약":selected()==LockTestPolicy.Mode.NETWORK?"기기 연결 진단 예약":"Chrome 열기만 예약 · 출결 안 함");
-        immediate.setText(!purposeSelected()?"실행 목적 선택 후 시험":actualSelected()?"지금 실제 입실·퇴실 시험":selected()==LockTestPolicy.Mode.NETWORK?"지금 기기 연결 진단":"지금 Chrome 열기만 · 출결 안 함");
-        checkout.setText(getString(R.string.checkout_trial_button,Policy.checkoutStartTime(new Prefs(this).checkout()).toString()));
+        boolean local=selected()!=LockTestPolicy.Mode.NETWORK;
+        readiness.setText(local?"대체 클릭 시험 · 접근성 연결과 예약 알람만 필요합니다. 아래 나머지 설정은 일반 출석용입니다.":"기기 연결 진단 · 실제 출결 없음");setupStatus.refresh();
+        expected.setText(local?"자동으로 시험 버튼을 누른 뒤 화면 변경까지 확인하면 ‘성공’을 표시합니다. 클릭 전·후 어느 단계에서 멈췄는지도 표시합니다.":methodExpected);
+        reserve.setText(local?"대체 클릭 시험 예약":"기기 연결 진단 예약");immediate.setText(local?"지금 대체 클릭 시험":"지금 기기 연결 진단");
         current.setText(getString(R.string.lock_lab_state,LockLab.snapshot(this),ChromeAttendanceService.available()?"연결됨":"연결 필요",AlarmScheduler.allowed(this)?"허용":"미허용"));
         long seconds=Math.max(0,(LockLab.prefs(this).getLong("due",0)-System.currentTimeMillis()+999)/1000);
         String stage=LockLab.prefs(this).getString("stage","아직 실행하지 않았습니다.");
@@ -175,7 +157,6 @@ public final class LockLabActivity extends Activity {
     private void space(LinearLayout p,int n){p.addView(new View(this),new LinearLayout.LayoutParams(1,dp(n)));}
     private LinearLayout card(String title){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(18),dp(18),dp(18),dp(18));GradientDrawable bg=new GradientDrawable();bg.setColor(0xFFFFFFFF);bg.setCornerRadius(dp(20));c.setBackground(bg);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(14);content.addView(c,lp);c.addView(text(title,14,ACCENT,true));space(c,10);return c;}
     private Button add(LinearLayout p,String label,boolean primary,Runnable action){space(p,10);Button b=new Button(this);b.setText(label);b.setTextSize(14);b.setAllCaps(false);b.setTextColor(primary?0xFFFFFFFF:ACCENT);b.setStateListAnimator(null);b.setMinHeight(dp(48));GradientDrawable bg=new GradientDrawable();bg.setColor(primary?ACCENT:0xFFE5F2EF);bg.setCornerRadius(dp(12));b.setBackground(bg);b.setPadding(dp(10),dp(8),dp(10),dp(8));b.setOnClickListener(v->action.run());p.addView(b,new LinearLayout.LayoutParams(-1,-2));return b;}
-    @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);if(purposeSelected())state.putBoolean("trial_actual",actualSelected());}
     @Override protected void onResume(){super.onResume();ChromeAttendanceService.cancelSettingsMenu();handler.removeCallbacks(refresh);handler.post(refresh);}
     @Override protected void onPause(){handler.removeCallbacks(refresh);super.onPause();}
     @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);super.onDestroy();}
