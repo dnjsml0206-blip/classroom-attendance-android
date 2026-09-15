@@ -54,13 +54,14 @@ public final class Notices {
         catch (SecurityException ignored) {}
     }
     public static synchronized void alert(Context context, String title, String detail) {
+        if (!new Prefs(context).guidanceNotifications()) return;
         channels(context);
         publish(context, RESULT, new Notification.Builder(context, "attention").setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title).setContentText(detail).setStyle(new Notification.BigTextStyle().bigText(detail))
             .setContentIntent(open(context)).setAutoCancel(true).setOnlyAlertOnce(true).build());
     }
     public static void wifi(Context context, boolean show, String detail) {
-        if (!show) { context.getSystemService(NotificationManager.class).cancel(WIFI); return; }
+        if (!show || !new Prefs(context).guidanceNotifications()) { context.getSystemService(NotificationManager.class).cancel(WIFI); return; }
         channels(context);
         Intent settings = new Intent(Build.VERSION.SDK_INT >= 29 ? Settings.Panel.ACTION_WIFI : Settings.ACTION_WIFI_SETTINGS);
         PendingIntent action = PendingIntent.getActivity(context, 4, settings, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -71,7 +72,7 @@ public final class Notices {
     }
     public static void checkoutAttention(Context context, boolean show, String detail) {
         final int id = 14;
-        if (!show) { context.getSystemService(NotificationManager.class).cancel(id); return; }
+        if (!show || !new Prefs(context).guidanceNotifications()) { context.getSystemService(NotificationManager.class).cancel(id); return; }
         channels(context);
         Intent settings = new Intent(Build.VERSION.SDK_INT >= 29 ? Settings.Panel.ACTION_WIFI : Settings.ACTION_WIFI_SETTINGS);
         PendingIntent action = PendingIntent.getActivity(context, 5, settings, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -90,7 +91,7 @@ public final class Notices {
     public static boolean departure(Context context, String day) {
         channels(context);
         NotificationManager nm = context.getSystemService(NotificationManager.class);
-        if (!attentionNotificationsAllowed(context)) return false;
+        if (!new Prefs(context).guidanceNotifications() || !attentionNotificationsAllowed(context)) return false;
         PendingIntent chrome = PendingIntent.getActivity(context, 7, new Intent(context, ChromeLaunchActivity.class),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         String detail = day + " · 강의실을 벗어났지만 퇴실 완료가 확인되지 않았습니다. 강의실 Wi-Fi와 Chrome 출결 기록을 확인해 주세요.";
@@ -107,7 +108,7 @@ public final class Notices {
     }
     public static void chromeAction(Context context, boolean show, String detail) {
         final int id = 15;
-        if (!show) { context.getSystemService(NotificationManager.class).cancel(id); return; }
+        if (!show || !new Prefs(context).guidanceNotifications()) { context.getSystemService(NotificationManager.class).cancel(id); return; }
         channels(context);
         PendingIntent open = PendingIntent.getActivity(context, 6, new Intent(context, ChromeLaunchActivity.class),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -117,7 +118,19 @@ public final class Notices {
             .setContentIntent(open).setOnlyAlertOnce(true).setAutoCancel(true)
             .addAction(new Notification.Action.Builder(null, "Chrome 열기", open).build()).build());
     }
+    /** Dismiss only optional guidance; keep attendance, foreground-service and test notifications. */
+    public static void guidanceNotifications(Context context, boolean enabled) {
+        new Prefs(context).raw.edit().putBoolean("guidance_notifications",enabled).apply();
+        if (!enabled) {
+            NotificationManager nm=context.getSystemService(NotificationManager.class);
+            for (int id : new int[]{WIFI,RESULT,14,15}) nm.cancel(id);
+            for (android.service.notification.StatusBarNotification notice : nm.getActiveNotifications())
+                if (notice.getId()==DEPARTURE && notice.getTag()!=null && notice.getTag().startsWith("departure:"))
+                    nm.cancel(notice.getTag(),DEPARTURE);
+        }
+    }
     private static void publish(Context context, int id, Notification notification) {
+        if (!new Prefs(context).guidanceNotifications()) return;
         try { context.getSystemService(NotificationManager.class).notify(id, notification); }
         catch (SecurityException ignored) {}
     }

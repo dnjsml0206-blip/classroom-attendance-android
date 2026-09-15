@@ -20,8 +20,7 @@ final class PhoneSettings {
             case LOCATION_PERMISSION, BATTERY -> new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,app);
             case LOCATION_SERVICE -> new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
             case ALARMS -> Build.VERSION.SDK_INT>=31?new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,app):new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,app);
-            case NOTIFICATIONS, TEST_NOTIFICATIONS -> new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-                .putExtra(Settings.EXTRA_APP_PACKAGE,pkg).putExtra(Settings.EXTRA_CHANNEL_ID,target==Target.NOTIFICATIONS?"result":"attention");
+            case NOTIFICATIONS, TEST_NOTIFICATIONS -> new Intent(c,NotificationSettingsActivity.class);
             case WIFI -> new Intent(Settings.ACTION_WIFI_SETTINGS);
             case EXTEND -> new Intent(Build.MANUFACTURER.equalsIgnoreCase("samsung")?Settings.ACTION_SETTINGS:Settings.ACTION_SECURITY_SETTINGS);
             case SCHEDULE, AUTO_CLICK -> new Intent(c,MainActivity.class).putExtra("open_tab",1).putExtra("focus_setting","automation");
@@ -37,10 +36,8 @@ final class PhoneSettings {
     static void open(Activity activity,Target target){
         ChromeAttendanceService.cancelSettingsMenu();
         if(target==Target.NOTIFICATIONS||target==Target.TEST_NOTIFICATIONS){
-            Notices.channels(activity);
-            if(!activity.getSystemService(android.app.NotificationManager.class).areNotificationsEnabled()){
-                if(launch(activity,new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,activity.getPackageName())))return;
-            }
+            // Keep every notification shortcut inside the app, including blocked permissions.
+            launch(activity,primary(activity,target));return;
         }
         if(target==Target.EXTEND&&openTrustAgent(activity))return;
         boolean navigating=ChromeAttendanceService.settingsMenu(activity,target);
@@ -49,9 +46,6 @@ final class PhoneSettings {
             return;
         }
         ChromeAttendanceService.cancelSettingsMenu();
-        if(target==Target.NOTIFICATIONS||target==Target.TEST_NOTIFICATIONS){
-            if(launch(activity,new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,activity.getPackageName())))return;
-        }
         Intent fallback=new Intent(target==Target.EXTEND?Settings.ACTION_SECURITY_SETTINGS:Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
         if(target!=Target.EXTEND)fallback.setData(Uri.parse("package:"+activity.getPackageName()));
         if(!launch(activity,fallback))launch(activity,new Intent(Settings.ACTION_SETTINGS));

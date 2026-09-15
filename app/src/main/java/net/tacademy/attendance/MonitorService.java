@@ -162,7 +162,7 @@ public final class MonitorService extends Service implements LocationListener {
     @Override public void onProviderDisabled(String provider) { latest = null; evaluate(); }
     @Override public void onStatusChanged(String provider, int status, Bundle extras) {}
     @Override public void onDestroy() {
-        stopping = true; running = false; ChromeAttendanceService.cancelWork(); handler.removeCallbacksAndMessages(null);
+        stopping = true; running = false; ChromeAttendanceService.cancelScheduledWork(); handler.removeCallbacksAndMessages(null);
         if (locations != null) { try { locations.removeUpdates(this); } catch (SecurityException ignored) {} }
         if (connectivity != null && callback != null) {
             try { connectivity.unregisterNetworkCallback(callback); } catch (RuntimeException ignored) {}

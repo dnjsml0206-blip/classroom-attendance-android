@@ -1,0 +1,22 @@
+package net.tacademy.attendance;
+import java.time.*;
+import java.util.Set;
+/** Bounded result observation and explicit user-initiated attendance outside automatic retry windows. */
+final class AttendanceAttemptPolicy {
+    static final long PAGE_WAIT_MS=35_000, RESULT_WAIT_MS=35_000, MAX_ATTEMPT_MS=105_000;
+    static long afterAction(long started,long action){return Math.min(started+MAX_ATTEMPT_MS,action+RESULT_WAIT_MS);}
+    static Policy.Phase activationPhase(ZonedDateTime now,Set<Integer> days,Set<String> excluded,String start,String end,String checkout,boolean checkedIn,boolean checkedOut){
+        if(checkedOut||!Policy.isClassDay(now,days,excluded))return Policy.Phase.IDLE;
+        if(!now.withZoneSameInstant(Policy.ZONE).toLocalTime().isBefore(Policy.checkoutStartTime(checkout)))return Policy.Phase.CHECKOUT;
+        return !checkedIn&&Policy.inWindow(now,start,end)?Policy.Phase.ENTRY:Policy.Phase.IDLE;
+    }
+    static String manualProblem(Policy.Phase phase,ZonedDateTime now,Set<Integer> days,Set<String> excluded,String start,String checkout,boolean readOnly){
+        if(phase==Policy.Phase.IDLE)return "입실 또는 퇴실을 선택해 주세요.";
+        if(readOnly)return "";
+        if(!Policy.isClassDay(now,days,excluded))return "오늘은 등록된 수업일이 아니에요. 수업 요일과 휴강일을 확인해 주세요.";
+        LocalTime t=now.withZoneSameInstant(Policy.ZONE).toLocalTime();
+        if(phase==Policy.Phase.CHECKOUT&&t.isBefore(Policy.checkoutStartTime(checkout)))return "퇴실은 "+Policy.checkoutStartTime(checkout)+"부터 할 수 있어요.";
+        if(phase==Policy.Phase.ENTRY&&t.isBefore(LocalTime.parse(start)))return "입실은 "+start+"부터 할 수 있어요.";
+        return "";
+    }
+}

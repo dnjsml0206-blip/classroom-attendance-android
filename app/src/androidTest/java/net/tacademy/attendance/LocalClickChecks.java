@@ -39,7 +39,7 @@ final class LocalClickChecks {
         ui(()->find(main.getWindow().getDecorView(),"오늘").performClick());SystemClock.sleep(500);
         TextView footer=main.getWindow().getDecorView().findViewWithTag("today-wifi");
         check(footer.getText().toString().endsWith("와이파이 미연결"),"Unregistered Wi-Fi displays the requested disconnected text");
-        parent=(ViewGroup)footer.getParent();check(parent.getChildAt(parent.getChildCount()-1)==footer,"Wi-Fi status is at the end of Today");
+        View panel=main.getWindow().getDecorView().findViewWithTag("today-wifi-panel");parent=(ViewGroup)panel.getParent();check(parent.getChildAt(parent.getChildCount()-1)==panel,"Wi-Fi status is at the end of Today");
         String observed=NetworkAccess.inspect(c).ssid();check(!observed.isEmpty(),"Emulator Wi-Fi can be observed even when mobile data is the default");
         p.raw.edit().putStringSet("ssids",Set.of(observed)).commit();SystemClock.sleep(2500);
         check(footer.getText().toString().endsWith("대기 중"),"Matching Wi-Fi refreshes to waiting without reopening Today");

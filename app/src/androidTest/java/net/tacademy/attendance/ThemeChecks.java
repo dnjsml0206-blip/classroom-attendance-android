@@ -46,12 +46,23 @@ public final class ThemeChecks {
             check(theme()==HomeTheme.WARM && value("inTime").equals("08:42:00") && value("outTime").equals("—"),
                 "Morning theme preserves confirmed entry and does not invent an exit");
             check(!value("todayLog").contains("감시")&&!value("todayLog").contains("변경")&&!value("todayLog").contains("Wi-Fi"),"Today lists confirmed attendance only, excluding operational and setting logs");
+            lampStates("warm");
             capture("today-warm.png");
+            check(value("todayWifi").equals("와이파이 미연결"),"Unmatched Wi-Fi shows the warning label");
+            runOnMainSync(()->((ScrollView)field("homeScroll")).fullScroll(View.FOCUS_DOWN));SystemClock.sleep(300);capture("wifi-warning-warm.png");
+            View panel=activity.getWindow().getDecorView().findViewWithTag("today-wifi-panel");ViewGroup parent=(ViewGroup)panel.getParent();
+            check(parent.getChildAt(parent.getChildCount()-1)==panel,"Wi-Fi warning remains the last Today card");
+            String observed=NetworkAccess.inspect(context).ssid();check(!observed.isEmpty(),"Emulator Wi-Fi is visible for refresh verification");
+            runOnMainSync(()->prefs.ssids(Set.of(observed)));settle();check(value("todayWifi").equals("대기 중"),"Registering connected Wi-Fi refreshes warning to waiting");capture("wifi-waiting.png");
+            runOnMainSync(()->{prefs.ssids(Set.of("__EMULATOR_NO_MATCH__"));((ScrollView)field("homeScroll")).fullScroll(View.FOCUS_UP);});settle();
             at(day,16,49,59); check(theme()==HomeTheme.WARM,"Warm immediately before the boundary");
             at(day,16,50,0);
             check(theme()==HomeTheme.NIGHT && value("inTime").equals("08:42:00") && value("todayLog").contains("입실 완료"),
                 "Visible screen switches automatically and preserves records and logs");
+            lampStates("night");
             capture("today-night.png");
+            runOnMainSync(()->((ScrollView)field("homeScroll")).fullScroll(View.FOCUS_DOWN));SystemClock.sleep(300);capture("wifi-warning-night.png");
+            runOnMainSync(()->((ScrollView)field("homeScroll")).fullScroll(View.FOCUS_UP));
             android.app.Instrumentation.ActivityMonitor calendarMonitor=instrumentation.addMonitor(AttendanceCalendarActivity.class.getName(),null,false);
             runOnMainSync(() -> clickText("달력에서 출결 조회  ›"));
             calendar=instrumentation.waitForMonitorWithTimeout(calendarMonitor,5000);instrumentation.removeMonitor(calendarMonitor);settle();
@@ -94,6 +105,20 @@ public final class ThemeChecks {
             try { restore(); } catch(Throwable ignored) {}
             result.putString("stream","FAIL: "+failure+"\n"); instrumentation.finish(Activity.RESULT_CANCELED,result);
         }
+    }
+    private void lampStates(String palette) throws Exception {
+        Prefs prefs=new Prefs(context);
+        // Change only saved UI state while visible. Auto-click is off, SSID is unmatched and alarms are cancelled.
+        runOnMainSync(()->prefs.enabled(true));settle();
+        check(value("reservationLampState").equals("출석 예약 켜짐")
+            && "출석 예약 전등 켜짐".contentEquals(activity.getWindow().getDecorView().findViewWithTag("reservation-lamp").getContentDescription())
+            && !MonitorService.running,"Reservation lamp lights while monitoring is idle: "+palette);
+        capture("reservation-"+palette+"-on.png");
+        runOnMainSync(()->prefs.enabled(false));settle();
+        check(value("reservationLampState").equals("출석 예약 꺼짐")
+            && "출석 예약 전등 꺼짐".contentEquals(activity.getWindow().getDecorView().findViewWithTag("reservation-lamp").getContentDescription()),
+            "Reservation lamp turns off without reopening Today: "+palette);
+        capture("reservation-"+palette+"-off.png");
     }
     private void runOnMainSync(Runnable action) { instrumentation.runOnMainSync(action); }
     private void at(LocalDate date,int h,int m,int s) { clock.instant=date.atTime(h,m,s).atZone(Policy.ZONE).toInstant(); settle(); }

@@ -12,9 +12,10 @@ public final class DeviceChecks extends Instrumentation {
     private Map<String,?> saved;
     private MainActivity activity;
     private int checks;
-    private boolean clickTest, wake, themes, locks, upload, settings, departure, calendar, traffic;
-    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments);clickTest=arguments!=null&&"click".equals(arguments.getString("suite")); wake=arguments!=null&&"wake".equals(arguments.getString("suite")); traffic=arguments!=null&&"traffic".equals(arguments.getString("suite")); calendar=arguments!=null&&"calendar".equals(arguments.getString("suite")); departure=arguments!=null&&"departure".equals(arguments.getString("suite")); settings=arguments!=null&&"settings".equals(arguments.getString("suite")); upload = arguments != null && "upload".equals(arguments.getString("suite")); themes = arguments != null && "themes".equals(arguments.getString("suite")); locks = arguments != null && "locks".equals(arguments.getString("suite")); start(); }
+    private boolean manual, clickTest, wake, themes, locks, upload, settings, departure, calendar, traffic;
+    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments);manual=arguments!=null&&"manual".equals(arguments.getString("suite"));clickTest=arguments!=null&&"click".equals(arguments.getString("suite")); wake=arguments!=null&&"wake".equals(arguments.getString("suite")); traffic=arguments!=null&&"traffic".equals(arguments.getString("suite")); calendar=arguments!=null&&"calendar".equals(arguments.getString("suite")); departure=arguments!=null&&"departure".equals(arguments.getString("suite")); settings=arguments!=null&&"settings".equals(arguments.getString("suite")); upload = arguments != null && "upload".equals(arguments.getString("suite")); themes = arguments != null && "themes".equals(arguments.getString("suite")); locks = arguments != null && "locks".equals(arguments.getString("suite")); start(); }
     @Override public void onStart() {
+        if(manual){new ManualAttendanceChecks(this).run();return;}
         if(clickTest){new LocalClickChecks(this).run();return;}
         if(wake){new WakeChecks(this).run();return;}
         if(traffic){new TrafficChecks(this).run();return;}

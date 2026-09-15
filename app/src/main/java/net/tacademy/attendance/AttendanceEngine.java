@@ -14,7 +14,7 @@ public final class AttendanceEngine {
             MAIN.post(() -> request(context, force, finished)); return;
         }
         Prefs prefs = new Prefs(context);
-        if(ScheduledUnlock.active(context)){if(finished!=null)finished.run();return;}
+        if(ActivationRun.pending()||ScheduledUnlock.active(context)){if(finished!=null)finished.run();return;}
         if (prefs.phase(ZonedDateTime.now(Policy.ZONE)) == Policy.Phase.IDLE ||
                 ChromeAttendanceService.busy() || (!force && SystemClock.elapsedRealtime() < nextRead)) {
             if (finished != null) finished.run(); return;

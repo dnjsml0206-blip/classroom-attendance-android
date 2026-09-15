@@ -25,6 +25,7 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity android:name=".NotificationSettingsActivity" android:exported="false"/>
         <activity android:name=".AttendanceCalendarActivity" android:exported="false"/>
         <activity android:name=".ChromeLaunchActivity" android:exported="false"/>
         <activity android:name=".ScheduledUnlockActivity" android:exported="false" android:excludeFromRecents="true"/>

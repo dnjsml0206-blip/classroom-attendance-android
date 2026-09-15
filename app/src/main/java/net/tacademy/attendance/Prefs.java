@@ -30,6 +30,7 @@ public final class Prefs {
     public void ssids(Set<String> values) { raw.edit().putStringSet("ssids", new HashSet<>(values)).apply(); }
     public boolean enabled() { return raw.getBoolean("enabled", false); }
     public void enabled(boolean value) { raw.edit().putBoolean("enabled", value).apply(); }
+    public boolean guidanceNotifications() { return raw.getBoolean("guidance_notifications",true); }
     public boolean auto() { return raw.getBoolean("auto", false); }
     public String start() { return raw.getString("start", "08:30"); }
     public String end() { return raw.getString("end", "09:30"); }
@@ -39,7 +40,7 @@ public final class Prefs {
         return checkedInToday() || LocalDate.now(Policy.ZONE).toString().equals(raw.getString("departure_seen_day",""));
     }
     public boolean departureWatching(ZonedDateTime now) {
-        return phase(now) == Policy.Phase.CHECKOUT && hasLocation()
+        return guidanceNotifications() && phase(now) == Policy.Phase.CHECKOUT && hasLocation()
             && !now.withZoneSameInstant(Policy.ZONE).toLocalDate().toString().equals(raw.getString("departure_notified_day",""));
     }
     public boolean monitoringNeeded(ZonedDateTime now) { return phase(now) != Policy.Phase.IDLE; }

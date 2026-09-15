@@ -16,10 +16,11 @@ public final class ScheduleController {
     public static void reconcile(Context context) {
         Prefs prefs = new Prefs(context);
         AlarmScheduler.arm(context, false);
+        if(ActivationRun.pending()&&prefs.enabled())return;
         if (!prefs.enabled() || prefs.checkedOutToday()) Notices.clearDeparture(context,java.time.LocalDate.now(Policy.ZONE).toString());
         if (!prefs.monitoringNeeded(ZonedDateTime.now(Policy.ZONE))) {
             ScheduledUnlock.cancel(context,"RESERVATION_IDLE");
-            ChromeAttendanceService.cancelWork();
+            ChromeAttendanceService.cancelScheduledWork();
             context.stopService(new Intent(context, MonitorService.class));
             if (!prefs.enabled() || prefs.checkedOutToday()) Notices.checkoutAttention(context, false, "");
             Notices.chromeAction(context, false, "");
