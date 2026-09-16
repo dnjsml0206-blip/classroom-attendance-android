@@ -39,6 +39,6 @@ public final class ChromePage {
             ||value.contains("502 BAD GATEWAY")||value.contains("503 SERVICE UNAVAILABLE")||value.contains("504 GATEWAY TIMEOUT");
     }
     public static boolean checkoutConfirmation(String text) {
-        return text.contains("정말로 퇴실 하시겠습니까?");
+        return text != null && text.replaceAll("[\\s\\u00a0]+", "").contains("정말로퇴실하시겠습니까?");
     }
 }

@@ -13,7 +13,7 @@ final class DiagnosticLog {
         CHROME_OPEN_FAILED, BUTTON_REQUEST, BUTTON_FAILED, CONFIRM_REQUEST, RECORD_CONFIRMED, AUTOMATIC_PAUSED, NETWORK_DIAGNOSTIC_LOCAL,
         ALARM_ARMED, ALARM_FIRED, ALARM_FAILED, MONITOR_START_REQUEST, MONITOR_START_RECEIVED, MONITOR_START_FAILED,
         CHROME_STAGE, CLICK_PLANNED, WAKE_REQUESTED, WAKE_VISIBLE, WAKE_BLOCKED, WAKE_AUTH_REQUIRED,
-        ACTIVATION_QUEUED, ACTIVATION_FIRED, WAKE_DISMISS_REQUEST, WAKE_DISMISS_RESULT, WAKE_FINISHED, ACCESSIBILITY_CONNECTED, RESULT_WAIT_STARTED, MANUAL_REQUEST, MANUAL_BLOCKED, MANUAL_FINISHED, PAGE_RECOVERY_WAIT, PRECLICK_DEFERRED, CHROME_DIAGNOSTIC, ATTEMPT_FAILED, ATTEMPT_CANCELLED }
+        ACTIVATION_QUEUED, ACTIVATION_FIRED, WAKE_DISMISS_REQUEST, WAKE_DISMISS_RESULT, WAKE_FINISHED, ACCESSIBILITY_CONNECTED, RESULT_WAIT_STARTED, MANUAL_REQUEST, MANUAL_BLOCKED, MANUAL_FINISHED, PAGE_RECOVERY_WAIT, PRECLICK_DEFERRED, CHROME_DIAGNOSTIC, ATTEMPT_FAILED, ATTEMPT_CANCELLED, DIALOG_STATE_CHANGED, SCREEN_PRESENTATION, SCREEN_OFF_REQUEST, SCREEN_OFF_RESULT }
     static SharedPreferences prefs(Context c){return c.getSharedPreferences("attendance_diagnostics",Context.MODE_PRIVATE);}
     static synchronized void add(Context c,Event event,Policy.Phase phase,String reason){
         add(c,event,phase,reason,new JSONObject());
@@ -25,7 +25,8 @@ final class DiagnosticLog {
                 "screen_interactive","keyguard_locked","device_locked","chrome_window_present","window_count","read_state","read_error","read_operation",
                 "address_state","page_signal","button_state","node_count","visible_node_count","web_node_count","tree_limit_reached","wifi_check_code",
                 "click_attempted","click_accepted","confirmation_attempted","pending_click","elapsed_ms","poll_count","chrome_event_age_ms",
-                "last_site_signal","last_site_address","last_site_age_ms","page_visible_ms"})if(details.has(key))safe.put(key,details.get(key));
+                "last_site_signal","last_site_address","last_site_age_ms","page_visible_ms","dialog_kind","confirm_button_state","confirm_target",
+                "confirmation_disappeared","confirmation_age_ms","confirmation_visible_ms","processing_page_visible"})if(details.has(key))safe.put(key,details.get(key));
             long now=System.currentTimeMillis();SharedPreferences p=prefs(c);
             String signature=LocalDate.now(Policy.ZONE)+":"+event+":"+phase+":"+reason+":"+safe;
             if(signature.equals(p.getString("last_signature","")))return;

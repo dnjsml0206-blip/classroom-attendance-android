@@ -34,6 +34,21 @@ final class ChromeDiagnostics {
         if(compact.contains("허용된IP가아닙니다")||compact.contains("등록된IP가아닙니다")||compact.contains("지정된와이파이")||compact.contains("교육장내에서만")||compact.contains("교육기관WIFI내에서")||compact.contains("교육기관WIFI에연결"))return "SITE_NETWORK_RESTRICTION";
         return "NONE_RECOGNIZED";
     }
+    static String dialogKind(boolean nativeDialog,String text){
+        if(!nativeDialog)return "NONE";
+        if(ChromePage.checkoutConfirmation(text))return "CHECKOUT_CONFIRMATION";
+        String signal=pageSignal("ATTENDANCE",text);
+        return "NONE_RECOGNIZED".equals(signal)?"UNKNOWN_DIALOG":signal;
+    }
+    static String dialogFailure(String kind){
+        return switch(kind){
+            case "SITE_NETWORK_RESTRICTION"->"SITE_WIFI_REJECTED_DIALOG";
+            case "AUTH_REQUIRED","TRAINEE_REJECTED"->"SITE_AUTH_DIALOG";
+            case "SERVER_ERROR","NETWORK_ERROR","TLS_ERROR"->"SITE_ERROR_DIALOG";
+            case "ACCESS_DENIED","RATE_LIMIT","HUMAN_CHECK"->"SITE_RESTRICTION_DIALOG";
+            default->"SITE_UNKNOWN_DIALOG";
+        };
+    }
     static String diagnosis(String owner,boolean interactive,boolean locked,String readError,String wifi,
                             String address,String signal,int visible,String button,String stage) {
         if("RETURNED_TO_APP_BEFORE_RESULT".equals(stage))return "APP_RETURNED_BEFORE_RECORD";
@@ -50,6 +65,9 @@ final class ChromeDiagnostics {
             case "TLS_ERROR":case "NETWORK_ERROR":return "BROWSER_CONNECTION_ERROR_SHOWN";
             case "SERVER_ERROR":return "SERVER_ERROR_SHOWN";
         }
+        if(stage.contains("CONFIRM_STILL_VISIBLE")||stage.contains("CONFIRM_REAPPEARED"))return "CONFIRMATION_NOT_DISMISSED";
+        if(stage.contains("SITE_UNKNOWN_DIALOG"))return "SITE_DIALOG_UNCLASSIFIED";
+        if(stage.contains("CONFIRM_BUTTON_UNAVAILABLE"))return "CONFIRM_BUTTON_NOT_EXPOSED";
         if("BUTTON_ACTION_REJECTED".equals(stage)||"CONFIRM_ACTION_REJECTED".equals(stage))return "UI_ACTION_REJECTED";
         if(!"ATTENDANCE".equals(address))return "ADDRESS_UNVERIFIED";
         if(visible==0)return "PAGE_NODES_UNAVAILABLE";

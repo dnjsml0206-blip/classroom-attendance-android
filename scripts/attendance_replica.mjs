@@ -22,6 +22,8 @@ async function respond(e,sid){
    const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
    body=html.replaceAll('__TODAY__',snapshot.case==='wrong-date'?'2000-01-01':day);
    if(snapshot.case==='already-in-ready')body='<meta name="viewport" content="width=device-width"><h2>수강생 출결관리</h2><p>출결일 : '+day+'</p><input type="button" value="입실시간 : 08:45:00"><input type="button" value="퇴실">';
+   if(snapshot.case==='checkout-unknown-alert')body=body.replaceAll('location.reload();','alert("재현 시험: 원인을 알 수 없는 안내");location.reload();');
+   if(snapshot.case==='checkout-reappeared')body=body.replace('var strCodeO  =', 'confirm("정말로 퇴실 하시겠습니까?"); var strCodeO  =');
    if(snapshot.case==='auth')body=body.replace("CstrCode:'replica-student'","CstrCode:null");
    if(snapshot.case==='auth-message')body='<h1>인증절차를 진행한후 사용해주세요. 관리자에게 문의바랍니다.</h1>';
    if(snapshot.case==='denied'){status=403;body='<h1>403 Forbidden</h1>'; }
@@ -36,7 +38,13 @@ async function respond(e,sid){
  else if(path.endsWith('/PresentRollBooklist.asp')){body='<table><tr><th>이수시간</th><th>총출석시간</th><th>남은시간</th></tr><tr><td>940시간</td><td>62시간 0분</td><td>878시간 0분</td></tr></table>';}
  else if(path.endsWith('/PresentRollBooklist1.asp'))body='';
  else if(path.endsWith('/PresentIn_ok.asp')){snapshot.entries++;body='1';if(!['no-result','return-after-click'].includes(snapshot.case))snapshot.in='08:45:00';delay=snapshot.case==='slow-result'?10000:150;}
- else if(path.endsWith('/PresentOut_ok.asp')){snapshot.exits++;snapshot.out='17:50:05';body='1';delay=150;}
+ else if(path.endsWith('/PresentOut_ok.asp')){
+   snapshot.exits++;body='1';delay=150;
+   if(snapshot.case==='checkout-wifi')body='0';
+   else if(snapshot.case==='checkout-no-result'){} // Successful HTTP response without a saved server time.
+   else if(snapshot.case==='checkout-unknown-alert')body="<script>";
+   else snapshot.out='17:50:05';
+ }
  else {status=404;body='Blocked by local replica';}
  record({url:e.request.url,method:e.request.method,action:'fulfilled',status});
  if(delay)await pause(delay);
@@ -60,6 +68,7 @@ ws.onmessage=({data})=>{const m=JSON.parse(data);if(m.id){let p=pending.get(m.id
  if(m.method==='Target.detachedFromTarget'){sessions.delete(m.params.sessionId);ready.delete(m.params.sessionId);}
  if(m.method==='Fetch.requestPaused')respond(m.params,m.sessionId).catch(fatal);
  if(m.method==='Page.javascriptDialogOpening'){state.dialogs++;record({dialog:m.params.type,message:m.params.message});}
+ if(m.method==='Page.javascriptDialogClosed')record({dialogClosed:true,accepted:m.params.result});
 };
 function fatal(e){errors.push(String(e));console.error(e);}
 await cmd('Target.setAutoAttach',{autoAttach:true,waitForDebuggerOnStart:true,flatten:true});

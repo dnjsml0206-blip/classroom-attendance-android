@@ -414,6 +414,19 @@ public final class MainActivity extends Activity {
         note(box,"기본 방식은 Extend Unlock · 신뢰 상태입니다. 휴대폰 신뢰 설정을 완료해 주세요. PIN·지문 재인증이 필요하면 자동 진행이 중단되고 결과를 알립니다.");
     }
 
+    private void screenSettings(){
+        LinearLayout box=card("출결 처리 화면");
+        Switch off=new Switch(this);off.setTag("attendance-screen-off");off.setText("입실·퇴실 완료 후 화면 끄기");off.setTextSize(16);off.setTextColor(INK);off.setMinHeight(dp(48));
+        off.setChecked(prefs.screenOffAfterAttendance());off.setEnabled(Build.VERSION.SDK_INT>=28);box.addView(off);
+        off.setOnCheckedChangeListener((v,yes)->prefs.raw.edit().putBoolean("screen_off_after_attendance",yes).apply());
+        Switch hide=new Switch(this);hide.setTag("attendance-processing-page");hide.setText("자동 처리 중 간단한 안내 화면 표시");hide.setTextSize(16);hide.setTextColor(INK);hide.setMinHeight(dp(48));
+        hide.setChecked(prefs.showProcessingScreen());box.addView(hide);
+        hide.setOnCheckedChangeListener((v,yes)->prefs.raw.edit().putBoolean("show_processing_screen",yes).apply());
+        note(box,"자동 처리 중에는 ‘출결 처리 중’ 화면이 보입니다. ‘Chrome 화면 보기’를 누르면 진행 화면을 확인할 수 있습니다. 완료 시각을 확인하면 화면을 끄고, 오류가 나면 진행 화면을 보여줍니다.");
+        note(box,"Chrome 처리 중에는 화면이 켜지고 잠금이 해제되어 있어야 합니다. 직접 실행하거나 기록만 조회할 때는 Chrome을 보여주며, 이미 완료된 기록만 조회하면 화면을 끄지 않습니다.");
+        if(Build.VERSION.SDK_INT<28)note(box,"완료 후 화면 끄기는 Android 9 이상에서 지원합니다.");
+    }
+
     private void creatorPanel(){
         if(CreatorTools.enabled()){
             LinearLayout diagnostics=card("진단 · 제작자용");diagnostics.setTag("creator-diagnostics");
@@ -432,6 +445,7 @@ public final class MainActivity extends Activity {
     private void settings() {
         reservationSettings();
         unlockSettings();
+        screenSettings();
         LinearLayout checks=card("설정 확인");setupStatus=new SetupStatusView(this,false);checks.addView(setupStatus);
         LinearLayout schedule = card("출석 시간");
         note(schedule, "변경할 항목을 선택하세요. 모든 시간은 한국 시간입니다.");

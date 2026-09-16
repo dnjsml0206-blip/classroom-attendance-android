@@ -31,6 +31,8 @@ public final class Prefs {
     public boolean enabled() { return raw.getBoolean("enabled", false); }
     public void enabled(boolean value) { raw.edit().putBoolean("enabled", value).apply(); }
     public boolean guidanceNotifications() { return raw.getBoolean("guidance_notifications",true); }
+    public boolean screenOffAfterAttendance() { return raw.getBoolean("screen_off_after_attendance",true); }
+    public boolean showProcessingScreen() { return raw.getBoolean("show_processing_screen",true); }
     public boolean auto() { return raw.getBoolean("auto", false); }
     public String start() { return raw.getString("start", "08:30"); }
     public String end() { return raw.getString("end", "09:30"); }

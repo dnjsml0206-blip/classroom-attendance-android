@@ -45,4 +45,19 @@ public final class ChromeDiagnosticsTest {
         for(String s:new String[]{"https://skplanet.atosoft.net.evil.test/Worknet/Present/Present.asp","https://someone@skplanet.atosoft.net/Worknet/Present/Present.asp","http://skplanet.atosoft.net/Worknet/Present/Present.asp","private.invalid/user"})assertEquals("OTHER_ADDRESS",ChromeDiagnostics.address(s));
         assertEquals("HIDDEN",ChromeDiagnostics.address(null));assertEquals("EMPTY",ChromeDiagnostics.address(""));
     }
+    @Test public void nativeCheckoutDialogAndErrorAlertsHaveDifferentCodes(){
+        assertEquals("CHECKOUT_CONFIRMATION",ChromeDiagnostics.dialogKind(true,"skplanet.atosoft.net 내용:\n정말로 퇴실\n하시겠습니까?\n취소\n확인"));
+        assertEquals("SITE_NETWORK_RESTRICTION",ChromeDiagnostics.dialogKind(true,"교육기관 wifi내에서 퇴실버튼을 클릭해야합니다.\n교육기관 wifi내에서 다시 시도해주세요."));
+        assertEquals("AUTH_REQUIRED",ChromeDiagnostics.dialogKind(true,"인증절차를 진행한후 사용해주세요."));
+        assertEquals("UNKNOWN_DIALOG",ChromeDiagnostics.dialogKind(true,"다른 안내"));
+        assertEquals("NONE",ChromeDiagnostics.dialogKind(false,"정말로 퇴실 하시겠습니까?"));
+    }
+    @Test public void dialogFailuresDoNotMasqueradeAsMissingPageDates(){
+        assertEquals("SITE_WIFI_REJECTED_DIALOG",ChromeDiagnostics.dialogFailure("SITE_NETWORK_RESTRICTION"));
+        assertEquals("SITE_UNKNOWN_DIALOG",ChromeDiagnostics.dialogFailure("UNKNOWN_DIALOG"));
+        assertEquals("SITE_DIALOG_UNCLASSIFIED",diagnose("CHROME","ATTENDANCE","NONE_RECOGNIZED","SITE_UNKNOWN_DIALOG"));
+        assertEquals("CONFIRMATION_NOT_DISMISSED",diagnose("CHROME","ATTENDANCE","NONE_RECOGNIZED","CONFIRM_STILL_VISIBLE"));
+        assertEquals("CONFIRMATION_NOT_DISMISSED",diagnose("CHROME","ATTENDANCE","NONE_RECOGNIZED","CONFIRM_REAPPEARED"));
+        assertEquals("CONFIRM_BUTTON_NOT_EXPOSED",diagnose("CHROME","ATTENDANCE","NONE_RECOGNIZED","TIMEOUT_CONFIRM_BUTTON_UNAVAILABLE"));
+    }
 }

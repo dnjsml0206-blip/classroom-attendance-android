@@ -2,10 +2,20 @@
 
 기존 **휴대폰 Chrome의 인증 상태**로 SK플래닛 출석 버튼을 처리하는 개인용 앱입니다.
 
-[제작자용 APK 다운로드 · v0.9.4](https://github.com/dnjsml0206-blip/classroom-attendance-android/releases/tag/v0.9.4)
+[제작자용 APK 다운로드 · v0.9.5](https://github.com/dnjsml0206-blip/classroom-attendance-android/releases/tag/v0.9.5)
 
 **실제 수강생 Chrome 인증과 강의실 Wi-Fi에서 확인이 필요한 초기 테스트 버전입니다.**
 설정의 **잠금 중 처리 방식**을 일반 예약에 적용합니다. 기본값은 Extend Unlock · 신뢰 상태이며, 화면 깨우기·시스템 인증 요청도 선택할 수 있습니다. 이전 알림 전용 설정은 Extend Unlock으로 적용됩니다. 실제 휴대폰이 화면 표시를 제한하거나 인증을 요구하면 사용자의 조작이 필요합니다.
+
+## v0.9.5 · 완료 후 화면 끄기와 퇴실 확인창
+
+자동 처리 중에는 간단한 ‘출결 처리 중’ 페이지를 보여주고, 입실·퇴실 완료 시각을 확인하면 화면을 끕니다. 설정에서 각각 켜거나 끌 수 있습니다. 처리 중에는 화면이 깨어 있으며, ‘Chrome 화면 보기’ 버튼으로 진행 화면을 볼 수 있습니다. [동작과 검증 범위](docs/attendance-screen-2026-09-16.md).
+
+### 퇴실 확인창 처리와 진단
+
+확인창이 표시된 뒤 최소 600ms 관찰하고 Chrome의 확인 버튼을 한 번 누릅니다. 확인 클릭 접수·창 사라짐·사이트 퇴실 시각을 구분해 기록하며, 창 잔류나 후속 Wi-Fi·인증·오류 안내는 별도 사유로 표시합니다. [9월 16일 퇴실 로그 분석 및 재현 검사](docs/checkout-dialog-analysis-2026-09-16.md).
+
+[v0.9.5 설치와 변경 내용](docs/releases/v0.9.5.md)
 
 ## v0.9.4 · Chrome 복귀와 달력 상태 버튼
 

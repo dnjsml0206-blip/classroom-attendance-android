@@ -16,6 +16,7 @@ import java.util.*;
 public final class ChromeAttendanceService extends AccessibilityService {
     private static ChromeAttendanceService instance;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final AttendanceScreen screen = new AttendanceScreen(this);
     private Runnable finished;
     private String lockProbe="", lockAttendanceToken="";
     private final Set<String> lockTrace=new HashSet<>();
@@ -30,6 +31,10 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private Policy.Phase phase;
     private String day, key;
     private long started, pageSeen, resultDeadline;
+    private long confirmationSeenAt,confirmationActionAt,unknownDialogSeenAt;
+    private boolean confirmationGone;
+    private String lastDialogState="";
+    private int dialogTransitions;
     private boolean manualSession, manualReadOnly, manualRetryApproved;
     private String attemptId="",lastStage="CHROME_NOT_VISIBLE";
     private final Set<String> seenStages=new HashSet<>();
@@ -41,7 +46,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         String owner="ROOT_UNAVAILABLE",address="HIDDEN",signal="NOT_OBSERVED",button="NOT_OBSERVED";
         String readState="NOT_STARTED",readError="NONE",wifi="NOT_OBSERVED",focusedOwner="ROOT_UNAVAILABLE";
         boolean interactive=true,locked,deviceLocked,chromeWindow,truncated;
-        String operation="NOT_STARTED";
+        String operation="NOT_STARTED",dialog="NONE",confirmButton="NOT_OBSERVED",confirmTarget="NONE";
         int nodes,visible,webNodes,windows;
     }
     private final Runnable timeout = this::onPageTimeout;
@@ -165,9 +170,11 @@ public final class ChromeAttendanceService extends AccessibilityService {
         service.lastSiteAt=0;service.lastChromeEventAt=0;service.lastSiteSignal="NOT_OBSERVED";service.lastSiteAddress="HIDDEN";
         service.lockTrace.clear(); service.finished = done; service.working = true; service.clicked = false; service.clickAttempted=false; service.recoveryExtended=false;
         service.confirmationExpected = false; service.confirmationClicked = false;
+        service.confirmationSeenAt=0;service.confirmationActionAt=0;service.unknownDialogSeenAt=0;service.confirmationGone=false;service.lastDialogState="";service.dialogTransitions=0;
         service.started = SystemClock.elapsedRealtime(); service.pageSeen = 0;
         service.events(true);
         prefs.status("Chrome 출석 화면 확인 중", "기존 Chrome의 인증 상태를 사용합니다");
+        service.screen.begin(!manual&&!readOnly,service.phase,service.attemptId);
         Context launch = context instanceof Activity ? context : service;
         if (!launchChrome(launch,SiteProtocol.PAGE,kind,service.phase)) { service.fail("Chrome 실행 실패", "Google Chrome 사용 설정을 확인해 주세요"); return; }
         service.resultDeadline=service.started+AttendanceAttemptPolicy.PAGE_WAIT_MS;
@@ -206,26 +213,14 @@ public final class ChromeAttendanceService extends AccessibilityService {
         }
         evidence.operation="ROOT_READ";
         AccessibilityNodeInfo root = freshChromeRoot();
-        if (root == null || !"com.android.chrome".equals(string(root.getPackageName()))) { windowStage(root);traceLock("Chrome 화면 노드 대기 · 현재 화면에서 Chrome을 읽지 못함"); return; }
+        boolean chromeForeground=root!=null&&"com.android.chrome".equals(string(root.getPackageName()));
+        screen.foreground(chromeForeground,root!=null&&getPackageName().equals(string(root.getPackageName())));
+        if (!chromeForeground) { windowStage(root);traceLock("Chrome 화면 노드 대기 · 현재 화면에서 Chrome을 읽지 못함"); return; }
         evidence.operation="NODE_COLLECTION";
         List<AccessibilityNodeInfo> nodes = new ArrayList<>(); collect(root, nodes, 0);
         String text = allText(nodes);
         readPageEvidence(nodes,text);evidence.operation="PAGE_INSPECTION";
-        if (confirmationExpected && !confirmationClicked && ChromePage.checkoutConfirmation(text)) {
-            if ((!manualSession&&!prefs.auto()) || !observationAllowed(prefs)) { finishWork(); return; }
-            AccessibilityNodeInfo confirm = exactButton(nodes, "확인", "OK");
-            if (confirm != null) {
-                confirmationClicked = true; // A rejected UI action may still have reached Chrome; never repeat it.
-                DiagnosticLog.add(this,DiagnosticLog.Event.CLICK_PLANNED,phase,"CHECKOUT_CONFIRMATION",attemptDetails());
-                evidence.operation="CONFIRM_CLICK";
-                boolean accepted=click(confirm);
-                DiagnosticLog.add(this,accepted?DiagnosticLog.Event.CONFIRM_REQUEST:DiagnosticLog.Event.BUTTON_FAILED,phase,accepted?"UI_ACTION_ACCEPTED":"CONFIRM_ACTION_REJECTED",attemptDetails());
-                if(accepted)traceLock("퇴실 확인 대화상자 클릭 요청 전달됨");
-                else fail("퇴실 확인 결과 미확인","확인 버튼을 다시 누르지 않습니다. Chrome에서 출결 기록을 확인해 주세요.","CONFIRM_ACTION_REJECTED");
-                if(accepted){waitForResult();stage("RECORD_NOT_UPDATED");}
-            } else stage("CONFIRM_BUTTON_UNAVAILABLE");
-            return;
-        }
+        if(inspectDialog(nodes,text,prefs))return;
         boolean correctAddress = false;
         for (AccessibilityNodeInfo node : nodes)
             if ("com.android.chrome:id/url_bar".equals(node.getViewIdResourceName()) &&
@@ -256,6 +251,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
                 Notices.attendanceCompleted(this, day, phase, record);
                 Notices.chromeAction(this, false, "");
                 if (record.checkedOut()) Notices.checkoutAttention(this, false, "");
+                screen.confirmed(!manualReadOnly&&(clicked||!manualSession));
                 finishWork(); ScheduleController.reconcile(this); return;
             }
         }
@@ -289,6 +285,80 @@ public final class ChromeAttendanceService extends AccessibilityService {
         traceLock((phase==Policy.Phase.ENTRY?"입실":"퇴실")+(clicked?" 버튼 클릭 요청 전달됨 · 사이트 기록 확인 전":" 버튼 클릭 요청 실패"));
         confirmationExpected = clicked && phase == Policy.Phase.CHECKOUT;
         if (!clicked) fail("출결 버튼 결과 미확인","버튼을 다시 누르지 않습니다. Chrome에서 출결 기록을 확인해 주세요.","BUTTON_ACTION_REJECTED");
+    }
+    /** Native Chrome dialogs obscure the page date; classify them before parsing the document. */
+    private boolean inspectDialog(List<AccessibilityNodeInfo> nodes,String text,Prefs prefs){
+        boolean nativeDialog=false;
+        for(AccessibilityNodeInfo n:nodes)if(n.isVisibleToUser()){
+            String id=string(n.getViewIdResourceName());
+            if((id.startsWith("com.android.chrome:id/")||id.startsWith("android:id/"))&&
+                (id.contains("dialog")||id.endsWith("/positive_button")||id.endsWith("/negative_button")||id.endsWith("/button_positive")||id.endsWith("/button_negative")||id.endsWith("/button1")||id.endsWith("/button2")))nativeDialog=true;
+        }
+        evidence.dialog=ChromeDiagnostics.dialogKind(nativeDialog,text);
+        AccessibilityNodeInfo positive=nativePositiveButton(nodes);
+        evidence.confirmButton=positive!=null?"READY":exactButton(nodes,"확인","OK")!=null?"LABEL_ONLY":"ABSENT";
+        if(positive!=null)evidence.confirmTarget="NATIVE_POSITIVE";
+        boolean verified="ATTENDANCE".equals(evidence.address);
+        if(!nativeDialog){
+            if(confirmationClicked&&!confirmationGone&&verified){confirmationGone=true;dialogState("CONFIRM_DISAPPEARED");}
+            confirmationSeenAt=0;unknownDialogSeenAt=0;return false;
+        }
+        if(!verified){dialogState("DIALOG_ORIGIN_UNVERIFIED");stage("DIALOG_ORIGIN_UNVERIFIED");return true;}
+        // A native dialog container can appear before its message during the opening animation.
+        if("UNKNOWN_DIALOG".equals(evidence.dialog)){
+            if(unknownDialogSeenAt==0)unknownDialogSeenAt=SystemClock.elapsedRealtime();
+            if(SystemClock.elapsedRealtime()-unknownDialogSeenAt<600){stage("DIALOG_MESSAGE_SETTLING");return true;}
+        }else unknownDialogSeenAt=0;
+        if(!"CHECKOUT_CONFIRMATION".equals(evidence.dialog)){
+            if(confirmationClicked)confirmationGone=true;
+            dialogState("SITE_DIALOG_VISIBLE");
+            String reason=ChromeDiagnostics.dialogFailure(evidence.dialog);
+            String detail=switch(evidence.dialog){
+                case "SITE_NETWORK_RESTRICTION"->"사이트가 교육기관 Wi-Fi/IP 조건을 거부했습니다. 휴대폰의 Wi-Fi 연결 확인과 서버의 허용 판단은 다릅니다.";
+                case "AUTH_REQUIRED","TRAINEE_REJECTED"->"사이트가 인증 또는 훈련 대상 확인을 요청했습니다. Chrome의 안내를 확인해 주세요.";
+                case "SERVER_ERROR","NETWORK_ERROR","TLS_ERROR"->"Chrome에 서버·연결 오류 안내가 표시됐습니다. 출결 완료는 확인되지 않았습니다.";
+                default->"Chrome에 추가 안내창이 표시됐습니다. 내용을 확인해 주세요. 확인되지 않은 버튼은 다시 누르지 않습니다.";
+            };
+            prefs.attendanceHint(day,phase,"결과 미확인 · Chrome 안내 확인 필요");
+            fail("사이트 안내로 처리 중단",detail,reason);return true;
+        }
+        if(!confirmationExpected||phase!=Policy.Phase.CHECKOUT||!clicked){dialogState("UNEXPECTED_CONFIRMATION");stage("UNEXPECTED_CONFIRMATION");return true;}
+        long now=SystemClock.elapsedRealtime();
+        if(confirmationClicked){
+            String state=confirmationGone?"CONFIRM_REAPPEARED":now-confirmationActionAt<2000?"CONFIRM_DISMISS_WAIT":"CONFIRM_STILL_VISIBLE";
+            dialogState(state);stage(state);
+            if(now-confirmationActionAt>=6000){prefs.attendanceHint(day,phase,"결과 미확인 · 퇴실 확인창 확인 필요");fail("퇴실 확인창이 남아 있습니다","확인 클릭 후 창이 닫히지 않았거나 다시 나타났습니다. 중복 출결을 막기 위해 재클릭하지 않습니다.",state);}
+            return true;
+        }
+        if(confirmationSeenAt==0)confirmationSeenAt=now;
+        dialogState("CONFIRM_VISIBLE");
+        if(now-confirmationSeenAt<600){stage("CONFIRM_SETTLING");return true;}
+        if(positive==null){stage("CONFIRM_BUTTON_UNAVAILABLE");return true;}
+        if((!manualSession&&!prefs.auto())||!observationAllowed(prefs)){finishWork();return true;}
+        confirmationClicked=true;confirmationActionAt=now;
+        evidence.operation="CONFIRM_CLICK";
+        DiagnosticLog.add(this,DiagnosticLog.Event.CLICK_PLANNED,phase,"CHECKOUT_CONFIRMATION",attemptDetails());
+        boolean accepted=click(positive);
+        DiagnosticLog.add(this,accepted?DiagnosticLog.Event.CONFIRM_REQUEST:DiagnosticLog.Event.BUTTON_FAILED,phase,accepted?"UI_ACTION_ACCEPTED":"CONFIRM_ACTION_REJECTED",attemptDetails());
+        if(!accepted){fail("퇴실 확인 결과 미확인","확인 버튼 요청이 거절됐습니다. Chrome에서 출결 기록을 확인해 주세요.","CONFIRM_ACTION_REJECTED");return true;}
+        traceLock("퇴실 확인 클릭 요청 전달 · 창 닫힘과 사이트 시각 확인 대기");
+        dialogState("CONFIRM_ACTION_ACCEPTED");waitForResult();stage("CONFIRM_DISMISS_WAIT");return true;
+    }
+    private static AccessibilityNodeInfo nativePositiveButton(List<AccessibilityNodeInfo> nodes){
+        for(AccessibilityNodeInfo n:nodes){
+            String id=string(n.getViewIdResourceName());
+            if(!n.isVisibleToUser()||!n.isEnabled()||!n.isClickable())continue;
+            if(!Set.of("확인","OK").contains(string(n.getText()).trim()))continue;
+            if((id.startsWith("com.android.chrome:id/")||id.startsWith("android:id/"))&&
+                (id.endsWith("/positive_button")||id.endsWith("/button_positive")||id.endsWith("/button1")))return n;
+        }
+        return null;
+    }
+    private void dialogState(String state){
+        String signature=state+":"+evidence.dialog+":"+evidence.confirmButton;
+        if(signature.equals(lastDialogState)||dialogTransitions>=12)return;
+        lastDialogState=signature;dialogTransitions++;
+        DiagnosticLog.add(this,DiagnosticLog.Event.DIALOG_STATE_CHANGED,phase,state,attemptDetails());
     }
     private boolean newClickAllowed(Prefs p){
         ZonedDateTime now=ZonedDateTime.now(Policy.ZONE);
@@ -349,7 +419,11 @@ public final class ChromeAttendanceService extends AccessibilityService {
         return null;
     }
     private static boolean click(AccessibilityNodeInfo node) { return node.performAction(AccessibilityNodeInfo.ACTION_CLICK); }
-    private org.json.JSONObject attemptDetails(){org.json.JSONObject d=new org.json.JSONObject();try{d.put("attempt_id",attemptId).put("diagnostic_version",3).put("page_visible_ms",pageSeen==0?-1:Math.max(0,SystemClock.elapsedRealtime()-pageSeen));}catch(org.json.JSONException ignored){}return d;}
+    private org.json.JSONObject attemptDetails(){org.json.JSONObject d=new org.json.JSONObject();try{d.put("attempt_id",attemptId).put("diagnostic_version",4).put("page_visible_ms",pageSeen==0?-1:Math.max(0,SystemClock.elapsedRealtime()-pageSeen))
+        .put("dialog_kind",evidence.dialog).put("confirm_button_state",evidence.confirmButton).put("confirm_target",evidence.confirmTarget)
+        .put("confirmation_attempted",confirmationClicked).put("confirmation_disappeared",confirmationGone)
+        .put("confirmation_age_ms",confirmationActionAt==0?-1:Math.max(0,SystemClock.elapsedRealtime()-confirmationActionAt))
+        .put("confirmation_visible_ms",confirmationSeenAt==0?-1:Math.max(0,SystemClock.elapsedRealtime()-confirmationSeenAt));}catch(org.json.JSONException ignored){}return d;}
     private String owner(AccessibilityNodeInfo node){
         if(node==null)return "ROOT_UNAVAILABLE";
         String pkg=string(node.getPackageName());
@@ -446,6 +520,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         finishWork();
     }
     private void finishWork() {
+        screen.finish();
         working = false; manualSession=false;manualReadOnly=false;manualRetryApproved=false;lockAttendanceToken=""; handler.removeCallbacks(timeout); handler.removeCallbacks(tick); handler.removeCallbacks(eventInspect);eventReadQueued=false;
         if (!navigatingWifi && settingsTarget==null && lockProbe.isEmpty()) events(false);
         Runnable done = finished; finished = null;
@@ -663,9 +738,9 @@ public final class ChromeAttendanceService extends AccessibilityService {
             if (menu != null) menuOpened = click(menu);
         }
     }
-    @Override public void onInterrupt() { if(working)diagnostic("ACCESSIBILITY_INTERRUPTED",true);endSettingsMenu(false); endLockProbe("접근성 연결 중단"); finishWork(); }
+    @Override public void onInterrupt() { if(working)diagnostic("ACCESSIBILITY_INTERRUPTED",true);screen.cancel();endSettingsMenu(false); endLockProbe("접근성 연결 중단"); finishWork(); }
     @Override public void onDestroy() {
-        if(working)diagnostic("ACCESSIBILITY_SERVICE_DESTROYED",true);
+        if(working)diagnostic("ACCESSIBILITY_SERVICE_DESTROYED",true);screen.cancel();
         endSettingsMenu(false); endLockProbe("접근성 연결 종료"); finishWork(); navigatingWifi = false; handler.removeCallbacksAndMessages(null); instance = null; super.onDestroy();
     }
 }

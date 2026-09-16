@@ -108,6 +108,9 @@ DIAGNOSES = {
     "BROWSER_CONNECTION_ERROR_SHOWN": "Chrome 연결·인증서 오류 표시 관찰",
     "SERVER_ERROR_SHOWN": "서버 오류 문구 관찰",
     "UI_ACTION_REJECTED": "Android 클릭 요청 거절",
+    "CONFIRMATION_NOT_DISMISSED": "확인 클릭 뒤 퇴실 확인창 유지·재등장 관찰",
+    "CONFIRM_BUTTON_NOT_EXPOSED": "퇴실 확인창의 확인 버튼 판독 실패",
+    "SITE_DIALOG_UNCLASSIFIED": "사이트 추가 안내창 관찰 · 내용 분류 불가",
     "CLICK_RESULT_UNCONFIRMED": "클릭 후 출결 결과 미확인",
     "UNDETERMINED": "특정 원인 판정 근거 없음",
 }
@@ -142,6 +145,14 @@ def diagnostic_lines(events):
         previous = enum(d.get("last_site_signal"), SIGNALS)
         lines.append(f"| {attempt} / {number(d.get('elapsed_ms'))} | {label} | {owner} / {flag(d.get('screen_interactive'))} / {flag(d.get('keyguard_locked'))} | {address} / {signal} | {button} / {flag(d.get('click_attempted'))} / {flag(d.get('click_accepted'))} / {flag(d.get('pending_click'))} | {previous} / {number(d.get('last_site_age_ms'))} |")
     lines += ["", "각 원본 details에는 접근성 갱신 상태·노드 수·창 수·Wi-Fi 코드·마지막 Chrome 이벤트 시각·오류 코드도 포함됩니다. 페이지 원문·계정·쿠키·다른 앱 이름은 기록하지 않습니다."]
+    dialogs = [r for r in events if r.get("event_code") == "DIALOG_STATE_CHANGED"]
+    if dialogs:
+        kinds = {"NONE", "CHECKOUT_CONFIRMATION", "UNKNOWN_DIALOG", *SIGNALS}
+        states = {"CONFIRM_VISIBLE", "CONFIRM_ACTION_ACCEPTED", "CONFIRM_DISAPPEARED", "CONFIRM_DISMISS_WAIT", "CONFIRM_STILL_VISIBLE", "CONFIRM_REAPPEARED", "SITE_DIALOG_VISIBLE", "DIALOG_ORIGIN_UNVERIFIED", "UNEXPECTED_CONFIRMATION"}
+        lines += ["", "### 퇴실 확인창과 후속 안내", "", "확인 클릭 접수, 창 닫힘, 출결 시각 확인은 각각 다른 단계입니다. 창이 닫혔다는 사실만으로 서버 제출·저장 성공을 단정하지 않습니다.", "", "| 상태 | 창 종류 | 확인 버튼 | 클릭 후 ms | 닫힘 관찰 |", "|---|---|---|---|---|"]
+        for row in dialogs:
+            d = row.get("details") if isinstance(row.get("details"), dict) else {}
+            lines.append(f"| {enum(row.get('reason_code'), states)} | {enum(d.get('dialog_kind'), kinds)} | {enum(d.get('confirm_button_state'), {'READY','LABEL_ONLY','ABSENT','NOT_OBSERVED'})} | {number(d.get('confirmation_age_ms'))} | {flag(d.get('confirmation_disappeared'))} |")
     return lines
 
 
@@ -168,7 +179,7 @@ def render(rows, skipped):
                   "CLICK_PLANNED": "클릭 직전 기록", "BUTTON_FAILED": "클릭 요청 거절", "CONFIRM_REQUEST": "퇴실 확인 요청",
                   "WAKE_REQUESTED": "화면 깨우기 요청", "WAKE_VISIBLE": "깨우기 화면 포커스", "WAKE_BLOCKED": "화면 깨우기 차단",
                   "WAKE_AUTH_REQUIRED": "사용자 인증 필요", "WAKE_DISMISS_REQUEST": "시스템 잠금 해제 요청",
-                  "WAKE_DISMISS_RESULT": "시스템 잠금 해제 응답", "WAKE_FINISHED": "잠금 처리 종료", "PAGE_RECOVERY_WAIT": "클릭 전 화면 복구 대기", "PRECLICK_DEFERRED": "클릭 전 일시 중단", "CHROME_DIAGNOSTIC": "화면·사이트 관찰", "ATTEMPT_FAILED": "출결 시도 중단 진단", "ATTEMPT_CANCELLED": "사용자가 출결 확인 취소"}
+                  "WAKE_DISMISS_RESULT": "시스템 잠금 해제 응답", "WAKE_FINISHED": "잠금 처리 종료", "PAGE_RECOVERY_WAIT": "클릭 전 화면 복구 대기", "PRECLICK_DEFERRED": "클릭 전 일시 중단", "CHROME_DIAGNOSTIC": "화면·사이트 관찰", "ATTEMPT_FAILED": "출결 시도 중단 진단", "SCREEN_PRESENTATION": "출결 처리 화면 가림", "SCREEN_OFF_REQUEST": "완료 후 화면 끄기 요청", "SCREEN_OFF_RESULT": "화면 꺼짐 확인 결과", "DIALOG_STATE_CHANGED": "대화상자 상태 변화", "ATTEMPT_CANCELLED": "사용자가 출결 확인 취소"}
         lines += ["", "## 일반 출결 동작", "", f"일반 동작 {len(events)}건. Chrome 내부 HTTP 요청 건수와 다릅니다."]
         for code, label in labels.items():
             lines.append(f"- {label}: {counts[code]}건")

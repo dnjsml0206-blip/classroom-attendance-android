@@ -17,6 +17,7 @@ final class LockLogExport {
         JSONObject out=new JSONObject();
         try{
             out.put("app_version",c.getPackageManager().getPackageInfo(c.getPackageName(),0).versionName);
+            try{out.put("chrome_version",c.getPackageManager().getPackageInfo("com.android.chrome",0).versionName);}catch(PackageManager.NameNotFoundException ignored){}
             out.put("device",LockLab.device()).put("emulator",Build.HARDWARE.equals("ranchu")||Build.HARDWARE.equals("goldfish"));
             out.put("accessibility_enabled",ChromeAttendanceService.configured(c)).put("accessibility_connected",ChromeAttendanceService.available()).put("exact_alarm_allowed",AlarmScheduler.allowed(c));
             out.put("notifications_enabled",c.getSystemService(NotificationManager.class).areNotificationsEnabled());
@@ -29,6 +30,7 @@ final class LockLogExport {
             out.put("battery_optimization_exempt",c.getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(c.getPackageName()));
             NetworkAccess.State wifi=NetworkAccess.inspect(c);out.put("registered_wifi_connected",wifi.allowed()).put("wifi_check",wifi.reason()).put("wifi_check_code",wifi.code()).put("wifi_transport_present",wifi.wifiTransportPresent()).put("ssid_visible",wifi.ssidVisible());
             Prefs p=new Prefs(c);out.put("schedule_enabled",p.enabled()).put("auto_click",p.auto()).put("attendance_phase",p.phase(ZonedDateTime.now(Policy.ZONE)).name());
+            out.put("screen_off_after_attendance",p.screenOffAfterAttendance()).put("show_processing_screen",p.showProcessingScreen());
             out.put("automation",AutomationSnapshot.read(c));
         }catch(Exception ignored){}return out;
     }

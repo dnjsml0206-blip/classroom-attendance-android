@@ -91,3 +91,15 @@ class DiagnosticAnalysisTests(unittest.TestCase):
     def test_local_error_and_unknown_click_have_distinct_labels(self):
         report=render([self.event("LOCAL_READ_ERROR"),self.event("CLICK_RESULT_UNCONFIRMED",click_attempted=True,click_accepted=True,pending_click=True)],0)
         self.assertIn("앱/접근성 읽기 오류 관찰",report);self.assertIn("클릭 후 출결 결과 미확인",report)
+
+    def test_dialog_transitions_do_not_claim_saved_attendance(self):
+        event = {"source":"s", "record_type":"attendance_event", "event_code":"DIALOG_STATE_CHANGED", "reason_code":"CONFIRM_DISAPPEARED", "details":{"dialog_kind":"NONE", "confirm_button_state":"ABSENT", "confirmation_age_ms":420, "confirmation_disappeared":True}}
+        report=render([self.event("CLICK_RESULT_UNCONFIRMED"),event],0)
+        self.assertIn("CONFIRM_DISAPPEARED",report)
+        self.assertIn("서버 제출·저장 성공을 단정하지 않습니다",report)
+    def test_dialog_fields_never_export_arbitrary_messages(self):
+        event = {"source":"s", "record_type":"attendance_event", "event_code":"DIALOG_STATE_CHANGED", "reason_code":"SECRET | raw message", "details":{"dialog_kind":"SECRET | raw message", "confirm_button_state":{"secret":True}, "confirmation_age_ms":"SECRET", "confirmation_disappeared":False}}
+        report=render([self.event("SITE_DIALOG_UNCLASSIFIED"),event],0)
+        self.assertNotIn("SECRET",report)
+        self.assertNotIn("raw message",report)
+        self.assertIn("내용 분류 불가",report)
