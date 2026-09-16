@@ -25,7 +25,7 @@ final class DiagnosticLog {
                 "screen_interactive","keyguard_locked","device_locked","chrome_window_present","window_count","read_state","read_error","read_operation",
                 "address_state","page_signal","button_state","node_count","visible_node_count","web_node_count","tree_limit_reached","wifi_check_code",
                 "click_attempted","click_accepted","confirmation_attempted","pending_click","elapsed_ms","poll_count","chrome_event_age_ms",
-                "last_site_signal","last_site_address","last_site_age_ms"})if(details.has(key))safe.put(key,details.get(key));
+                "last_site_signal","last_site_address","last_site_age_ms","page_visible_ms"})if(details.has(key))safe.put(key,details.get(key));
             long now=System.currentTimeMillis();SharedPreferences p=prefs(c);
             String signature=LocalDate.now(Policy.ZONE)+":"+event+":"+phase+":"+reason+":"+safe;
             if(signature.equals(p.getString("last_signature","")))return;

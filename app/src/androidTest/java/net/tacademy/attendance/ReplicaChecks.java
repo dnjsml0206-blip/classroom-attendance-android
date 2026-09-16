@@ -46,11 +46,25 @@ final class ReplicaChecks {
             p.raw.edit().putString("chrome_pending",LocalDate.now(Policy.ZONE)+":ENTRY").putLong("chrome_pending_at",System.currentTimeMillis()-10000).commit();
             ui(()->{main.getWindow().getDecorView().findViewWithTag("reservation-stand").performClick();main.getWindow().getDecorView().findViewWithTag("reservation-stand").performClick();});
             check(p.enabled()&&ActivationRun.pending(),"Real stand OFF/ON re-enables the reservation and queues its countdown");
-        }else ui(()->{if(scenario.equals("already-in"))main.getWindow().getDecorView().findViewWithTag("attendance-enter-now").performClick();else if(checkout)ChromeAttendanceService.beginManual(main,Policy.Phase.CHECKOUT,false,false);else ChromeAttendanceService.begin(main,null);});
+        }else ui(()->{if(scenario.startsWith("already-in"))main.getWindow().getDecorView().findViewWithTag("attendance-enter-now").performClick();else if(scenario.equals("early-return")||scenario.equals("return-after-click")){ChromeAttendanceService.beginManual(main,Policy.Phase.ENTRY,false,false);}else if(checkout)ChromeAttendanceService.beginManual(main,Policy.Phase.CHECKOUT,false,false);else ChromeAttendanceService.begin(main,null);});
         await(()->ChromeAttendanceService.busy(),scenario.equals("pending-read")?10000:3000,"Production attendance session started");
-        if(scenario.startsWith("focus")){
+        if(scenario.equals("early-return")||scenario.equals("return-after-click")){
+            boolean sent=scenario.equals("return-after-click");
+            await(()->sent?countEvent("BUTTON_REQUEST")==1:hasReason("PAGE_SETTLING")||hasReason("BUTTON_UNAVAILABLE"),12000,"Chrome reached the expected state before the user goes back");
+            ui(()->c.startActivity(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)));
+            await(()->!ChromeAttendanceService.busy(),1500,"Returning to the app promptly ends the unreadable wait");
+            await(()->{var button=main.getWindow().getDecorView().findViewWithTag("attendance-enter-now");var label=main.getWindow().getDecorView().findViewWithTag("attendance-entry-time");return button!=null&&button.isEnabled()&&label instanceof android.widget.TextView&&((android.widget.TextView)label).getText().toString().contains("미확인");},3000,"The entry button recovers with an explicit unconfirmed hint, not a fabricated time");
+            check(!p.checkedInToday()&&control("/state").getInt("entries")== (sent?1:0),"Returning neither invents success nor repeats a submitted request");
+            check(countEvent("ATTEMPT_CANCELLED")==1,"The return is recorded separately from website errors");
+            if(!sent){check(TrafficGuard.peek(c,AccessPolicy.Kind.AUTOMATIC,Policy.Phase.ENTRY).reason()==AccessPolicy.Reason.COOLDOWN,"Returning with reservations ON cannot immediately reopen Chrome");
+                long wall=System.currentTimeMillis(),elapsed=SystemClock.elapsedRealtime();int boot=Settings.Global.getInt(c.getContentResolver(),Settings.Global.BOOT_COUNT,-1);
+                check(TrafficGuard.claim(c,AccessPolicy.Kind.MANUAL,Policy.Phase.ENTRY,wall+3100,elapsed+3100,boot).allowed(),"Explicit manual retry is available after the existing three-second interval");
+                check(TrafficGuard.claim(c,AccessPolicy.Kind.AUTOMATIC,Policy.Phase.ENTRY,wall+121000,elapsed+121000,boot).allowed(),"Automatic return cooldown expires without permanent pre-click pause");}
+
+            check(sent==!p.raw.getString("chrome_pending","").isEmpty()&&sent==TrafficGuard.prefs(c).getBoolean("paused:ENTRY",false),"Only a submitted action retains its pending marker and automatic pause");
+        }else if(scenario.startsWith("focus")){
             await(()->hasReason("PAGE_SETTLING"),10000,"Replica page visible before focus interruption");
-            ui(()->c.startActivity(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP)));
+            ui(()->c.startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
             await(()->hasReason("CHROME_NOT_VISIBLE")||hasReason("FOREGROUND_OTHER_APP"),8000,"Focus interruption is observed");
             boolean baseline="true".equals(args.getString("baseline"));
             if(baseline)await(()->!ChromeAttendanceService.busy(),42000,"Initial observation deadline completes");
@@ -81,8 +95,11 @@ final class ReplicaChecks {
             }else if(scenario.equals("pending-read")){
                 check(state.getInt("entries")==0&&countEvent("BUTTON_REQUEST")==0&&!p.checkedInToday(),"OFF/ON of an uncertain click only reads the page; it never resubmits or invents success");
                 check((LocalDate.now(Policy.ZONE)+":ENTRY").equals(p.raw.getString("chrome_pending",""))&&countEvent("MANUAL_FINISHED")==1,"Record-only activation keeps the uncertain click marker after the read");
-            }else if(scenario.equals("already-in")){
+            }else if(scenario.startsWith("already-in")){
                 check(p.checkedInToday()&&state.getInt("entries")==0&&countEvent("BUTTON_REQUEST")==0,"Existing site entry is read without submitting another entry");
+                JSONArray events=DiagnosticLog.records(c);long visible=-1;for(int i=0;i<events.length();i++){var e=events.getJSONObject(i);if("RECORD_CONFIRMED".equals(e.optString("event_code")))visible=e.getJSONObject("details").optLong("page_visible_ms",-1);}
+                check(visible>=0,"Observed-record timing is included in diagnostics");
+                if(scenario.equals("already-in-ready"))check(visible<1800,"A ready completed record bypasses the new-click settling delay");
                 ui(()->c.startActivity(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)));
                 await(()->{var v=main.getWindow().getDecorView().findViewWithTag("attendance-entry-time");return v instanceof android.widget.TextView&&v.getVisibility()==android.view.View.VISIBLE&&((android.widget.TextView)v).getText().toString().equals("입실  08:45:00");},5000,"Returning from Chrome displays its confirmed entry time below the button");
             }else if(scenario.equals("no-result")){

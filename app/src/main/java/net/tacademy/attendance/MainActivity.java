@@ -62,6 +62,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume() {
         super.onResume(); ChromeAttendanceService.cancelSettingsMenu();
+        ChromeAttendanceService.returnedToAttendanceApp();
         handler.removeCallbacks(refresh); handler.post(refresh);
         if (selected != 0) render(selected);
         if (prefs.enabled()) ScheduleController.reconcile(this);
@@ -260,8 +261,10 @@ public final class MainActivity extends Activity {
         label.setPadding(0,dp(7),0,0);label.setVisibility(View.GONE);return label;
     }
     private void showReceipt(TextView label,String name,String time){
-        setIfChanged(label,time.isEmpty()?"":name+"  "+time);label.setVisibility(time.isEmpty()?View.GONE:View.VISIBLE);
-        label.setContentDescription(time.isEmpty()?"":name+" 확인 시각 "+time);
+        String hint=time.isEmpty()?prefs.attendanceHint(homeDay.toString(),name.equals("입실")?Policy.Phase.ENTRY:Policy.Phase.CHECKOUT):"";
+        String caption=time.isEmpty()?hint:name+"  "+time;
+        setIfChanged(label,caption);label.setVisibility(caption.isEmpty()?View.GONE:View.VISIBLE);
+        label.setContentDescription(time.isEmpty()?hint:name+" 확인 시각 "+time);
     }
     private Button attendanceButton(String label,Policy.Phase phase){
         Button button=button(label,false,()->manualAttendance(phase));boolean night=homeTheme==HomeTheme.NIGHT;

@@ -10,7 +10,7 @@ const ws=new WebSocket(version.webSocketDebuggerUrl);await new Promise((yes,no)=
 let serial=0;const pending=new Map(),sessions=new Set(),ready=new Set(),targetBySession=new Map();let errors=[];
 function cmd(method,params={},sessionId){return new Promise((resolve,reject)=>{let id=++serial;pending.set(id,{resolve,reject,method});ws.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));});}
 let state;
-function reset(name){state={runId,case:name,in:(name.startsWith('checkout')||name==='already-in')?'08:45:00':'',out:'',requests:[],entries:0,exits:0,dialogs:0,documents:0};}
+function reset(name){state={runId,case:name,in:(name.startsWith('checkout')||name.startsWith('already-in'))?'08:45:00':'',out:'',requests:[],entries:0,exits:0,dialogs:0,documents:0};}
 reset('entry');
 function record(item){state.requests.push({...item,at:new Date().toISOString()});fs.writeFileSync(`${dir}/router-state.json`,JSON.stringify(state,null,2));}
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
@@ -21,6 +21,7 @@ async function respond(e,sid){
    snapshot.documents++;snapshot.targetId=targetBySession.get(sid);type='text/html; charset=utf-8';
    const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
    body=html.replaceAll('__TODAY__',snapshot.case==='wrong-date'?'2000-01-01':day);
+   if(snapshot.case==='already-in-ready')body='<meta name="viewport" content="width=device-width"><h2>수강생 출결관리</h2><p>출결일 : '+day+'</p><input type="button" value="입실시간 : 08:45:00"><input type="button" value="퇴실">';
    if(snapshot.case==='auth')body=body.replace("CstrCode:'replica-student'","CstrCode:null");
    if(snapshot.case==='auth-message')body='<h1>인증절차를 진행한후 사용해주세요. 관리자에게 문의바랍니다.</h1>';
    if(snapshot.case==='denied'){status=403;body='<h1>403 Forbidden</h1>'; }
@@ -31,10 +32,10 @@ async function respond(e,sid){
  }else if(path.endsWith('/PresentIP.asp')){body='1';delay=150;}
  else if(path.endsWith('/PresentStrCName.asp')){body='[SK플래닛] 재현 시험 과정';delay=150;}
  else if(path.endsWith('/PresentPeriodChk.asp')){body=snapshot.case==='no-course'?'0':'1';delay=150;}
- else if(path.endsWith('/PresentRollBookChk.asp')){body=snapshot.in+'|'+snapshot.out;delay=snapshot.case==='slow-page'?7000:snapshot.case.startsWith('focus')?5000:150;}
+ else if(path.endsWith('/PresentRollBookChk.asp')){body=snapshot.in+'|'+snapshot.out;delay=['slow-page','early-return'].includes(snapshot.case)?7000:snapshot.case.startsWith('focus')?5000:150;}
  else if(path.endsWith('/PresentRollBooklist.asp')){body='<table><tr><th>이수시간</th><th>총출석시간</th><th>남은시간</th></tr><tr><td>940시간</td><td>62시간 0분</td><td>878시간 0분</td></tr></table>';}
  else if(path.endsWith('/PresentRollBooklist1.asp'))body='';
- else if(path.endsWith('/PresentIn_ok.asp')){snapshot.entries++;body='1';if(snapshot.case!=='no-result')snapshot.in='08:45:00';delay=snapshot.case==='slow-result'?10000:150;}
+ else if(path.endsWith('/PresentIn_ok.asp')){snapshot.entries++;body='1';if(!['no-result','return-after-click'].includes(snapshot.case))snapshot.in='08:45:00';delay=snapshot.case==='slow-result'?10000:150;}
  else if(path.endsWith('/PresentOut_ok.asp')){snapshot.exits++;snapshot.out='17:50:05';body='1';delay=150;}
  else {status=404;body='Blocked by local replica';}
  record({url:e.request.url,method:e.request.method,action:'fulfilled',status});

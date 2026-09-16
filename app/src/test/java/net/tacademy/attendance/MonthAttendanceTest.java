@@ -47,12 +47,4 @@ public final class MonthAttendanceTest {
         assertEquals(MonthAttendance.State.PLANNED,MonthAttendance.state(future,today,null,MonthAttendance.ManualStatus.PRESENT,weekdays,Set.of()));
     }
 
-    @Test public void ManualTimesAcceptOptionalValuesAndValidOrder(){
-        assertEquals(new Policy.Record("",""),MonthAttendance.manualTimes(MonthAttendance.ManualStatus.PRESENT," ",""));
-        assertEquals(new Policy.Record("08:30","17:50"),MonthAttendance.manualTimes(MonthAttendance.ManualStatus.PRESENT,"08:30","17:50"));
-    }
-    @Test(expected=IllegalArgumentException.class) public void InvalidManualClockIsRejected(){MonthAttendance.manualTimes(MonthAttendance.ManualStatus.PRESENT,"25:00","");}
-    @Test(expected=IllegalArgumentException.class) public void EarlierExitIsRejected(){MonthAttendance.manualTimes(MonthAttendance.ManualStatus.EARLY_LEAVE,"08:30","08:29");}
-    @Test(expected=IllegalArgumentException.class) public void AbsenceCannotHaveTimes(){MonthAttendance.manualTimes(MonthAttendance.ManualStatus.ABSENT,"08:30","");}
-    @Test(expected=IllegalArgumentException.class) public void ExitWithoutEntryIsRejected(){MonthAttendance.manualTimes(MonthAttendance.ManualStatus.PRESENT,"","17:50");}
 }

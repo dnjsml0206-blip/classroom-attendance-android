@@ -96,6 +96,7 @@ DIAGNOSES = {
     "SCREEN_LOCKED_OR_OFF": "화면 꺼짐·잠금 관찰",
     "WIFI_PREREQUISITE": "휴대폰 Wi-Fi 조건 미충족",
     "ACCESSIBILITY_ROOT_UNAVAILABLE": "접근성 화면 없음 · 사이트 차단 여부 확인 불가",
+    "APP_RETURNED_BEFORE_RECORD": "시각 확인 전에 출석 앱으로 돌아옴 · 대기 종료",
     "CHROME_NOT_FOREGROUND": "현재 읽은 창이 Chrome 아님 · 사이트 차단 여부 확인 불가",
     "ADDRESS_UNVERIFIED": "대상 주소 미확인 · 사이트 차단 여부 확인 불가",
     "PAGE_NODES_UNAVAILABLE": "화면 요소 없음 · 원인 미확정",

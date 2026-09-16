@@ -1,7 +1,6 @@
 package net.tacademy.attendance;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.*;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -12,7 +11,7 @@ import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-/** Observed attendance and local editable statuses/times, with an inline detail panel. */
+/** Observed times and immediately toggled local statuses, with an inline detail panel. */
 public final class AttendanceCalendarActivity extends Activity {
     private Prefs prefs;
     private HomeTheme theme;
@@ -20,7 +19,6 @@ public final class AttendanceCalendarActivity extends Activity {
     private LocalDate selected;
     private LinearLayout content;
     private ScrollView scroll;
-    private AlertDialog manualDialog;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable refresh=this::render;
     private final SharedPreferences.OnSharedPreferenceChangeListener changes=(p,key)->{
@@ -58,7 +56,7 @@ public final class AttendanceCalendarActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();prefs.raw.registerOnSharedPreferenceChangeListener(changes);render();}
     @Override protected void onPause(){prefs.raw.unregisterOnSharedPreferenceChangeListener(changes);handler.removeCallbacks(refresh);super.onPause();}
-    @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);if(manualDialog!=null)manualDialog.dismiss();super.onDestroy();}
+    @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);super.onDestroy();}
     @Override protected void onSaveInstanceState(Bundle state){state.putString("selected",selected.toString());super.onSaveInstanceState(state);}
     private void moveMonth(int delta){month=month.plusMonths(delta);selected=month.atDay(Math.min(selected.getDayOfMonth(),month.lengthOfMonth()));render();}
     private void render(){
@@ -85,7 +83,7 @@ public final class AttendanceCalendarActivity extends Activity {
         }}
         TextView summary=text(getString(R.string.calendar_summary,complete,early,absent,entered,unknown),12,theme.muted,false);summary.setTag("calendar-summary");summary.setGravity(Gravity.CENTER);calendar.addView(summary);
         if(dates.stream().filter(Objects::nonNull).anyMatch(date->!date.isAfter(today)&&prefs.manualAttendance(date)!=null)){
-            TextView legend=text("* 직접 입력한 출결",11,theme.muted,false);legend.setGravity(Gravity.CENTER);calendar.addView(legend);
+            TextView legend=text("* 직접 선택한 출결",11,theme.muted,false);legend.setGravity(Gravity.CENTER);calendar.addView(legend);
         }
         gap(calendar,12);
         LinearLayout names=new LinearLayout(this);String[] dayNames={"일","월","화","수","목","금","토"};
@@ -102,7 +100,7 @@ public final class AttendanceCalendarActivity extends Activity {
                     tile.setBackground(shape(chosen?theme.soft:theme.surface,chosen?theme.accent:isToday?theme.border:theme.surface,chosen||isToday?2:0,10));
                     TextView number=text(String.valueOf(date.getDayOfMonth()),16,chosen?theme.accent:theme.ink,chosen||isToday);number.setGravity(Gravity.CENTER);tile.addView(number);
                     TextView state=text(status.label+(!date.isAfter(today)&&prefs.manualAttendance(date)!=null?"*":""),11,color,false);state.setGravity(Gravity.CENTER);state.setSingleLine(true);tile.addView(state);
-                    tile.setTag("calendar-day:"+date);tile.setFocusable(true);tile.setClickable(true);tile.setContentDescription(date+" "+status.label+(!date.isAfter(today)&&prefs.manualAttendance(date)!=null?" 직접 입력":"")+(isToday?" 오늘":"")+(chosen?" 선택됨":""));
+                    tile.setTag("calendar-day:"+date);tile.setFocusable(true);tile.setClickable(true);tile.setContentDescription(date+" "+status.label+(!date.isAfter(today)&&prefs.manualAttendance(date)!=null?" 직접 선택":"")+(isToday?" 오늘":"")+(chosen?" 선택됨":""));
                     tile.setOnClickListener(v->{selected=date;render();scroll.post(()->{View details=content.findViewWithTag("calendar-detail");if(details!=null)scroll.smoothScrollTo(0,details.getTop());});});cell=tile;
                 }
                 cell.setMinimumHeight(dp(62));
@@ -111,18 +109,17 @@ public final class AttendanceCalendarActivity extends Activity {
             calendar.addView(week);
         }
         gap(content,14);
-        Policy.Record record=prefs.calendarRecord(selected);
+        Policy.Record record=prefs.history(selected);
         MonthAttendance.ManualStatus manual=!selected.isAfter(today)?prefs.manualAttendance(selected):null;
         MonthAttendance.State state=MonthAttendance.state(selected,today,record,manual,weekdays,holidays);
         LinearLayout detail=card();detail.setTag("calendar-detail");
         TextView date=text(selected.format(DateTimeFormatter.ofPattern("M월 d일 EEEE",Locale.KOREAN)),18,theme.ink,true);date.setTag("calendar-selected-date");detail.addView(date);
         TextView stateLabel=text(state==MonthAttendance.State.ENTERED?"입실 확인 · 퇴실 미확인":state.label,13,color(state),true);stateLabel.setTag("calendar-selected-status");detail.addView(stateLabel);gap(detail,12);
-        LinearLayout times=new LinearLayout(this);
+        LinearLayout times=new LinearLayout(this);times.setTag("calendar-times");times.setVisibility(record!=null&&record.checkedIn()?View.VISIBLE:View.GONE);
         times.addView(time("입실",record==null?"":record.in(),"calendar-in"),new LinearLayout.LayoutParams(0,-2,1));
         times.addView(time("퇴실",record==null?"":record.out(),"calendar-out"),new LinearLayout.LayoutParams(0,-2,1));detail.addView(times);
         if(manual!=null){
-            TextView source=text("직접 입력 · 앱에 저장한 출결",12,theme.accent,true);source.setTag("calendar-source");detail.addView(source);
-            detail.addView(text(prefs.manualTimes(selected)!=null?"시간도 직접 입력한 기록입니다.":"입실·퇴실 시간은 사이트에서 확인한 기록입니다.",12,theme.muted,false));
+            TextView source=text("직접 선택 · 앱에 저장한 상태",12,theme.accent,true);source.setTag("calendar-source");detail.addView(source);
         }
         if(state==MonthAttendance.State.UNKNOWN)detail.addView(text("앱에서 확인된 입실·퇴실 기록이 없습니다.",12,theme.muted,false));
         else if(state==MonthAttendance.State.HOLIDAY)detail.addView(text("등록된 휴강일입니다.",12,theme.muted,false));
@@ -130,65 +127,26 @@ public final class AttendanceCalendarActivity extends Activity {
         else if(state==MonthAttendance.State.PLANNED)detail.addView(text("현재 설정에 따른 수업 예정일입니다.",12,theme.muted,false));
         if(!selected.isAfter(today)){
             gap(detail,12);LocalDate editDate=selected;
-            Button edit=button(manual==null?"출결 수기 입력":"출결 수기 수정","선택한 날짜 출결 상태와 입실·퇴실 시간 수정",()->editAttendance(editDate));
-            edit.setTag("calendar-edit");detail.addView(edit,new LinearLayout.LayoutParams(-1,dp(48)));
+            LinearLayout choices=new LinearLayout(this);choices.setTag("calendar-status-toggles");
+            for(MonthAttendance.ManualStatus option:MonthAttendance.ManualStatus.values()){
+                boolean on=manual==option;String statusText=option.state.label;
+                Button toggle=button((on?"✓  ":"")+statusText,statusText+(on?" 선택됨 · 눌러 해제":" · 눌러 저장"),()->toggleAttendance(editDate,option));
+                toggle.setTag("manual-status:"+option.name());toggle.setSelected(on);toggle.setTextColor(on?color(option.state):theme.muted);
+                toggle.setTypeface(null,on?Typeface.BOLD:Typeface.NORMAL);toggle.setBackground(shape(on?theme.soft:theme.surface,on?color(option.state):theme.border,on?2:1,14));
+                if(Build.VERSION.SDK_INT>=30)toggle.setStateDescription(on?"켜짐":"꺼짐");
+                LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(0,dp(50),1);if(choices.getChildCount()>0)size.leftMargin=dp(8);choices.addView(toggle,size);
+            }
+            detail.addView(choices);gap(detail,6);detail.addView(text("누르면 바로 저장 · 한 번 더 누르면 해제",12,theme.muted,false));
         } else detail.addView(text("미래 날짜는 아직 수정할 수 없습니다.",12,theme.muted,false));
-        gap(content,12);content.addView(text("오늘 또는 지난 날짜를 눌러 출결 상태와 시간을 수정하세요. 직접 입력은 앱에만 저장되며 사이트 출결은 변경하지 않습니다. 미확인은 결석을 뜻하지 않습니다.",12,theme.muted,false));
+        gap(content,12);content.addView(text("오늘 또는 지난 날짜에서 출석·조퇴·결석을 선택하세요. 상태는 앱에만 저장되며, 시각은 앱이 확인한 출결 기록이 있을 때만 표시합니다. 사이트 출결은 변경되지 않습니다.",12,theme.muted,false));
         gap(content,10);content.addView(button("Chrome 출결 화면 열기","Chrome 출결 화면 열기",()->ChromeAttendanceService.openChrome(this,SiteProtocol.PAGE)),new LinearLayout.LayoutParams(-1,dp(48)));
         scroll.post(()->scroll.scrollTo(0,position));
     }
-    private void editAttendance(LocalDate date){
+    private void toggleAttendance(LocalDate date,MonthAttendance.ManualStatus choice){
         if(date.isAfter(LocalDate.now(Policy.ZONE))){render();return;}
-        MonthAttendance.ManualStatus existing=prefs.manualAttendance(date);
-        MonthAttendance.ManualStatus[] choice={existing};
-        Policy.Record original=prefs.calendarRecord(date);
-        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(24),dp(8),dp(24),dp(12));
-        TextView note=new TextView(this);note.setText("앱에 저장하는 수기 기록이에요. 사이트 출결은 변경되지 않아요.");note.setTextSize(13);form.addView(note);
-        RadioGroup options=new RadioGroup(this);options.setOrientation(RadioGroup.VERTICAL);form.addView(options);
-        EditText in=manualTime(form,"입실 시간",original==null?"":original.in(),"manual-in");
-        EditText out=manualTime(form,"퇴실 시간",original==null?"":original.out(),"manual-out");
-        TextView help=new TextView(this);help.setText("모르는 시간은 비워 두세요. 예: 08:30 / 17:50");help.setTextSize(12);form.addView(help);
-        TextView error=new TextView(this);error.setTag("manual-error");error.setTextColor(0xFFB3261E);error.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);form.addView(error);
-        android.text.TextWatcher clearError=new android.text.TextWatcher(){
-            @Override public void beforeTextChanged(CharSequence text,int start,int count,int after){}
-            @Override public void onTextChanged(CharSequence text,int start,int before,int count){error.setText("");}
-            @Override public void afterTextChanged(android.text.Editable text){}
-        };in.addTextChangedListener(clearError);out.addTextChangedListener(clearError);
-        for(MonthAttendance.ManualStatus status:MonthAttendance.ManualStatus.values()){
-            RadioButton option=new RadioButton(this);option.setId(View.generateViewId());option.setText(status.state.label);option.setTag("manual-status:"+status.name());option.setMinHeight(dp(48));options.addView(option);
-            if(status==existing)option.setChecked(true);
-            option.setOnCheckedChangeListener((button,checked)->{if(checked){choice[0]=status;error.setText("");
-                boolean absent=status==MonthAttendance.ManualStatus.ABSENT;if(absent){in.setText("");out.setText("");}in.setEnabled(!absent);out.setEnabled(!absent);
-                if(manualDialog!=null)manualDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
-            }});
-        }
-        if(existing==MonthAttendance.ManualStatus.ABSENT){in.setText("");out.setText("");in.setEnabled(false);out.setEnabled(false);}
-        ScrollView scroller=new ScrollView(this);scroller.addView(form);
-        AlertDialog.Builder builder=new AlertDialog.Builder(this).setTitle(date.format(DateTimeFormatter.ofPattern("yyyy년 M월 d일 출결",Locale.KOREAN)))
-            .setView(scroller).setNegativeButton("취소",null).setPositiveButton("저장",null);
-        if(existing!=null)builder.setNeutralButton("수기 기록 삭제",null);
-        manualDialog=builder.create();
-        manualDialog.setOnShowListener(d->{
-            manualDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(choice[0]!=null);
-            manualDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
-                if(choice[0]==null)return;
-                try{saveManual(date,choice[0],MonthAttendance.manualTimes(choice[0],in.getText().toString(),out.getText().toString()));}
-                catch(IllegalArgumentException problem){error.setText(problem.getMessage());}
-            });
-            if(existing!=null)manualDialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->saveManual(date,null,null));
-        });
-        manualDialog.show();manualDialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
-    }
-    private EditText manualTime(LinearLayout form,String label,String value,String tag){
-        TextView title=new TextView(this);title.setText(label);title.setPadding(0,dp(8),0,0);form.addView(title);
-        EditText input=new EditText(this);input.setTag(tag);input.setSingleLine(true);input.setTextSize(18);input.setHint("HH:mm · 선택 입력");input.setText(value);
-        input.setContentDescription(label);input.setInputType(android.text.InputType.TYPE_CLASS_DATETIME|android.text.InputType.TYPE_DATETIME_VARIATION_TIME);
-        form.addView(input,new LinearLayout.LayoutParams(-1,dp(50)));return input;
-    }
-    private void saveManual(LocalDate date,MonthAttendance.ManualStatus status,Policy.Record times){
-        if(!prefs.saveManualAttendance(date,status,times)){Toast.makeText(this,"저장하지 못했습니다. 다시 시도해 주세요.",Toast.LENGTH_LONG).show();return;}
-        if(manualDialog!=null)manualDialog.dismiss();manualDialog=null;render();
-        Toast.makeText(this,status==null?"수기 기록을 삭제했습니다":"출결을 저장했습니다",Toast.LENGTH_SHORT).show();
+        MonthAttendance.ManualStatus next=prefs.manualAttendance(date)==choice?null:choice;
+        if(!prefs.saveManualAttendance(date,next)){Toast.makeText(this,"저장하지 못했습니다. 다시 눌러 주세요.",Toast.LENGTH_LONG).show();return;}
+        handler.removeCallbacks(refresh);render();
     }
     private LinearLayout time(String label,String value,String tag){LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.addView(text(label,12,theme.muted,false));TextView time=text(value.isEmpty()?"—":value,23,theme.ink,true);time.setFontFeatureSettings("tnum");time.setTag(tag);box.addView(time);return box;}
     private int color(MonthAttendance.State state){boolean night=theme==HomeTheme.NIGHT;return switch(state){

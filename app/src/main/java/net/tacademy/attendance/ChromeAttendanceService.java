@@ -45,6 +45,9 @@ public final class ChromeAttendanceService extends AccessibilityService {
         int nodes,visible,webNodes,windows;
     }
     private final Runnable timeout = this::onPageTimeout;
+    // Read finished labels promptly; continuous Chrome events must not indefinitely postpone the poll.
+    private boolean eventReadQueued;
+    private final Runnable eventInspect = ()->{eventReadQueued=false;inspect();};
     private void onPageTimeout(){
         if(!working)return;
         Prefs p=new Prefs(this);
@@ -155,6 +158,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         service.manualSession=manual;service.manualReadOnly=readOnly;service.manualRetryApproved=retryApproved;
         service.day = LocalDate.now(Policy.ZONE).toString();
         service.key = service.day + ":" + service.phase.name();
+        prefs.attendanceHint(service.day,service.phase,"");
         service.lockAttendanceToken = LockLab.live(context,LockLab.id(context)) && LockLab.prefs(context).getBoolean("allow_attendance",false) ? LockLab.id(context) : "";
         service.attemptId=UUID.randomUUID().toString();service.lastStage="CHROME_NOT_VISIBLE";service.seenStages.clear();
         service.evidence=new ReadEvidence();service.lastDiagnostic="";service.diagnosticCount=0;service.pollCount=0;
@@ -175,7 +179,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if (navigatingWifi && "com.android.settings".equals(string(event.getPackageName()))) { navigateWifi(); return; }
         if (working && "com.android.chrome".equals(string(event.getPackageName()))) {
             lastChromeEventAt=SystemClock.elapsedRealtime();
-            handler.removeCallbacks(tick); handler.postDelayed(tick, 300);
+            if(!eventReadQueued){eventReadQueued=true;handler.postDelayed(eventInspect,80);}
         }
     }
     private void inspect() {
@@ -233,8 +237,6 @@ public final class ChromeAttendanceService extends AccessibilityService {
             fail("Chrome 인증 확인 필요", "평소 인증해 둔 Chrome 일반 탭에서 출석 화면이 열리는지 확인해 주세요","CHROME_AUTH_REQUIRED"); return;
         }
         if (pageSeen == 0) pageSeen = SystemClock.elapsedRealtime();
-        // Wait for the site's asynchronous course and attendance checks before considering a button.
-        if (SystemClock.elapsedRealtime() - pageSeen < 1800) {stage("PAGE_SETTLING");return;}
         try { if (!ChromePage.date(text).toString().equals(day)) { stage("DATE_MISMATCH");traceLock("출결일 불일치 · 오늘 기록이 아니어서 클릭 보류"); return; } }
         catch (RuntimeException e) { stage("DATE_UNREADABLE");traceLock("출결일 읽기 대기 · 사이트 화면 형식 확인 필요"); return; }
         Policy.Record record;
@@ -246,6 +248,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
                 prefs.raw.edit().remove("chrome_pending").remove("chrome_pending_at").apply();
                 String title = phase == Policy.Phase.ENTRY ? "입실 완료" : "퇴실 완료";
                 String time = phase == Policy.Phase.ENTRY ? record.in() : record.out();
+                prefs.attendanceHint(day,phase,"");
                 prefs.status(title + " · 감시 종료", "Chrome 사이트 기록 " + time);
                 prefs.log(title + " " + time);
                 diagnostic("SITE_TIME_OBSERVED",false);
@@ -256,6 +259,8 @@ public final class ChromeAttendanceService extends AccessibilityService {
                 finishWork(); ScheduleController.reconcile(this); return;
             }
         }
+        // Existing confirmed records can be read immediately. Only a NEW click needs settling.
+        if (SystemClock.elapsedRealtime() - pageSeen < 1800) {stage("PAGE_SETTLING");return;}
         if(manualSession&&manualReadOnly){
             prefs.status("출결 기록 확인",phase==Policy.Phase.ENTRY?"아직 입실 완료 시간을 확인하지 못했어요.":"아직 퇴실 완료 시간을 확인하지 못했어요. 실제 미처리를 확인한 뒤 다시 실행해 주세요.");
             DiagnosticLog.add(this,DiagnosticLog.Event.MANUAL_FINISHED,phase,"RECORD_NOT_CONFIRMED");finishWork();return;
@@ -344,7 +349,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         return null;
     }
     private static boolean click(AccessibilityNodeInfo node) { return node.performAction(AccessibilityNodeInfo.ACTION_CLICK); }
-    private org.json.JSONObject attemptDetails(){org.json.JSONObject d=new org.json.JSONObject();try{d.put("attempt_id",attemptId).put("diagnostic_version",2);}catch(org.json.JSONException ignored){}return d;}
+    private org.json.JSONObject attemptDetails(){org.json.JSONObject d=new org.json.JSONObject();try{d.put("attempt_id",attemptId).put("diagnostic_version",3).put("page_visible_ms",pageSeen==0?-1:Math.max(0,SystemClock.elapsedRealtime()-pageSeen));}catch(org.json.JSONException ignored){}return d;}
     private String owner(AccessibilityNodeInfo node){
         if(node==null)return "ROOT_UNAVAILABLE";
         String pkg=string(node.getPackageName());
@@ -441,10 +446,28 @@ public final class ChromeAttendanceService extends AccessibilityService {
         finishWork();
     }
     private void finishWork() {
-        working = false; manualSession=false;manualReadOnly=false;manualRetryApproved=false;lockAttendanceToken=""; handler.removeCallbacks(timeout); handler.removeCallbacks(tick);
+        working = false; manualSession=false;manualReadOnly=false;manualRetryApproved=false;lockAttendanceToken=""; handler.removeCallbacks(timeout); handler.removeCallbacks(tick); handler.removeCallbacks(eventInspect);eventReadQueued=false;
         if (!navigatingWifi && settingsTarget==null && lockProbe.isEmpty()) events(false);
         Runnable done = finished; finished = null;
         if (done != null) done.run();
+    }
+    /** Returning to our own activity ends a now-unreadable Chrome attempt instead of waiting 70 seconds. */
+    public static void returnedToAttendanceApp(){
+        ChromeAttendanceService s=instance;if(s==null||!s.working)return;
+        // A queued Chrome event may already have confirmed the record; never replace that time with a hint.
+        Prefs p=new Prefs(s);Policy.Record record=p.history(java.time.LocalDate.parse(s.day));
+        boolean confirmed=record!=null&&(s.phase==Policy.Phase.ENTRY?record.checkedIn():record.checkedOut());
+        if(!confirmed){
+            boolean submitted=s.clickAttempted||s.key.equals(p.raw.getString("chrome_pending",""));
+            String hint=submitted?"결과 미확인 · Chrome 기록 확인 필요":"시각 미확인 · Chrome에서 잠시 기다려 주세요";
+            p.attendanceHint(s.day,s.phase,hint);p.status("출결 시각 미확인",hint);
+            s.evidence=new ReadEvidence();s.evidence.owner="OWN_APP";s.evidence.focusedOwner="OWN_APP";
+            s.evidence.operation="ACTIVITY_RESUMED";s.evidence.readState="APP_RETURNED";
+            s.diagnostic("RETURNED_TO_APP_BEFORE_RESULT",true);
+            DiagnosticLog.add(s,DiagnosticLog.Event.ATTEMPT_CANCELLED,s.phase,"USER_RETURNED_TO_APP",s.attemptDetails());
+            if(submitted)TrafficGuard.pause(s,s.phase,"RETURNED_AFTER_CLICK");else TrafficGuard.deferAfterReturn(s,s.phase);
+        }
+        s.finishWork();
     }
     /** An explicit OFF stops manual/activation work too, while retaining any durable click marker. */
     public static void cancelForReservationOff(){

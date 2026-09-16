@@ -25,6 +25,7 @@ final class TrafficGuard {
         boolean paused=!newDay&&p.getBoolean("paused:"+key,false);
         long common=AccessPolicy.remaining(wall,elapsed,boot,p.getLong("last_wall",0),p.getLong("last_elapsed",0),p.getInt("last_boot",-1),AccessPolicy.GLOBAL_GAP_MS);
         long automatic=newDay?0:AccessPolicy.remaining(wall,elapsed,boot,p.getLong("wall:"+key,0),p.getLong("elapsed:"+key,0),p.getInt("boot:"+key,-1),AccessPolicy.retryGap(count));
+        if(!newDay)automatic=Math.max(automatic,AccessPolicy.remaining(wall,elapsed,boot,p.getLong("defer_wall:"+key,0),p.getLong("defer_elapsed:"+key,0),p.getInt("defer_boot:"+key,-1),AccessPolicy.retryGap(1)));
         AccessPolicy.Decision decision=AccessPolicy.decide(kind,total,count,paused,common,automatic);
         if(claim&&decision.allowed()){
             SharedPreferences.Editor edit=p.edit();
@@ -35,6 +36,13 @@ final class TrafficGuard {
         }
         if(claim&&!decision.allowed())DiagnosticLog.add(c,DiagnosticLog.Event.ACCESS_BLOCKED,phase,kind+":"+decision.reason());
         return decision;
+    }
+    /** A user returning before a click gets a bounded automatic cooldown; explicit manual actions remain available. */
+    static synchronized void deferAfterReturn(Context c,Policy.Phase phase){
+        if(phase==Policy.Phase.IDLE)return;
+        prefs(c).edit().putLong("defer_wall:"+phase,System.currentTimeMillis()).putLong("defer_elapsed:"+phase,SystemClock.elapsedRealtime())
+            .putInt("defer_boot:"+phase,Settings.Global.getInt(c.getContentResolver(),Settings.Global.BOOT_COUNT,-1)).commit();
+        DiagnosticLog.add(c,DiagnosticLog.Event.PRECLICK_DEFERRED,phase,"USER_RETURNED_TO_APP");
     }
     static void pause(Context c,Policy.Phase phase){pause(c,phase,"RESULT_UNCONFIRMED");}
     static synchronized void pause(Context c,Policy.Phase phase,String reason){

@@ -36,6 +36,7 @@ final class ChromeDiagnostics {
     }
     static String diagnosis(String owner,boolean interactive,boolean locked,String readError,String wifi,
                             String address,String signal,int visible,String button,String stage) {
+        if("RETURNED_TO_APP_BEFORE_RESULT".equals(stage))return "APP_RETURNED_BEFORE_RECORD";
         if(!"NONE".equals(readError))return "LOCAL_READ_ERROR";
         if(!interactive||locked)return "SCREEN_LOCKED_OR_OFF";
         if(!"ALLOWED".equals(wifi)&&!"NOT_OBSERVED".equals(wifi))return "WIFI_PREREQUISITE";
