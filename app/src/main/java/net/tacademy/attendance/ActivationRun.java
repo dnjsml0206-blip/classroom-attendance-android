@@ -22,8 +22,9 @@ final class ActivationRun {
             Prefs current=new Prefs(activity);
             if(activity.isFinishing()||activity.isDestroyed()||!current.enabled()||!current.auto()||!day.equals(LocalDate.now(Policy.ZONE).toString()))return;
             DiagnosticLog.add(activity,DiagnosticLog.Event.ACTIVATION_FIRED,selected,"EXPLICIT_ENABLE");
-            // The explicit activation requests one retry; Chrome must first read today's actual record.
-            ChromeAttendanceService.beginManual(activity,selected,false,true);
+            // Enabling a reservation must not authorize a duplicate pending click after an OFF/ON cycle.
+            boolean pendingClick=(day+":"+selected).equals(current.raw.getString("chrome_pending",""));
+            ChromeAttendanceService.beginManual(activity,selected,pendingClick,false);
             ScheduleController.reconcile(activity);
         };
         DiagnosticLog.add(activity,DiagnosticLog.Event.ACTIVATION_QUEUED,phase,"FIVE_SECOND_DELAY");

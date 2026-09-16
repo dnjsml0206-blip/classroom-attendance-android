@@ -51,7 +51,11 @@ public final class ThemeChecks {
             check(value("todayWifi").equals("와이파이 미연결"),"Unmatched Wi-Fi shows the warning label");
             runOnMainSync(()->((ScrollView)field("homeScroll")).fullScroll(View.FOCUS_DOWN));SystemClock.sleep(300);capture("wifi-warning-warm.png");
             View panel=activity.getWindow().getDecorView().findViewWithTag("today-wifi-panel");ViewGroup parent=(ViewGroup)panel.getParent();
-            check(parent.getChildAt(parent.getChildCount()-1)==panel,"Wi-Fi warning remains the last Today card");
+            check("today-header".equals(parent.getTag())&&parent.getChildAt(parent.getChildCount()-1)==panel,"Wi-Fi status sits at the right of the Today title");
+            runOnMainSync(()->((ScrollView)field("homeScroll")).fullScroll(View.FOCUS_UP));SystemClock.sleep(250);
+            android.graphics.Rect bounds=new android.graphics.Rect();check(panel.getGlobalVisibleRect(bounds)&&bounds.right<=activity.getWindow().getDecorView().getWidth(),"Header Wi-Fi badge stays visible within the screen");
+            TextView receipt=(TextView)activity.getWindow().getDecorView().findViewWithTag("attendance-entry-time");
+            check(receipt.getVisibility()==View.VISIBLE&&receipt.getText().toString().equals("입실  08:42:00")&&receipt.getCurrentTextColor()==0xFF75736F,"Confirmed entry appears in quiet gray directly under the button");
             String observed=NetworkAccess.inspect(context).ssid();check(!observed.isEmpty(),"Emulator Wi-Fi is visible for refresh verification");
             runOnMainSync(()->prefs.ssids(Set.of(observed)));settle();check(value("todayWifi").equals("대기 중"),"Registering connected Wi-Fi refreshes warning to waiting");capture("wifi-waiting.png");
             runOnMainSync(()->{prefs.ssids(Set.of("__EMULATOR_NO_MATCH__"));((ScrollView)field("homeScroll")).fullScroll(View.FOCUS_UP);});settle();
@@ -59,6 +63,7 @@ public final class ThemeChecks {
             at(day,16,50,0);
             check(theme()==HomeTheme.NIGHT && value("inTime").equals("08:42:00") && value("todayLog").contains("입실 완료"),
                 "Visible screen switches automatically and preserves records and logs");
+            check(((TextView)activity.getWindow().getDecorView().findViewWithTag("attendance-entry-time")).getCurrentTextColor()==0xFFA8ADB6,"Night receipt uses a readable soft gray");
             artworkStates("night");
             capture("today-night.png");
             runOnMainSync(()->((ScrollView)field("homeScroll")).fullScroll(View.FOCUS_DOWN));SystemClock.sleep(300);capture("wifi-warning-night.png");
@@ -87,6 +92,7 @@ public final class ThemeChecks {
             at(day.plusDays(1),0,0,0);
             check(theme()==HomeTheme.WARM && value("inTime").equals("—") && value("todayLog").equals("아직 확인된 출석 기록이 없습니다."),
                 "Midnight resets the theme and loads the new day's records");
+            check(activity.getWindow().getDecorView().findViewWithTag("attendance-entry-time").getVisibility()==View.GONE,"Next day does not show yesterday's receipt below the button");
             runOnMainSync(() -> activity.moveTaskToBack(true));
             clock.instant=day.atTime(20,0).atZone(Policy.ZONE).toInstant();
             context.startActivity(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)); settle();

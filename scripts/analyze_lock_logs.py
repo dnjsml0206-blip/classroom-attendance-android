@@ -167,7 +167,7 @@ def render(rows, skipped):
                   "CLICK_PLANNED": "클릭 직전 기록", "BUTTON_FAILED": "클릭 요청 거절", "CONFIRM_REQUEST": "퇴실 확인 요청",
                   "WAKE_REQUESTED": "화면 깨우기 요청", "WAKE_VISIBLE": "깨우기 화면 포커스", "WAKE_BLOCKED": "화면 깨우기 차단",
                   "WAKE_AUTH_REQUIRED": "사용자 인증 필요", "WAKE_DISMISS_REQUEST": "시스템 잠금 해제 요청",
-                  "WAKE_DISMISS_RESULT": "시스템 잠금 해제 응답", "WAKE_FINISHED": "잠금 처리 종료", "PAGE_RECOVERY_WAIT": "클릭 전 화면 복구 대기", "PRECLICK_DEFERRED": "클릭 전 일시 중단", "CHROME_DIAGNOSTIC": "화면·사이트 관찰", "ATTEMPT_FAILED": "출결 시도 중단 진단"}
+                  "WAKE_DISMISS_RESULT": "시스템 잠금 해제 응답", "WAKE_FINISHED": "잠금 처리 종료", "PAGE_RECOVERY_WAIT": "클릭 전 화면 복구 대기", "PRECLICK_DEFERRED": "클릭 전 일시 중단", "CHROME_DIAGNOSTIC": "화면·사이트 관찰", "ATTEMPT_FAILED": "출결 시도 중단 진단", "ATTEMPT_CANCELLED": "사용자가 출결 확인 취소"}
         lines += ["", "## 일반 출결 동작", "", f"일반 동작 {len(events)}건. Chrome 내부 HTTP 요청 건수와 다릅니다."]
         for code, label in labels.items():
             lines.append(f"- {label}: {counts[code]}건")

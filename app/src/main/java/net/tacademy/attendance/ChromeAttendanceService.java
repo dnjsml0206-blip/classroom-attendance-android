@@ -446,6 +446,15 @@ public final class ChromeAttendanceService extends AccessibilityService {
         Runnable done = finished; finished = null;
         if (done != null) done.run();
     }
+    /** An explicit OFF stops manual/activation work too, while retaining any durable click marker. */
+    public static void cancelForReservationOff(){
+        if(instance==null||!instance.working)return;
+        ChromeAttendanceService s=instance;org.json.JSONObject d=s.attemptDetails();
+        try{d.put("click_attempted",s.clickAttempted||s.clicked).put("click_accepted",s.clicked)
+            .put("pending_click",s.key!=null&&s.key.equals(new Prefs(s).raw.getString("chrome_pending","")));}catch(org.json.JSONException ignored){}
+        DiagnosticLog.add(s,DiagnosticLog.Event.ATTEMPT_CANCELLED,s.phase,"RESERVATION_OFF",d);
+        s.finishWork();
+    }
     public static void cancelWork() { if (instance != null) instance.finishWork(); }
     public static void launchLockTest(Context context, Intent intent) {
         Context source=instance!=null?instance:context;

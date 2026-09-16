@@ -30,7 +30,7 @@ public final class MainActivity extends Activity {
     private LinearLayout todayWifiPanel;
     private HomeTheme homeTheme;
     private StandSceneView reservationScene;
-    private TextView reservationState;
+    private TextView reservationState, entryReceipt, exitReceipt;
     private Button enterNow, leaveNow;
     private LocalDate homeDay;
     private String homeCheckout, homeEntryEnd;
@@ -143,8 +143,13 @@ public final class MainActivity extends Activity {
             heading.addView(text("ATTENDANCE MATE", 11, homeTheme.accent, true), new LinearLayout.LayoutParams(0, -2, 1));
             TextView mode = text(night ? "NIGHT" : "DAYLIGHT", 10, homeTheme.accent, true);
             mode.setLetterSpacing(.12f); heading.addView(mode); content.addView(heading); gap(content, 8);
-            content.addView(text("오늘 출결", 29, homeTheme.ink, true)); gap(content, 4);
-            content.addView(text(now.format(DateTimeFormatter.ofPattern("M월 d일 EEEE", Locale.KOREAN)), 13, homeTheme.muted, false));
+            LinearLayout titleRow=new LinearLayout(this);titleRow.setTag("today-header");titleRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout titles=new LinearLayout(this);titles.setOrientation(LinearLayout.VERTICAL);
+            titles.addView(text("오늘 출결",29,homeTheme.ink,true));gap(titles,4);
+            titles.addView(text(now.format(DateTimeFormatter.ofPattern("M월 d일 EEEE",Locale.KOREAN)),13,homeTheme.muted,false));
+            titleRow.addView(titles,new LinearLayout.LayoutParams(0,-2,1));
+            LinearLayout.LayoutParams wifiParams=new LinearLayout.LayoutParams(dp(140),-2);wifiParams.leftMargin=dp(10);
+            titleRow.addView(wifiBadge(),wifiParams);content.addView(titleRow);
             gap(content, 18); home();
         } else {
             content.addView(text("T  /  ATTENDANCE MATE", 12, TEAL, true)); gap(content, 10);
@@ -219,33 +224,53 @@ public final class MainActivity extends Activity {
         LinearLayout quick=new LinearLayout(this);
         enterNow=attendanceButton("☀  입실하기",Policy.Phase.ENTRY);enterNow.setTag("attendance-enter-now");
         leaveNow=attendanceButton("☾  퇴실하기",Policy.Phase.CHECKOUT);leaveNow.setTag("attendance-leave-now");
-        LinearLayout.LayoutParams enterParams=new LinearLayout.LayoutParams(0,dp(60),1);enterParams.rightMargin=dp(8);
-        quick.addView(enterNow,enterParams);quick.addView(leaveNow,new LinearLayout.LayoutParams(0,dp(60),1));state.addView(quick);
+        LinearLayout enterColumn=new LinearLayout(this);enterColumn.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout leaveColumn=new LinearLayout(this);leaveColumn.setOrientation(LinearLayout.VERTICAL);
+        enterColumn.addView(enterNow,new LinearLayout.LayoutParams(-1,dp(60)));
+        leaveColumn.addView(leaveNow,new LinearLayout.LayoutParams(-1,dp(60)));
+        entryReceipt=receiptLabel("attendance-entry-time");exitReceipt=receiptLabel("attendance-exit-time");
+        enterColumn.addView(entryReceipt,new LinearLayout.LayoutParams(-1,-2));leaveColumn.addView(exitReceipt,new LinearLayout.LayoutParams(-1,-2));
+        LinearLayout.LayoutParams enterParams=new LinearLayout.LayoutParams(0,-2,1);enterParams.rightMargin=dp(8);
+        quick.addView(enterColumn,enterParams);quick.addView(leaveColumn,new LinearLayout.LayoutParams(0,-2,1));state.addView(quick);
         TextView quickHint=text("버튼을 누르면 Chrome에서 한 번 처리해요.",11,homeTheme.muted,false);quickHint.setPadding(0,dp(7),0,0);state.addView(quickHint);
         gap(state, 10);
         state.addView(button("달력에서 출결 조회  ›", true, this::attendanceCalendar), new LinearLayout.LayoutParams(-1, -2));
         LinearLayout log = card("오늘 출석 기록");
         todayLog = text("", 13, homeTheme.muted, false); todayLog.setLineSpacing(dp(8), 1); log.addView(todayLog);
-        todayWifiPanel=card("");todayWifiPanel.setTag("today-wifi-panel");
-        todayWifiPanel.setOrientation(LinearLayout.HORIZONTAL);todayWifiPanel.setGravity(Gravity.CENTER_VERTICAL);
-        todayWifiPanel.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
-        todayWifiIcon=text("!",24,homeTheme.ink,true);todayWifiIcon.setGravity(Gravity.CENTER);
-        todayWifiIcon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(dp(44),dp(44));iconParams.rightMargin=dp(14);
-        todayWifiPanel.addView(todayWifiIcon,iconParams);
-        LinearLayout wifiLabels=new LinearLayout(this);wifiLabels.setOrientation(LinearLayout.VERTICAL);
-        todayWifi=text("",20,homeTheme.ink,true);todayWifi.setTag("today-wifi");wifiLabels.addView(todayWifi);
-        todayWifiHint=text("",13,homeTheme.muted,false);gap(wifiLabels,4);wifiLabels.addView(todayWifiHint);
-        todayWifiPanel.addView(wifiLabels,new LinearLayout.LayoutParams(0,-2,1));
         updateHome();
     }
 
+    private LinearLayout wifiBadge(){
+        todayWifiPanel=new LinearLayout(this);todayWifiPanel.setTag("today-wifi-panel");
+        todayWifiPanel.setOrientation(LinearLayout.HORIZONTAL);todayWifiPanel.setGravity(Gravity.CENTER_VERTICAL);
+        todayWifiPanel.setPadding(dp(10),dp(9),dp(10),dp(9));todayWifiPanel.setMinimumHeight(dp(52));
+        todayWifiPanel.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        todayWifiIcon=text("!",13,homeTheme.ink,true);todayWifiIcon.setGravity(Gravity.CENTER);
+        todayWifiIcon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(dp(22),dp(22));iconParams.rightMargin=dp(7);
+        todayWifiPanel.addView(todayWifiIcon,iconParams);
+        LinearLayout labels=new LinearLayout(this);labels.setOrientation(LinearLayout.VERTICAL);
+        todayWifiHint=text("WI-FI",9,homeTheme.muted,true);todayWifiHint.setLetterSpacing(.08f);labels.addView(todayWifiHint);
+        todayWifi=text("",12,homeTheme.ink,true);todayWifi.setTag("today-wifi");labels.addView(todayWifi);
+        todayWifiPanel.addView(labels,new LinearLayout.LayoutParams(0,-2,1));return todayWifiPanel;
+    }
+    private TextView receiptLabel(String tag){
+        TextView label=text("",12,homeTheme==HomeTheme.NIGHT?0xFFA8ADB6:0xFF75736F,false);
+        label.setTag(tag);label.setGravity(Gravity.CENTER);label.setFontFeatureSettings("tnum");
+        label.setPadding(0,dp(7),0,0);label.setVisibility(View.GONE);return label;
+    }
+    private void showReceipt(TextView label,String name,String time){
+        setIfChanged(label,time.isEmpty()?"":name+"  "+time);label.setVisibility(time.isEmpty()?View.GONE:View.VISIBLE);
+        label.setContentDescription(time.isEmpty()?"":name+" 확인 시각 "+time);
+    }
     private Button attendanceButton(String label,Policy.Phase phase){
         Button button=button(label,false,()->manualAttendance(phase));boolean night=homeTheme==HomeTheme.NIGHT;
         button.setTextSize(16);button.setTypeface(null,Typeface.BOLD);button.setBackground(shape(phase==Policy.Phase.ENTRY?(night?0xFF624B35:0xFFFFDEB8):(night?0xFF354665:0xFFE2E6FB),22));
         button.setTextColor(phase==Policy.Phase.ENTRY?(night?0xFFFFDEA3:0xFF794C24):(night?0xFFDAE2FF:0xFF515D91));return button;
     }
     private void manualAttendance(Policy.Phase phase){
+        Policy.Record confirmed=prefs.history(LocalDate.now(Policy.ZONE));
+        if(confirmed!=null&&(phase==Policy.Phase.ENTRY?confirmed.checkedIn():confirmed.checkedOut())){updateHome();return;}
         if(ChromeAttendanceService.busy()){toast("출결 결과를 확인하고 있어요. 잠시 기다려 주세요.");return;}
         String key=LocalDate.now(Policy.ZONE)+":"+phase;
         if(key.equals(prefs.raw.getString("chrome_pending",""))){
@@ -285,9 +310,10 @@ public final class MainActivity extends Activity {
             : "설정에서 출석 예약을 켜 주세요.";
         if (MonitorService.running) description = prefs.raw.getString("detail", description);
         boolean busy=ChromeAttendanceService.busy()||ActivationRun.pending();
-        if(ActivationRun.pending()){title=ActivationRun.label();description="완료 기록을 먼저 확인하고, 미처리이면 한 번 눌러요.";}
+        if(ActivationRun.pending()){title=ActivationRun.label();description="완료 기록을 먼저 확인해요. 이전 요청이 있으면 중복으로 누르지 않아요.";}
         setIfChanged(enterNow,!entry.isEmpty()?"✓  입실 완료":"☀  입실하기");enterNow.setEnabled(entry.isEmpty()&&!busy);enterNow.setAlpha(enterNow.isEnabled()?1f:.55f);
         setIfChanged(leaveNow,!exit.isEmpty()?"✓  퇴실 완료":"☾  퇴실하기");leaveNow.setEnabled(exit.isEmpty()&&!busy);leaveNow.setAlpha(leaveNow.isEnabled()?1f:.55f);
+        showReceipt(entryReceipt,"입실",entry);showReceipt(exitReceipt,"퇴실",exit);
         setIfChanged(status, title); setIfChanged(detail, description);
         setIfChanged(inTime, entry.isEmpty() ? "—" : entry); setIfChanged(outTime, exit.isEmpty() ? "—" : exit);
         // Show confirmed attendance times; operational diagnostics stay in their existing log.
@@ -301,21 +327,20 @@ public final class MainActivity extends Activity {
         int wifiBackground=matched?(night?0xFF193A37:0xFFE5F3EC):(night?0xFF432D24:0xFFFFE7D2);
         int wifiBorder=matched?(night?0xFF3D7468:0xFF9ACCB8):(night?0xFFE89756:0xFFD97A39);
         setIfChanged(todayWifi,matched?"대기 중":"와이파이 미연결");
-        setIfChanged(todayWifiHint,matched?"대상 Wi-Fi 연결됨":"등록한 강의실 Wi-Fi를 연결해 주세요");
+        setIfChanged(todayWifiHint,matched?"WI-FI 연결됨":"WI-FI 확인 필요");
         setIfChanged(todayWifiIcon,matched?"✓":"!");
         todayWifi.setTextColor(wifiInk);todayWifiHint.setTextColor(wifiInk);todayWifiIcon.setTextColor(wifiInk);
         todayWifiIcon.setBackground(shape(matched?(night?0xFF28564B:0xFFC7E6D9):(night?0xFF66402B:0xFFF9C49A),22));
-        GradientDrawable wifiShape=shape(wifiBackground,20);wifiShape.setStroke(dp(matched?1:2),wifiBorder);todayWifiPanel.setBackground(wifiShape);
+        GradientDrawable wifiShape=shape(wifiBackground,16);wifiShape.setStroke(dp(1),wifiBorder);todayWifiPanel.setBackground(wifiShape);
         todayWifiPanel.setContentDescription("대상 와이파이 인식 상태 · "+todayWifi.getText()+" · "+todayWifiHint.getText());
     }
 
     private void setAttendanceReservation(boolean enabled) {
         int returnTab=selected;
         pendingStart = false;
-        if (!enabled && !prefs.enabled()) { render(returnTab); return; }
-        if(enabled&&ChromeAttendanceService.busy()){toast("출결 결과를 확인 중이에요. 잠시 기다려 주세요.");return;}
         if (!enabled) {
-            ActivationRun.cancel();prefs.enabled(false); ScheduleController.reconcile(this);
+            ActivationRun.cancel();prefs.enabled(false);
+            ChromeAttendanceService.cancelForReservationOff();ScheduleController.reconcile(this);
             Notices.wifi(this, false, ""); prefs.log("출석 예약 꺼짐"); render(returnTab); return;
         }
         if (prefs.ssids().isEmpty() || prefs.days().isEmpty()) { toast("Wi-Fi와 수업 요일을 먼저 등록해 주세요"); return; }
@@ -328,7 +353,8 @@ public final class MainActivity extends Activity {
         LocationManager lm = getSystemService(LocationManager.class);
         if (Build.VERSION.SDK_INT >= 28 && !lm.isLocationEnabled()) { toast("휴대폰 위치 기능을 켜 주세요"); openSettings(Settings.ACTION_LOCATION_SOURCE_SETTINGS); return; }
         prefs.enabled(true);prefs.raw.edit().putBoolean("auto",true).apply();prefs.log("출석 예약 켜짐");
-        boolean immediate=ActivationRun.start(this);ScheduleController.reconcile(this);render(immediate?0:returnTab);
+        boolean immediate=!ChromeAttendanceService.busy()&&ActivationRun.start(this);
+        ScheduleController.reconcile(this);render(immediate?0:returnTab);
     }
 
     private void reservationSettings() {
@@ -348,7 +374,7 @@ public final class MainActivity extends Activity {
         }
         automation.addView(choices);
         note(automation,ActivationRun.pending()?ActivationRun.label():prefs.enabled() ? "예약 켜짐 · 출석 시간에 자동 시작" : "예약 꺼짐");
-        note(automation,"켜기를 누르면 자동 클릭도 켜지고, 지금 가능한 미처리 출결을 5초 뒤 한 번 실행해요. 이전 요청이 있어도 실제 완료 기록을 먼저 확인해요. 예약이 이미 켜져 있어도 다시 누를 수 있어요.");
+        note(automation,"켜기를 누르면 자동 클릭도 켜지고, 지금 가능한 미처리 출결을 5초 뒤 한 번 실행해요. 이전 요청이 있으면 완료 기록만 먼저 확인해요. 예약이 이미 켜져 있어도 다시 누를 수 있어요.");
         String checkoutEnd = LocalTime.parse(prefs.checkout()).plusMinutes(prefs.retryMinutes()).format(DateTimeFormatter.ofPattern("HH:mm"));
         note(automation,"자동 감시는 수업일의 아래 시간에만 작동합니다.\n입실 " + prefs.start() + "–" + prefs.end()
             + " · 퇴실 " + Policy.checkoutStartTime(prefs.checkout()) + "–" + checkoutEnd + "\n출석 완료 또는 시간 종료 시 GPS 감시도 멈춥니다.");

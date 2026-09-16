@@ -42,8 +42,12 @@ final class ReplicaChecks {
         check(NetworkAccess.inspect(c).allowed(),"Real network guard passes using the emulator Wi-Fi");
         if(checkout)p.raw.edit().putString("record_day",LocalDate.now(Policy.ZONE).toString()).putString("in","08:45:00").commit();
         // Automatic entry uses unchanged production launch/address/date/click/result code.
-        ui(()->{if(checkout)ChromeAttendanceService.beginManual(main,Policy.Phase.CHECKOUT,false,false);else ChromeAttendanceService.begin(main,null);});
-        await(()->ChromeAttendanceService.busy(),3000,"Production attendance session started");
+        if(scenario.equals("pending-read")){
+            p.raw.edit().putString("chrome_pending",LocalDate.now(Policy.ZONE)+":ENTRY").putLong("chrome_pending_at",System.currentTimeMillis()-10000).commit();
+            ui(()->{main.getWindow().getDecorView().findViewWithTag("reservation-stand").performClick();main.getWindow().getDecorView().findViewWithTag("reservation-stand").performClick();});
+            check(p.enabled()&&ActivationRun.pending(),"Real stand OFF/ON re-enables the reservation and queues its countdown");
+        }else ui(()->{if(scenario.equals("already-in"))main.getWindow().getDecorView().findViewWithTag("attendance-enter-now").performClick();else if(checkout)ChromeAttendanceService.beginManual(main,Policy.Phase.CHECKOUT,false,false);else ChromeAttendanceService.begin(main,null);});
+        await(()->ChromeAttendanceService.busy(),scenario.equals("pending-read")?10000:3000,"Production attendance session started");
         if(scenario.startsWith("focus")){
             await(()->hasReason("PAGE_SETTLING"),10000,"Replica page visible before focus interruption");
             ui(()->c.startActivity(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP)));
@@ -74,6 +78,13 @@ final class ReplicaChecks {
             JSONObject state=control("/state");
             if(Set.of("auth","wrong-date","server-error","no-course","auth-message","denied","rate-limit","human-check","network-error").contains(scenario)){
                 check(state.getInt("entries")==0,"Invalid page never submits entry");check(!p.checkedInToday(),"Invalid page never reports success");
+            }else if(scenario.equals("pending-read")){
+                check(state.getInt("entries")==0&&countEvent("BUTTON_REQUEST")==0&&!p.checkedInToday(),"OFF/ON of an uncertain click only reads the page; it never resubmits or invents success");
+                check((LocalDate.now(Policy.ZONE)+":ENTRY").equals(p.raw.getString("chrome_pending",""))&&countEvent("MANUAL_FINISHED")==1,"Record-only activation keeps the uncertain click marker after the read");
+            }else if(scenario.equals("already-in")){
+                check(p.checkedInToday()&&state.getInt("entries")==0&&countEvent("BUTTON_REQUEST")==0,"Existing site entry is read without submitting another entry");
+                ui(()->c.startActivity(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)));
+                await(()->{var v=main.getWindow().getDecorView().findViewWithTag("attendance-entry-time");return v instanceof android.widget.TextView&&v.getVisibility()==android.view.View.VISIBLE&&((android.widget.TextView)v).getText().toString().equals("입실  08:45:00");},5000,"Returning from Chrome displays its confirmed entry time below the button");
             }else if(scenario.equals("no-result")){
                 check(state.getInt("entries")==1,"Unconfirmed result is submitted only once");check(!p.checkedInToday(),"Missing server time is not success");
                 check(TrafficGuard.prefs(c).getBoolean("paused:ENTRY",false)&&!p.raw.getString("chrome_pending","").isEmpty(),"Unconfirmed click retains pause and durable pending marker");
@@ -126,5 +137,5 @@ final class ReplicaChecks {
         Bitmap b=test.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES).takeScreenshot();if(b!=null){try(var f=new FileOutputStream(new File(dir,scenario+".png"))){b.compress(Bitmap.CompressFormat.PNG,100,f);}b.recycle();}
     }
     private void dump(android.view.accessibility.AccessibilityNodeInfo n,StringBuilder out,int depth){if(n==null||depth>40)return;out.append(" ".repeat(depth)).append(n.getClassName()).append(" text=[").append(n.getText()).append("] desc=[").append(n.getContentDescription()).append("] visible=").append(n.isVisibleToUser()).append(" enabled=").append(n.isEnabled()).append(" clickable=").append(n.isClickable()).append(" children=").append(n.getChildCount()).append('\n');for(int i=0;i<n.getChildCount();i++)dump(n.getChild(i),out,depth+1);}
-    @SuppressWarnings("unchecked") private void restore(){if(c==null||saved.isEmpty())return;ui(()->{ChromeAttendanceService.cancelWork();new Prefs(c).enabled(false);AlarmScheduler.cancel(c);c.stopService(new Intent(c,MonitorService.class));if(main!=null)main.finish();for(var group:saved.entrySet()){var edit=c.getSharedPreferences(group.getKey(),0).edit().clear();for(var item:group.getValue().entrySet()){var v=item.getValue();var k=item.getKey();if(v instanceof String)edit.putString(k,(String)v);else if(v instanceof Boolean)edit.putBoolean(k,(Boolean)v);else if(v instanceof Long)edit.putLong(k,(Long)v);else if(v instanceof Integer)edit.putInt(k,(Integer)v);else if(v instanceof Float)edit.putFloat(k,(Float)v);else if(v instanceof Set)edit.putStringSet(k,new HashSet<>((Set<String>)v));}edit.commit();}});}
+    @SuppressWarnings("unchecked") private void restore(){if(c==null||saved.isEmpty())return;ui(()->{ActivationRun.cancel();ChromeAttendanceService.cancelWork();new Prefs(c).enabled(false);AlarmScheduler.cancel(c);c.stopService(new Intent(c,MonitorService.class));if(main!=null)main.finish();for(var group:saved.entrySet()){var edit=c.getSharedPreferences(group.getKey(),0).edit().clear();for(var item:group.getValue().entrySet()){var v=item.getValue();var k=item.getKey();if(v instanceof String)edit.putString(k,(String)v);else if(v instanceof Boolean)edit.putBoolean(k,(Boolean)v);else if(v instanceof Long)edit.putLong(k,(Long)v);else if(v instanceof Integer)edit.putInt(k,(Integer)v);else if(v instanceof Float)edit.putFloat(k,(Float)v);else if(v instanceof Set)edit.putStringSet(k,new HashSet<>((Set<String>)v));}edit.commit();}});}
 }

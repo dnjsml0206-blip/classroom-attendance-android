@@ -45,6 +45,21 @@ final class ManualAttendanceChecks {
         main(()->{set("manualSession",false);p.enabled(true);p.raw.edit().putStringSet("days",Set.of()).commit();ScheduleController.reconcile(c);});
         check(ChromeAttendanceService.busy(),"Ending scheduled monitoring preserves observation after an accepted click");
         main(()->{p.enabled(false);ScheduleController.reconcile(c);});check(!ChromeAttendanceService.busy(),"Explicit reservation-off cancels automatic result observation");
+        // Regression: five-second activation uses a manual session, which reconcile intentionally preserves.
+        String pending=p.raw.getString("chrome_pending","");int[] finished={0};
+        main(()->{p.enabled(true);set("manualSession",true);set("working",true);set("clicked",true);set("key",pending);set("finished",(Runnable)()->finished[0]++);renderSettings();a.getWindow().getDecorView().findViewWithTag("reservation-off").performClick();});
+        check(!p.enabled()&&!ChromeAttendanceService.busy()&&finished[0]==1,"OFF button immediately ends a manual result wait and finishes it once");
+        check(pending.equals(p.raw.getString("chrome_pending",""))&&p.raw.getLong("chrome_pending_at",0)==1,"OFF preserves submitted click marker and original timestamp");
+        main(()->{a.getWindow().getDecorView().findViewWithTag("reservation-off").performClick();});
+        check(finished[0]==1&&countEvent("ATTEMPT_CANCELLED")==1,"Repeated OFF neither repeats completion nor starts another request");
+        main(()->{p.raw.edit().putStringSet("days",Set.of("1","2","3","4","5","6","7")).putStringSet("excluded",Set.of()).putString("start","00:00").putString("end","00:01").putString("checkout","00:02").putBoolean("auto",true).commit();a.getWindow().getDecorView().findViewWithTag("reservation-on").performClick();});
+        check(p.enabled()&&ActivationRun.pending(),"ON works immediately after cancelling a manual result wait");
+        main(()->{renderSettings();a.getWindow().getDecorView().findViewWithTag("reservation-off").performClick();});
+        check(!p.enabled()&&!ActivationRun.pending(),"OFF still cancels a newly queued five-second run");
+        main(()->{set("working",true);set("manualSession",true);set("clicked",false);a.getWindow().getDecorView().findViewWithTag("reservation-on").performClick();});
+        check(p.enabled()&&ChromeAttendanceService.busy()&&!ActivationRun.pending(),"Enabling future reservations during a manual run does not start a competing activation");
+        main(()->{renderSettings();a.getWindow().getDecorView().findViewWithTag("reservation-off").performClick();});
+        check(!p.enabled()&&!ChromeAttendanceService.busy(),"Explicit OFF also cancels the click-before phase of manual work");
         check(TrafficGuard.prefs(c).getInt("total",0)==AccessPolicy.DAILY_LIMIT&&DiagnosticLog.records(c).toString().split("CHROME_OPEN_REQUEST",-1).length==opens,"Manual checks never bypass the daily cap or contact attendance");
         main(()->{
             p.raw.edit().putStringSet("days",Set.of("1","2","3","4","5","6","7")).putStringSet("excluded",Set.of()).putString("start","00:00").putString("end","00:01").putString("checkout","00:02").putBoolean("auto",true).commit();
@@ -61,6 +76,10 @@ final class ManualAttendanceChecks {
         main(()->{renderTab(0);a.getWindow().getDecorView().findViewWithTag("reservation-stand").performClick();});
         SystemClock.sleep(5300);check(!ActivationRun.pending()&&!p.enabled()&&countEvent("ACTIVATION_FIRED")==fired+1,"Tapping the stand again turns OFF and cancels the countdown");
         check(DiagnosticLog.records(c).toString().split("CHROME_OPEN_REQUEST",-1).length==opens,"Activation checks never contact the attendance site");
+        main(()->{renderTab(0);p.record(LocalDate.now(Policy.ZONE).toString(),new Policy.Record("08:45:00",""));a.getWindow().getDecorView().findViewWithTag("attendance-enter-now").performClick();});
+        TextView receipt=(TextView)a.getWindow().getDecorView().findViewWithTag("attendance-entry-time");
+        check(receipt.getVisibility()==View.VISIBLE&&receipt.getText().toString().equals("입실  08:45:00"),"Entry button immediately reveals a newly confirmed time below it");
+        check(DiagnosticLog.records(c).toString().split("CHROME_OPEN_REQUEST",-1).length==opens,"Already known entry is shown without reopening Chrome");
         restore();result.putString("stream","PASS: "+count+" manual attendance and result-deadline checks. No real site access.\n");test.finish(Activity.RESULT_OK,result);
     }catch(Throwable e){try{restore();}catch(Throwable ignored){}result.putString("stream","FAIL: "+e+"\n");test.finish(Activity.RESULT_CANCELED,result);}}
     private int countEvent(String name){int result=0;var records=DiagnosticLog.records(c);for(int i=0;i<records.length();i++){var e=records.optJSONObject(i);if(e!=null&&name.equals(e.optString("event_code")))result++;}return result;}
