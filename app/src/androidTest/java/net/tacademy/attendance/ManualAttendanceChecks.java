@@ -48,9 +48,9 @@ final class ManualAttendanceChecks {
         check(TrafficGuard.prefs(c).getInt("total",0)==AccessPolicy.DAILY_LIMIT&&DiagnosticLog.records(c).toString().split("CHROME_OPEN_REQUEST",-1).length==opens,"Manual checks never bypass the daily cap or contact attendance");
         main(()->{
             p.raw.edit().putStringSet("days",Set.of("1","2","3","4","5","6","7")).putStringSet("excluded",Set.of()).putString("start","00:00").putString("end","00:01").putString("checkout","00:02").putBoolean("auto",true).commit();
-            renderSettings();a.getWindow().getDecorView().findViewWithTag("reservation-on").performClick();
+            renderTab(0);a.getWindow().getDecorView().findViewWithTag("reservation-stand").performClick();
         });
-        check(ActivationRun.pending()&&p.enabled()&&p.auto(),"Reservation ON schedules one five-second activation and enables automatic clicking");
+        check(ActivationRun.pending()&&p.enabled()&&p.auto(),"Tapping the pictured stand turns reservation ON and schedules the five-second activation");
         int fired=countEvent("ACTIVATION_FIRED");
         main(()->AttendanceEngine.request(c,true,null));SystemClock.sleep(4000);
         check(ActivationRun.pending()&&countEvent("ACTIVATION_FIRED")==fired,"No early activation or competing monitor run before five seconds");
@@ -58,13 +58,14 @@ final class ManualAttendanceChecks {
         check(!ActivationRun.pending()&&countEvent("ACTIVATION_FIRED")==fired+1&&!ChromeAttendanceService.busy(),"Five-second activation fires exactly once and still blocks missing classroom Wi-Fi");
         main(()->{renderSettings();a.getWindow().getDecorView().findViewWithTag("reservation-on").performClick();});
         check(ActivationRun.pending(),"Pressing ON again explicitly schedules a fresh activation");
-        main(()->{renderSettings();a.getWindow().getDecorView().findViewWithTag("reservation-off").performClick();});
-        SystemClock.sleep(5300);check(!ActivationRun.pending()&&!p.enabled()&&countEvent("ACTIVATION_FIRED")==fired+1,"OFF cancels the countdown without a delayed hidden run");
+        main(()->{renderTab(0);a.getWindow().getDecorView().findViewWithTag("reservation-stand").performClick();});
+        SystemClock.sleep(5300);check(!ActivationRun.pending()&&!p.enabled()&&countEvent("ACTIVATION_FIRED")==fired+1,"Tapping the stand again turns OFF and cancels the countdown");
         check(DiagnosticLog.records(c).toString().split("CHROME_OPEN_REQUEST",-1).length==opens,"Activation checks never contact the attendance site");
         restore();result.putString("stream","PASS: "+count+" manual attendance and result-deadline checks. No real site access.\n");test.finish(Activity.RESULT_OK,result);
     }catch(Throwable e){try{restore();}catch(Throwable ignored){}result.putString("stream","FAIL: "+e+"\n");test.finish(Activity.RESULT_CANCELED,result);}}
     private int countEvent(String name){int result=0;var records=DiagnosticLog.records(c);for(int i=0;i<records.length();i++){var e=records.optJSONObject(i);if(e!=null&&name.equals(e.optString("event_code")))result++;}return result;}
-    private void renderSettings(){try{var method=MainActivity.class.getDeclaredMethod("render",int.class);method.setAccessible(true);method.invoke(a,1);}catch(Exception e){throw new AssertionError(e);}}
+    private void renderSettings(){renderTab(1);}
+    private void renderTab(int tab){try{var method=MainActivity.class.getDeclaredMethod("render",int.class);method.setAccessible(true);method.invoke(a,tab);}catch(Exception e){throw new AssertionError(e);}}
     private String tree(android.view.accessibility.AccessibilityNodeInfo n){if(n==null)return "";StringBuilder s=new StringBuilder().append(n.getText()).append(' ');for(int i=0;i<n.getChildCount();i++)s.append(tree(n.getChild(i)));return s.toString();}
     private void set(String key,Object value){try{Field f=ChromeAttendanceService.class.getDeclaredField(key);f.setAccessible(true);f.set(service,value);}catch(Exception e){throw new AssertionError(e);}}
     private Object get(String key){try{Field f=ChromeAttendanceService.class.getDeclaredField(key);f.setAccessible(true);return f.get(service);}catch(Exception e){throw new AssertionError(e);}}

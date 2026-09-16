@@ -86,13 +86,21 @@ public final class Prefs {
         try { return MonthAttendance.ManualStatus.valueOf(raw.getString("manual_attendance:"+day,"")); }
         catch (IllegalArgumentException e) { return null; }
     }
+    public Policy.Record manualTimes(LocalDate day){
+        String value=raw.getString("manual_times:"+day,null);if(value==null)return null;
+        try{return Policy.parseRecord(value);}catch(IllegalArgumentException e){return null;}
+    }
+    public Policy.Record calendarRecord(LocalDate day){
+        Policy.Record manual=manualAttendance(day)==null?null:manualTimes(day);return manual!=null?manual:history(day);
+    }
+    public boolean saveManualAttendance(LocalDate day,MonthAttendance.ManualStatus status){return saveManualAttendance(day,status,status==MonthAttendance.ManualStatus.ABSENT?new Policy.Record("",""):manualTimes(day));}
     @android.annotation.SuppressLint("ApplySharedPref") // Report durable save failures before closing the editor.
-    public boolean saveManualAttendance(LocalDate day, MonthAttendance.ManualStatus status) {
-        if (day==null || !day.isBefore(LocalDate.now(Policy.ZONE)))
-            throw new IllegalArgumentException("지난 날짜만 직접 기록할 수 있습니다.");
-        SharedPreferences.Editor edit=raw.edit();
-        String key="manual_attendance:"+day;
-        if (status==null) edit.remove(key); else edit.putString(key,status.name());
+    public boolean saveManualAttendance(LocalDate day, MonthAttendance.ManualStatus status,Policy.Record times) {
+        if(day==null||day.isAfter(LocalDate.now(Policy.ZONE)))throw new IllegalArgumentException("오늘과 지난 날짜만 직접 기록할 수 있습니다.");
+        if(status!=null&&times!=null)MonthAttendance.manualTimes(status,times.in(),times.out());
+        SharedPreferences.Editor edit=raw.edit();String key="manual_attendance:"+day,timeKey="manual_times:"+day;
+        if(status==null)edit.remove(key).remove(timeKey);
+        else {edit.putString(key,status.name());if(times==null)edit.remove(timeKey);else edit.putString(timeKey,times.in()+"|"+times.out());}
         return edit.commit();
     }
     public String todayLog() { return raw.getString("log:" + LocalDate.now(Policy.ZONE), ""); }

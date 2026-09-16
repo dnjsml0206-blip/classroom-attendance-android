@@ -19,12 +19,19 @@ final class MonthAttendance {
         return state(date,today,record,null,days,holidays);
     }
     static State state(LocalDate date, LocalDate today, Policy.Record record, ManualStatus manual, Set<Integer> days, Set<String> holidays) {
-        if (date.isBefore(today) && manual != null) return manual.state;
+        if (!date.isAfter(today) && manual != null) return manual.state;
         if (record != null && record.checkedOut()) return State.COMPLETE;
         if (record != null && record.checkedIn()) return State.ENTERED;
         if (holidays.contains(date.toString())) return State.HOLIDAY;
         if (!days.contains(date.getDayOfWeek().getValue())) return State.NO_CLASS;
         return date.isAfter(today) ? State.PLANNED : State.UNKNOWN;
+    }
+    static Policy.Record manualTimes(ManualStatus status,String in,String out){
+        Policy.Record record;
+        try{record=Policy.parseRecord(in.trim()+"|"+out.trim());}catch(RuntimeException e){throw new IllegalArgumentException("입실·퇴실 시간을 HH:mm 형식으로 입력해 주세요.");}
+        if(status==ManualStatus.ABSENT&&(record.checkedIn()||!record.out().isEmpty()))throw new IllegalArgumentException("결석에는 입실·퇴실 시간을 입력할 수 없습니다.");
+        if(record.checkedOut()&&LocalTime.parse(record.out()).isBefore(LocalTime.parse(record.in())))throw new IllegalArgumentException("퇴실 시간은 입실 시간보다 빠를 수 없습니다.");
+        return record;
     }
     static List<LocalDate> cells(YearMonth month) {
         List<LocalDate> cells=new ArrayList<>();

@@ -63,14 +63,25 @@ final class CalendarChecks {
             edit();main(()->dialog().getButton(AlertDialog.BUTTON_NEUTRAL).performClick());settle();
             check(value("calendar-selected-status").equals("완료")&&prefs.history(observed).out().equals("15:30:00"),"Deleting an annotation restores the original observed record");
             close();open(today,HomeTheme.WARM);
-            check(view("calendar-edit")==null,"Today does not expose historical editing");
+            check(view("calendar-edit")!=null,"Today exposes the manual status and time editor");
+            edit();choose(MonthAttendance.ManualStatus.PRESENT);setTimes("08:35","17:55");save();
+            check(value("calendar-in").equals("08:35")&&value("calendar-out").equals("17:55")&&description(today).contains("직접 입력"),"Today displays manually entered times with a source marker");
+            check(!prefs.checkedOutToday()&&prefs.history(today).in().equals("08:41:00")&&prefs.history(today).out().isEmpty(),"Manual times never mark the real automatic attendance as completed");
+            close();open(today,HomeTheme.WARM);edit();
+            check(((EditText)dialog().getWindow().getDecorView().findViewWithTag("manual-out")).getText().toString().equals("17:55"),"Reopening the editor restores saved manual times");
+            setTimes("08:35","08:34");save();
+            check(dialog().isShowing()&&((TextView)dialog().getWindow().getDecorView().findViewWithTag("manual-error")).getText().toString().contains("빠를 수")&&prefs.manualTimes(today).out().equals("17:55"),"Invalid time order stays editable and leaves the saved record unchanged");
+            setTimes("08:35","17:55");check(((TextView)dialog().getWindow().getDecorView().findViewWithTag("manual-error")).getText().length()==0,"Editing a time clears the stale validation message");capture("calendar-time-editor.png");save();capture("calendar-manual-today.png");
+            edit();choose(MonthAttendance.ManualStatus.ABSENT);save();
+            check(value("calendar-selected-status").equals("결석")&&value("calendar-in").equals("—")&&value("calendar-out").equals("—"),"Absence clears only the manual time values");
+            edit();main(()->dialog().getButton(AlertDialog.BUTTON_NEUTRAL).performClick());settle();
+            check(prefs.manualAttendance(today)==null&&prefs.manualTimes(today)==null&&value("calendar-in").equals("08:41:00"),"Removing today's correction restores the original observed time");
             close();open(today.plusDays(1),HomeTheme.WARM);
             check(view("calendar-edit")==null,"Future dates do not expose historical editing");
-            boolean[] rejected={false,false};main(()->{
-                try{prefs.saveManualAttendance(today,MonthAttendance.ManualStatus.ABSENT);}catch(IllegalArgumentException e){rejected[0]=true;}
-                try{prefs.saveManualAttendance(today.plusDays(1),MonthAttendance.ManualStatus.PRESENT);}catch(IllegalArgumentException e){rejected[1]=true;}
+            boolean[] rejected={false};main(()->{
+                try{prefs.saveManualAttendance(today.plusDays(1),MonthAttendance.ManualStatus.PRESENT);}catch(IllegalArgumentException e){rejected[0]=true;}
             });
-            check(rejected[0]&&rejected[1]&&prefs.manualAttendance(today)==null,"Storage also rejects today and future dates");
+            check(rejected[0],"Storage rejects future manual dates");
             check(prefs.checkedInToday()&&!prefs.checkedOutToday()&&prefs.history(today).in().equals("08:41:00"),"Historical editing never changes today's confirmed attendance");
             check(prefs.raw.getLong("next_alarm",0)==123456&&prefs.raw.getString("chrome_pending","").equals("sentinel")&&!prefs.enabled()&&!prefs.auto(),"Historical editing leaves reservations and click state untouched");
             check(prefs.todayLog().equals("08:41  입실 완료")&&!MonitorService.running,"Historical edits do not add today's operational logs or start monitoring");
@@ -82,6 +93,7 @@ final class CalendarChecks {
     private void edit(){main(()->view("calendar-edit").performClick());settle();}
     private void choose(MonthAttendance.ManualStatus status){main(()->((RadioButton)dialog().getWindow().getDecorView().findViewWithTag("manual-status:"+status.name())).performClick());settle();}
     private int checkedOptionId(MonthAttendance.ManualStatus status){return dialog().getWindow().getDecorView().findViewWithTag("manual-status:"+status.name()).getId();}
+    private void setTimes(String in,String out){main(()->{((EditText)dialog().getWindow().getDecorView().findViewWithTag("manual-in")).setText(in);((EditText)dialog().getWindow().getDecorView().findViewWithTag("manual-out")).setText(out);});}
     private void save(){main(()->dialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick());settle();}
     private AlertDialog dialog(){try{Field field=AttendanceCalendarActivity.class.getDeclaredField("manualDialog");field.setAccessible(true);return (AlertDialog)field.get(activity);}catch(Exception e){throw new AssertionError(e);}}
     private View view(String tag){return activity.getWindow().getDecorView().findViewWithTag(tag);}

@@ -91,6 +91,59 @@ def conclusion(mode, rows):
     return "완료 근거 부족. 자동 진입·Chrome 확인 단계와 사용자 메모 검토"
 
 
+DIAGNOSES = {
+    "LOCAL_READ_ERROR": "앱/접근성 읽기 오류 관찰",
+    "SCREEN_LOCKED_OR_OFF": "화면 꺼짐·잠금 관찰",
+    "WIFI_PREREQUISITE": "휴대폰 Wi-Fi 조건 미충족",
+    "ACCESSIBILITY_ROOT_UNAVAILABLE": "접근성 화면 없음 · 사이트 차단 여부 확인 불가",
+    "CHROME_NOT_FOREGROUND": "현재 읽은 창이 Chrome 아님 · 사이트 차단 여부 확인 불가",
+    "ADDRESS_UNVERIFIED": "대상 주소 미확인 · 사이트 차단 여부 확인 불가",
+    "PAGE_NODES_UNAVAILABLE": "화면 요소 없음 · 원인 미확정",
+    "PAGE_FORMAT_UNVERIFIED": "출결 날짜·기록 형식 미확인",
+    "BUTTON_NOT_EXPOSED": "클릭 가능한 버튼 미확인 · 원인 미확정",
+    "SITE_RESTRICTION_SHOWN": "접속 제한·거부·사람 확인 문구 관찰 · 자동화 차단 정책 여부는 미확정",
+    "SITE_AUTH_MESSAGE_SHOWN": "사이트 인증·훈련 대상 오류 문구 관찰",
+    "SITE_NETWORK_MESSAGE_SHOWN": "사이트 Wi-Fi/IP 조건 안내 관찰",
+    "BROWSER_CONNECTION_ERROR_SHOWN": "Chrome 연결·인증서 오류 표시 관찰",
+    "SERVER_ERROR_SHOWN": "서버 오류 문구 관찰",
+    "UI_ACTION_REJECTED": "Android 클릭 요청 거절",
+    "CLICK_RESULT_UNCONFIRMED": "클릭 후 출결 결과 미확인",
+    "UNDETERMINED": "특정 원인 판정 근거 없음",
+}
+SIGNALS = {code: code for code in ("NOT_OBSERVED", "NONE_RECOGNIZED", "ACCESS_DENIED", "RATE_LIMIT", "HUMAN_CHECK", "SERVER_ERROR", "TLS_ERROR", "NETWORK_ERROR", "AUTH_REQUIRED", "TRAINEE_REJECTED", "SITE_NETWORK_RESTRICTION")}
+
+
+def diagnostic_lines(events):
+    observations = [r for r in events if r.get("event_code") in ("CHROME_DIAGNOSTIC", "ATTEMPT_FAILED")]
+    if not observations:
+        return ["", "상세 화면 진단 기록 없음: 구버전 로그만으로 사이트 차단과 화면 접근 문제를 확정하지 않습니다."]
+    def enum(value, allowed):
+        return value if isinstance(value, str) and value in allowed else "UNKNOWN"
+    def number(value):
+        return str(value) if type(value) is int and 0 <= value <= 1_000_000 else "미관찰"
+    def flag(value):
+        return "예" if value is True else "아니오" if value is False else "미관찰"
+    lines = ["", "## 화면·사이트 진단", "",
+             "현재 화면과 이전 사이트 관찰은 구분합니다. 오류 문구가 없거나 Chrome 화면을 못 읽었다고 사이트 정상/차단으로 단정하지 않습니다.",
+             "403·429 등은 화면에서 인식한 문구이며 실제 HTTP 상태를 수집한 값이 아닙니다. 자동화 차단 정책 여부는 이 문구만으로 확정할 수 없습니다.", "",
+             "| 시도 / 경과 ms | 관찰 분류 | 현재 창 / 화면 켜짐 / 잠금 | 주소 / 사이트 표시 | 버튼 / 클릭 시도 / 접수 / 보류 | 마지막 사이트 표시 / 경과 ms |",
+             "|---|---|---|---|---|---|"]
+    for row in observations:
+        d = row.get("details") if isinstance(row.get("details"), dict) else {}
+        attempt = d.get("attempt_id", "")
+        attempt = attempt[:8] if isinstance(attempt, str) and re.fullmatch(r"[a-f0-9-]{36}", attempt) else "미확인"
+        label = DIAGNOSES.get(d.get("diagnosis") if isinstance(d.get("diagnosis"), str) else None, "분류 미확인")
+        if row.get("event_code") == "ATTEMPT_FAILED": label = "중단: " + label
+        owner = enum(d.get("window_state"), {"CHROME", "OWN_APP", "OTHER_APP", "SYSTEM_UI", "ROOT_UNAVAILABLE"})
+        address = enum(d.get("address_state"), {"ATTENDANCE", "AUTHENTICATION", "SITE_OTHER", "SITE_DIALOG", "OTHER_ADDRESS", "EMPTY", "HIDDEN"})
+        signal = enum(d.get("page_signal"), SIGNALS)
+        button = enum(d.get("button_state"), {"READY", "DISABLED", "LABEL_ONLY", "ABSENT", "NOT_OBSERVED"})
+        previous = enum(d.get("last_site_signal"), SIGNALS)
+        lines.append(f"| {attempt} / {number(d.get('elapsed_ms'))} | {label} | {owner} / {flag(d.get('screen_interactive'))} / {flag(d.get('keyguard_locked'))} | {address} / {signal} | {button} / {flag(d.get('click_attempted'))} / {flag(d.get('click_accepted'))} / {flag(d.get('pending_click'))} | {previous} / {number(d.get('last_site_age_ms'))} |")
+    lines += ["", "각 원본 details에는 접근성 갱신 상태·노드 수·창 수·Wi-Fi 코드·마지막 Chrome 이벤트 시각·오류 코드도 포함됩니다. 페이지 원문·계정·쿠키·다른 앱 이름은 기록하지 않습니다."]
+    return lines
+
+
 def render(rows, skipped):
     events = [r for r in rows if r.get("record_type") == "attendance_event"]
     rows = [r for r in rows if r.get("record_type") != "attendance_event"]
@@ -114,7 +167,7 @@ def render(rows, skipped):
                   "CLICK_PLANNED": "클릭 직전 기록", "BUTTON_FAILED": "클릭 요청 거절", "CONFIRM_REQUEST": "퇴실 확인 요청",
                   "WAKE_REQUESTED": "화면 깨우기 요청", "WAKE_VISIBLE": "깨우기 화면 포커스", "WAKE_BLOCKED": "화면 깨우기 차단",
                   "WAKE_AUTH_REQUIRED": "사용자 인증 필요", "WAKE_DISMISS_REQUEST": "시스템 잠금 해제 요청",
-                  "WAKE_DISMISS_RESULT": "시스템 잠금 해제 응답", "WAKE_FINISHED": "잠금 처리 종료"}
+                  "WAKE_DISMISS_RESULT": "시스템 잠금 해제 응답", "WAKE_FINISHED": "잠금 처리 종료", "PAGE_RECOVERY_WAIT": "클릭 전 화면 복구 대기", "PRECLICK_DEFERRED": "클릭 전 일시 중단", "CHROME_DIAGNOSTIC": "화면·사이트 관찰", "ATTEMPT_FAILED": "출결 시도 중단 진단"}
         lines += ["", "## 일반 출결 동작", "", f"일반 동작 {len(events)}건. Chrome 내부 HTTP 요청 건수와 다릅니다."]
         for code, label in labels.items():
             lines.append(f"- {label}: {counts[code]}건")
@@ -130,6 +183,7 @@ def render(rows, skipped):
             phase={"ENTRY":"입실","CHECKOUT":"퇴실","IDLE":"대기"}.get(event.get("phase"),"미확인")
             lines.append(f"| {stamp} | {phase} | {labels.get(event.get('event_code'),'기타 동작')} | {reason} |")
         lines += ["", "클릭 직전 기록은 클릭 실행 증거가 아니며, UI 클릭 접수와 서버 출결 완료를 구분합니다. 화면 포커스·시스템 해제 응답만으로 무인 인증 성공을 판정하지 않습니다."]
+    if events: lines += diagnostic_lines(events)
     lines += ["", "## 시험별 조건", "", "| 방식 | 접근성 연결 | 위치 항상 허용 | 출석 예약 / 자동 클릭 / 실제 출결 | Wi-Fi 진단 | 진입 지연 | 직접 조작 기록 |", "|---|---|---|---|---|---|---|"]
     def flag(value):
         return "켜짐" if value is True else "꺼짐" if value is False else "기록 없음"

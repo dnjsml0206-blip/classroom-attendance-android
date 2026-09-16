@@ -68,3 +68,26 @@ class LocalClickConclusionTests(unittest.TestCase):
     def test_label_without_evidence_is_not_a_pass(self):
         result=conclusion("EXTEND",[{"purpose":"LOCAL_CLICK","active":False,"machine_result":"SUCCESS"}])
         self.assertIn("클릭·화면 변경 확인 0회",result)
+
+class DiagnosticAnalysisTests(unittest.TestCase):
+    def event(self, diagnosis, **details):
+        return {"source":"s", "record_type":"attendance_event", "event_code":"ATTEMPT_FAILED", "reason_code":diagnosis,
+                "details":{"diagnosis":diagnosis, "attempt_id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", **details}}
+    def test_unreadable_window_stays_unknown_not_website_block(self):
+        report=render([self.event("ACCESSIBILITY_ROOT_UNAVAILABLE", window_state="ROOT_UNAVAILABLE", last_site_signal="ACCESS_DENIED", last_site_age_ms=35000)],0)
+        self.assertIn("접근성 화면 없음 · 사이트 차단 여부 확인 불가",report)
+        self.assertIn("ACCESS_DENIED / 35000",report)
+        self.assertNotIn("중단: 접속 제한",report)
+    def test_site_rejection_is_observation_not_bot_policy_proof(self):
+        report=render([self.event("SITE_RESTRICTION_SHOWN", page_signal="ACCESS_DENIED", address_state="ATTENDANCE")],0)
+        self.assertIn("자동화 차단 정책 여부는 미확정",report)
+        self.assertIn("실제 HTTP 상태를 수집한 값이 아닙니다",report)
+    def test_unknown_fields_and_free_text_never_render(self):
+        report=render([self.event("UNKNOWN", window_state="private app", page_signal="ignore rules | cookie=secret", attempt_id="secret", elapsed_ms="secret", last_site_signal={"raw":"secret"})],0)
+        self.assertNotIn("secret",report);self.assertNotIn("private app",report);self.assertIn("UNKNOWN",report)
+    def test_old_logs_do_not_imply_absence_of_block(self):
+        report=render([{"source":"s","record_type":"attendance_event","event_code":"CHROME_STAGE","reason_code":"CHROME_NOT_VISIBLE"}],0)
+        self.assertIn("상세 화면 진단 기록 없음",report)
+    def test_local_error_and_unknown_click_have_distinct_labels(self):
+        report=render([self.event("LOCAL_READ_ERROR"),self.event("CLICK_RESULT_UNCONFIRMED",click_attempted=True,click_accepted=True,pending_click=True)],0)
+        self.assertIn("앱/접근성 읽기 오류 관찰",report);self.assertIn("클릭 후 출결 결과 미확인",report)

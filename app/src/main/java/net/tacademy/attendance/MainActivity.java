@@ -29,8 +29,8 @@ public final class MainActivity extends Activity {
     private TextView status, detail, inTime, outTime, todayLog, todayWifi, todayWifiHint, todayWifiIcon;
     private LinearLayout todayWifiPanel;
     private HomeTheme homeTheme;
-    private ReservationLampView reservationLamp;
-    private TextView reservationLampState;
+    private StandSceneView reservationScene;
+    private TextView reservationState;
     private Button enterNow, leaveNow;
     private LocalDate homeDay;
     private String homeCheckout, homeEntryEnd;
@@ -188,30 +188,16 @@ public final class MainActivity extends Activity {
     private void home() {
         LinearLayout hero = new LinearLayout(this); hero.setOrientation(LinearLayout.VERTICAL);
         hero.setBackground(shape(homeTheme.soft, 22)); hero.setClipToOutline(true);
-        ImageView illustration = new ImageView(this);
-        illustration.setImageResource(homeTheme == HomeTheme.NIGHT ? R.drawable.hero_night : R.drawable.hero_warm);
-        illustration.setScaleType(ImageView.ScaleType.MATRIX);
-        final float verticalFocus = homeTheme == HomeTheme.WARM ? .82f : .5f;
-        illustration.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
-            android.graphics.drawable.Drawable asset = illustration.getDrawable();
-            float width = r-l, height = b-t;
-            float scale = Math.max(width/asset.getIntrinsicWidth(), height/asset.getIntrinsicHeight());
-            android.graphics.Matrix matrix = new android.graphics.Matrix(); matrix.setScale(scale, scale);
-            matrix.postTranslate((width-asset.getIntrinsicWidth()*scale)/2, (height-asset.getIntrinsicHeight()*scale)*verticalFocus);
-            illustration.setImageMatrix(matrix);
-        });
-        illustration.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        hero.addView(illustration, new LinearLayout.LayoutParams(-1, dp(144)));
+        reservationScene=new StandSceneView(this,homeTheme,()->setAttendanceReservation(!prefs.enabled()));
+        hero.addView(reservationScene,new LinearLayout.LayoutParams(-1,dp(144)));
         TextView greeting = text(homeTheme == HomeTheme.NIGHT ? "차분하게 하루를 마무리해요." : "오늘도 좋은 배움이 기다려요.", 14, homeTheme.ink, true);
         LinearLayout caption=new LinearLayout(this);caption.setGravity(Gravity.CENTER_VERTICAL);
         caption.setPadding(dp(16),dp(10),dp(10),dp(10));
         LinearLayout words=new LinearLayout(this);words.setOrientation(LinearLayout.VERTICAL);words.addView(greeting);gap(words,5);
-        reservationLampState=text("",12,homeTheme.muted,true);reservationLampState.setTag("reservation-lamp-state");
-        reservationLampState.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);words.addView(reservationLampState);
-        caption.addView(words,new LinearLayout.LayoutParams(0,-2,1));
-        reservationLamp=new ReservationLampView(this,homeTheme);reservationLamp.setTag("reservation-lamp");
-        LinearLayout.LayoutParams lampParams=new LinearLayout.LayoutParams(dp(74),dp(68));lampParams.leftMargin=dp(8);
-        caption.addView(reservationLamp,lampParams);hero.addView(caption);
+        reservationState=text("",12,homeTheme.muted,true);reservationState.setTag("reservation-state");
+        reservationState.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);words.addView(reservationState);
+        words.addView(text("스탠드를 눌러 출석 예약을 켜고 꺼요",11,homeTheme.muted,false));
+        caption.addView(words,new LinearLayout.LayoutParams(0,-2,1));hero.addView(caption);
         LinearLayout.LayoutParams heroParams = new LinearLayout.LayoutParams(-1, -2); heroParams.bottomMargin = dp(16);
         content.addView(hero, heroParams);
 
@@ -287,9 +273,9 @@ public final class MainActivity extends Activity {
             int position = homeScroll.getScrollY(); render(0); homeScroll.post(() -> homeScroll.scrollTo(0, position)); return;
         }
         boolean reservationEnabled=prefs.enabled();
-        reservationLamp.setLit(reservationEnabled);
-        setIfChanged(reservationLampState,reservationEnabled?"출석 예약 켜짐":"출석 예약 꺼짐");
-        reservationLampState.setTextColor(reservationEnabled?(homeTheme==HomeTheme.NIGHT?0xFFF5D294:0xFF875024):homeTheme.muted);
+        reservationScene.setLit(reservationEnabled);
+        setIfChanged(reservationState,reservationEnabled?"출석 예약 켜짐":"출석 예약 꺼짐");
+        reservationState.setTextColor(reservationEnabled?(homeTheme==HomeTheme.NIGHT?0xFFF5D294:0xFF875024):homeTheme.muted);
         Policy.Record record = prefs.history(now.toLocalDate());
         String entry = record == null ? "" : record.in(), exit = record == null ? "" : record.out();
         String title = !exit.isEmpty() ? "오늘 출결 완료" : !entry.isEmpty() ? "입실 완료"
@@ -324,12 +310,13 @@ public final class MainActivity extends Activity {
     }
 
     private void setAttendanceReservation(boolean enabled) {
+        int returnTab=selected;
         pendingStart = false;
-        if (!enabled && !prefs.enabled()) { render(1); return; }
+        if (!enabled && !prefs.enabled()) { render(returnTab); return; }
         if(enabled&&ChromeAttendanceService.busy()){toast("출결 결과를 확인 중이에요. 잠시 기다려 주세요.");return;}
         if (!enabled) {
             ActivationRun.cancel();prefs.enabled(false); ScheduleController.reconcile(this);
-            Notices.wifi(this, false, ""); prefs.log("출석 예약 꺼짐"); render(1); return;
+            Notices.wifi(this, false, ""); prefs.log("출석 예약 꺼짐"); render(returnTab); return;
         }
         if (prefs.ssids().isEmpty() || prefs.days().isEmpty()) { toast("Wi-Fi와 수업 요일을 먼저 등록해 주세요"); return; }
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -341,7 +328,7 @@ public final class MainActivity extends Activity {
         LocationManager lm = getSystemService(LocationManager.class);
         if (Build.VERSION.SDK_INT >= 28 && !lm.isLocationEnabled()) { toast("휴대폰 위치 기능을 켜 주세요"); openSettings(Settings.ACTION_LOCATION_SOURCE_SETTINGS); return; }
         prefs.enabled(true);prefs.raw.edit().putBoolean("auto",true).apply();prefs.log("출석 예약 켜짐");
-        boolean immediate=ActivationRun.start(this);ScheduleController.reconcile(this);render(immediate?0:1);
+        boolean immediate=ActivationRun.start(this);ScheduleController.reconcile(this);render(immediate?0:returnTab);
     }
 
     private void reservationSettings() {

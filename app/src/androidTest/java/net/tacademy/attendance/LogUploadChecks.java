@@ -71,8 +71,27 @@ final class LogUploadChecks {
         test.runOnMainSync(()->{TextView button=find(activity.getWindow().getDecorView(),"GitHub 업로드 연결 설정");if(button==null)throw new AssertionError("Connection control");button.performClick();});test.waitForIdleSync();test.getUiAutomation().performGlobalAction(1);test.waitForIdleSync();
         // Synthetic export for host-side transport verification; explicitly not a user's device report.
         doc.put("verification_fixture",true);try(FileOutputStream out=new FileOutputStream(new File(c.getExternalFilesDir(null),"upload-fixture.json"))){out.write((doc.toString(2)+"\n").getBytes(StandardCharsets.UTF_8));}
+        diagnosticChecks();
         restore();result.putString("stream","PASS: "+count+" upload/export/credential checks. Fake transport and synthetic data only.\n");test.finish(Activity.RESULT_OK,result);
     }catch(Throwable e){try{restore();}catch(Throwable ignored){}result.putString("stream","FAIL: "+e+"\n");test.finish(Activity.RESULT_CANCELED,result);}}
+    private void diagnosticChecks()throws Exception{
+        DiagnosticLog.prefs(c).edit().clear().commit();LogUploadStore.prefs(c).edit().clear().commit();
+        JSONObject details=new JSONObject().put("attempt_id",UUID.randomUUID().toString()).put("diagnostic_version",2)
+            .put("diagnosis","ACCESSIBILITY_ROOT_UNAVAILABLE").put("stage","TIMEOUT_CHROME_NOT_VISIBLE")
+            .put("window_state","ROOT_UNAVAILABLE").put("focused_owner","SYSTEM_UI").put("screen_interactive",true).put("keyguard_locked",false).put("device_locked",false)
+            .put("chrome_window_present",false).put("window_count",1).put("read_state","CACHE_CLEARED").put("read_error","NONE").put("read_operation","ROOT_READ")
+            .put("address_state","HIDDEN").put("page_signal","NOT_OBSERVED").put("button_state","NOT_OBSERVED").put("node_count",0).put("visible_node_count",0).put("web_node_count",0)
+            .put("tree_limit_reached",false).put("wifi_check_code","ALLOWED").put("click_attempted",false).put("click_accepted",false).put("confirmation_attempted",false)
+            .put("pending_click",false).put("elapsed_ms",70000).put("poll_count",100).put("chrome_event_age_ms",60000)
+            .put("last_site_signal","NONE_RECOGNIZED").put("last_site_address","ATTENDANCE").put("last_site_age_ms",65000)
+            .put("raw_page","PRIVATE_PAGE_SENTINEL").put("cookie","PRIVATE_COOKIE_SENTINEL");
+        for(int i=0;i<210;i++){details.put("attempt_id",UUID.randomUUID().toString());DiagnosticLog.add(c,DiagnosticLog.Event.CHROME_DIAGNOSTIC,Policy.Phase.ENTRY,"ACCESSIBILITY_ROOT_UNAVAILABLE",details);}
+        DiagnosticLog.add(c,DiagnosticLog.Event.ATTEMPT_FAILED,Policy.Phase.ENTRY,"ACCESSIBILITY_ROOT_UNAVAILABLE",details);
+        JSONArray rows=DiagnosticLog.records(c);check(rows.length()>0&&rows.length()<200,"Detailed diagnostics obey byte budget as well as event count");
+        check(rows.getJSONObject(rows.length()-1).getString("event_code").equals("ATTEMPT_FAILED"),"Newest final failure survives bounded retention");
+        String payload=LogUploadStore.prepare(c);check(payload.getBytes(StandardCharsets.UTF_8).length<GitHubLogClient.LIMIT,"Saturated diagnostics still fit the existing upload size limit");
+        check(payload.contains("read_operation")&&payload.contains("last_site_age_ms")&&!payload.contains("PRIVATE_PAGE_SENTINEL")&&!payload.contains("PRIVATE_COOKIE_SENTINEL"),"Upload includes evidence and rejects raw page/cookie fields");
+    }
     private void periodChecks(String first,String firstPath)throws Exception{
         Map<String,?> initialLab=new HashMap<>(LockLab.prefs(c).getAll());
         JSONObject a=new JSONObject().put("test_id","a").put("created_at_ms",1).put("user_note","old");

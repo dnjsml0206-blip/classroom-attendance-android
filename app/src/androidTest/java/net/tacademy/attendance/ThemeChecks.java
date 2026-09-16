@@ -46,7 +46,7 @@ public final class ThemeChecks {
             check(theme()==HomeTheme.WARM && value("inTime").equals("08:42:00") && value("outTime").equals("—"),
                 "Morning theme preserves confirmed entry and does not invent an exit");
             check(!value("todayLog").contains("감시")&&!value("todayLog").contains("변경")&&!value("todayLog").contains("Wi-Fi"),"Today lists confirmed attendance only, excluding operational and setting logs");
-            lampStates("warm");
+            artworkStates("warm");
             capture("today-warm.png");
             check(value("todayWifi").equals("와이파이 미연결"),"Unmatched Wi-Fi shows the warning label");
             runOnMainSync(()->((ScrollView)field("homeScroll")).fullScroll(View.FOCUS_DOWN));SystemClock.sleep(300);capture("wifi-warning-warm.png");
@@ -59,7 +59,7 @@ public final class ThemeChecks {
             at(day,16,50,0);
             check(theme()==HomeTheme.NIGHT && value("inTime").equals("08:42:00") && value("todayLog").contains("입실 완료"),
                 "Visible screen switches automatically and preserves records and logs");
-            lampStates("night");
+            artworkStates("night");
             capture("today-night.png");
             runOnMainSync(()->((ScrollView)field("homeScroll")).fullScroll(View.FOCUS_DOWN));SystemClock.sleep(300);capture("wifi-warning-night.png");
             runOnMainSync(()->((ScrollView)field("homeScroll")).fullScroll(View.FOCUS_UP));
@@ -106,18 +106,23 @@ public final class ThemeChecks {
             result.putString("stream","FAIL: "+failure+"\n"); instrumentation.finish(Activity.RESULT_CANCELED,result);
         }
     }
-    private void lampStates(String palette) throws Exception {
+    private void artworkStates(String palette) throws Exception {
         Prefs prefs=new Prefs(context);
         // Change only saved UI state while visible. Auto-click is off, SSID is unmatched and alarms are cancelled.
         runOnMainSync(()->prefs.enabled(true));settle();
-        check(value("reservationLampState").equals("출석 예약 켜짐")
-            && "출석 예약 전등 켜짐".contentEquals(activity.getWindow().getDecorView().findViewWithTag("reservation-lamp").getContentDescription())
-            && !MonitorService.running,"Reservation lamp lights while monitoring is idle: "+palette);
+        check(value("reservationState").equals("출석 예약 켜짐")
+            && "출석 예약 스탠드 켜짐 · 눌러 끄기".contentEquals(activity.getWindow().getDecorView().findViewWithTag("reservation-stand").getContentDescription())
+            && ((StandSceneView)field("reservationScene")).isLit()
+            && activity.getWindow().getDecorView().findViewWithTag("reservation-lamp")==null
+            && !MonitorService.running,"Pictured stand is ON and separate icon is absent: "+palette);
+        int onResource=((StandSceneView)field("reservationScene")).imageResource();
         capture("reservation-"+palette+"-on.png");
         runOnMainSync(()->prefs.enabled(false));settle();
-        check(value("reservationLampState").equals("출석 예약 꺼짐")
-            && "출석 예약 전등 꺼짐".contentEquals(activity.getWindow().getDecorView().findViewWithTag("reservation-lamp").getContentDescription()),
-            "Reservation lamp turns off without reopening Today: "+palette);
+        check(value("reservationState").equals("출석 예약 꺼짐")
+            && "출석 예약 스탠드 꺼짐 · 눌러 켜기".contentEquals(activity.getWindow().getDecorView().findViewWithTag("reservation-stand").getContentDescription())
+            && !((StandSceneView)field("reservationScene")).isLit(),
+            "Pictured stand switches to the OFF lighting image: "+palette);
+        check(onResource!=((StandSceneView)field("reservationScene")).imageResource(),"ON and OFF load distinct stand-lighting assets: "+palette);
         capture("reservation-"+palette+"-off.png");
     }
     private void runOnMainSync(Runnable action) { instrumentation.runOnMainSync(action); }

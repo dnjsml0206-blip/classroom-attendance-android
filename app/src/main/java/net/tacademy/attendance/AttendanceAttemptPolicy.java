@@ -3,7 +3,16 @@ import java.time.*;
 import java.util.Set;
 /** Bounded result observation and explicit user-initiated attendance outside automatic retry windows. */
 final class AttendanceAttemptPolicy {
-    static final long PAGE_WAIT_MS=35_000, RESULT_WAIT_MS=35_000, MAX_ATTEMPT_MS=105_000;
+    static final long PAGE_WAIT_MS=35_000, RESULT_WAIT_MS=35_000, MAX_ATTEMPT_MS=105_000, RECOVERY_PAGE_WAIT_MS=70_000;
+    /** A single local observation extension leaves 35 seconds for the eventual result. */
+    static boolean extendBeforeClick(boolean attempted,boolean extended,String stage){
+        return !attempted&&!extended&&(stage.equals("CHROME_NOT_VISIBLE")||stage.equals("ADDRESS_NOT_VISIBLE"));
+    }
+    static boolean pauseAfterFailure(boolean attempted,String reason){
+        if(attempted)return true;
+        return !java.util.Set.of("TIMEOUT_CHROME_NOT_VISIBLE","TIMEOUT_ADDRESS_NOT_VISIBLE",
+            "SCREEN_LOCKED_DURING_WORK","WIFI_LOST_DURING_WORK").contains(reason);
+    }
     static long afterAction(long started,long action){return Math.min(started+MAX_ATTEMPT_MS,action+RESULT_WAIT_MS);}
     static Policy.Phase activationPhase(ZonedDateTime now,Set<Integer> days,Set<String> excluded,String start,String end,String checkout,boolean checkedIn,boolean checkedOut){
         if(checkedOut||!Policy.isClassDay(now,days,excluded))return Policy.Phase.IDLE;

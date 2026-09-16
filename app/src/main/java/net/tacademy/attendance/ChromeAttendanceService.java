@@ -25,6 +25,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private PhoneSettings.Target settingsTarget;
     private int settingsStep, settingsScrolls;
     private long settingsUntil, settingsActionAt;
+    private boolean clickAttempted, recoveryExtended;
     private boolean working, clicked, confirmationExpected, confirmationClicked, navigatingWifi, menuOpened;
     private Policy.Phase phase;
     private String day, key;
@@ -32,7 +33,34 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private boolean manualSession, manualReadOnly, manualRetryApproved;
     private String attemptId="",lastStage="CHROME_NOT_VISIBLE";
     private final Set<String> seenStages=new HashSet<>();
-    private final Runnable timeout = () -> fail("Chrome에서 확인이 필요합니다", "출석 페이지와 기록을 확인해 주세요. 확인되지 않은 클릭은 반복하지 않습니다","TIMEOUT_"+lastStage);
+    private ReadEvidence evidence=new ReadEvidence();
+    private String lastDiagnostic="",lastSiteSignal="NOT_OBSERVED",lastSiteAddress="HIDDEN";
+    private long lastSiteAt,lastChromeEventAt;
+    private int diagnosticCount,pollCount;
+    private static final class ReadEvidence {
+        String owner="ROOT_UNAVAILABLE",address="HIDDEN",signal="NOT_OBSERVED",button="NOT_OBSERVED";
+        String readState="NOT_STARTED",readError="NONE",wifi="NOT_OBSERVED",focusedOwner="ROOT_UNAVAILABLE";
+        boolean interactive=true,locked,deviceLocked,chromeWindow,truncated;
+        String operation="NOT_STARTED";
+        int nodes,visible,webNodes,windows;
+    }
+    private final Runnable timeout = this::onPageTimeout;
+    private void onPageTimeout(){
+        if(!working)return;
+        Prefs p=new Prefs(this);
+        boolean attempted=clickAttempted||key.equals(p.raw.getString("chrome_pending",""));
+        if(AttendanceAttemptPolicy.extendBeforeClick(attempted,recoveryExtended,lastStage)&&observationAllowed(p)){
+            recoveryExtended=true;
+            resultDeadline=started+AttendanceAttemptPolicy.RECOVERY_PAGE_WAIT_MS;
+            long remaining=resultDeadline-SystemClock.elapsedRealtime();
+            if(remaining>0){
+                DiagnosticLog.add(this,DiagnosticLog.Event.PAGE_RECOVERY_WAIT,phase,"PRE_CLICK_WINDOW_RECOVERY",attemptDetails());
+                p.status("Chrome 화면 복구 대기", "출결 화면이 다시 보이면 이어서 확인합니다");
+                handler.postDelayed(timeout,remaining);return;
+            }
+        }
+        fail("Chrome에서 확인이 필요합니다", "출석 페이지와 기록을 확인해 주세요. 확인되지 않은 클릭은 반복하지 않습니다","TIMEOUT_"+lastStage);
+    }
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             if (working) { inspect(); if (working) handler.postDelayed(this, 700); }
@@ -55,7 +83,8 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private void events(boolean enabled) {
         AccessibilityServiceInfo info = getServiceInfo();
         if (info != null) {
-            info.eventTypes = enabled ? AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED | AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED : 0;
+            info.eventTypes = enabled ? AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED | AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+                | AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED | AccessibilityEvent.TYPE_VIEW_SCROLLED | AccessibilityEvent.TYPE_WINDOWS_CHANGED : 0;
             setServiceInfo(info);
         }
     }
@@ -128,7 +157,9 @@ public final class ChromeAttendanceService extends AccessibilityService {
         service.key = service.day + ":" + service.phase.name();
         service.lockAttendanceToken = LockLab.live(context,LockLab.id(context)) && LockLab.prefs(context).getBoolean("allow_attendance",false) ? LockLab.id(context) : "";
         service.attemptId=UUID.randomUUID().toString();service.lastStage="CHROME_NOT_VISIBLE";service.seenStages.clear();
-        service.lockTrace.clear(); service.finished = done; service.working = true; service.clicked = false;
+        service.evidence=new ReadEvidence();service.lastDiagnostic="";service.diagnosticCount=0;service.pollCount=0;
+        service.lastSiteAt=0;service.lastChromeEventAt=0;service.lastSiteSignal="NOT_OBSERVED";service.lastSiteAddress="HIDDEN";
+        service.lockTrace.clear(); service.finished = done; service.working = true; service.clicked = false; service.clickAttempted=false; service.recoveryExtended=false;
         service.confirmationExpected = false; service.confirmationClicked = false;
         service.started = SystemClock.elapsedRealtime(); service.pageSeen = 0;
         service.events(true);
@@ -143,28 +174,46 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if(settingsTarget!=null){return;} // The bounded settings poll owns only explicitly requested menu navigation.
         if (navigatingWifi && "com.android.settings".equals(string(event.getPackageName()))) { navigateWifi(); return; }
         if (working && "com.android.chrome".equals(string(event.getPackageName()))) {
+            lastChromeEventAt=SystemClock.elapsedRealtime();
             handler.removeCallbacks(tick); handler.postDelayed(tick, 300);
         }
     }
     private void inspect() {
+        if(!working)return;
+        try { inspectAttendance(); }
+        catch(RuntimeException e){
+            evidence.readError=DiagnosticLog.failureCode(e);
+            fail("화면 판독 오류", "휴대폰 화면 접근 중 오류가 발생했습니다. 진단 로그에서 확인할 수 있습니다.","LOCAL_RUNTIME_FAILURE");
+        }
+    }
+    private void inspectAttendance() {
         if (!working) return;
         if (LockLab.readOnlyActive(this) || (!lockAttendanceToken.isEmpty() && !LockLab.live(this,lockAttendanceToken))) { finishWork(); return; }
         Prefs prefs = new Prefs(this);
         if (!observationAllowed(prefs)) { finishWork(); return; }
-        if (!NetworkAccess.inspect(this).allowed()) { fail("Wi-Fi 연결 대기", "지정 Wi-Fi에 연결한 뒤 직접 확인해 주세요","WIFI_LOST_DURING_WORK"); return; }
-        if (getSystemService(KeyguardManager.class).isKeyguardLocked() || !getSystemService(PowerManager.class).isInteractive()) {
+        evidence=new ReadEvidence();pollCount++;evidence.operation="ENVIRONMENT_READ";
+        evidence.interactive=getSystemService(PowerManager.class).isInteractive();
+        evidence.locked=getSystemService(KeyguardManager.class).isKeyguardLocked();
+        evidence.deviceLocked=getSystemService(KeyguardManager.class).isDeviceLocked();
+        NetworkAccess.State network=NetworkAccess.inspect(this);evidence.wifi=network.code();
+        if (!network.allowed()) { fail("Wi-Fi 연결 대기", "지정 Wi-Fi에 연결한 뒤 직접 확인해 주세요","WIFI_LOST_DURING_WORK"); return; }
+        if (evidence.locked || !evidence.interactive) {
             fail("잠금 해제 후 확인", "잠금을 해제하고 Chrome 출석 알림을 눌러 주세요","SCREEN_LOCKED_DURING_WORK"); return;
         }
-        AccessibilityNodeInfo root = focusedRoot();
-        if (root == null || !"com.android.chrome".equals(string(root.getPackageName()))) { stage("CHROME_NOT_VISIBLE");traceLock("Chrome 화면 노드 대기 · 현재 화면에서 Chrome을 읽지 못함"); return; }
+        evidence.operation="ROOT_READ";
+        AccessibilityNodeInfo root = freshChromeRoot();
+        if (root == null || !"com.android.chrome".equals(string(root.getPackageName()))) { windowStage(root);traceLock("Chrome 화면 노드 대기 · 현재 화면에서 Chrome을 읽지 못함"); return; }
+        evidence.operation="NODE_COLLECTION";
         List<AccessibilityNodeInfo> nodes = new ArrayList<>(); collect(root, nodes, 0);
         String text = allText(nodes);
+        readPageEvidence(nodes,text);evidence.operation="PAGE_INSPECTION";
         if (confirmationExpected && !confirmationClicked && ChromePage.checkoutConfirmation(text)) {
             if ((!manualSession&&!prefs.auto()) || !observationAllowed(prefs)) { finishWork(); return; }
             AccessibilityNodeInfo confirm = exactButton(nodes, "확인", "OK");
             if (confirm != null) {
                 confirmationClicked = true; // A rejected UI action may still have reached Chrome; never repeat it.
                 DiagnosticLog.add(this,DiagnosticLog.Event.CLICK_PLANNED,phase,"CHECKOUT_CONFIRMATION",attemptDetails());
+                evidence.operation="CONFIRM_CLICK";
                 boolean accepted=click(confirm);
                 DiagnosticLog.add(this,accepted?DiagnosticLog.Event.CONFIRM_REQUEST:DiagnosticLog.Event.BUTTON_FAILED,phase,accepted?"UI_ACTION_ACCEPTED":"CONFIRM_ACTION_REJECTED",attemptDetails());
                 if(accepted)traceLock("퇴실 확인 대화상자 클릭 요청 전달됨");
@@ -199,7 +248,8 @@ public final class ChromeAttendanceService extends AccessibilityService {
                 String time = phase == Policy.Phase.ENTRY ? record.in() : record.out();
                 prefs.status(title + " · 감시 종료", "Chrome 사이트 기록 " + time);
                 prefs.log(title + " " + time);
-                DiagnosticLog.add(this,DiagnosticLog.Event.RECORD_CONFIRMED,phase,"SITE_TIME_OBSERVED");
+                diagnostic("SITE_TIME_OBSERVED",false);
+                DiagnosticLog.add(this,DiagnosticLog.Event.RECORD_CONFIRMED,phase,"SITE_TIME_OBSERVED",attemptDetails());
                 Notices.attendanceCompleted(this, day, phase, record);
                 Notices.chromeAction(this, false, "");
                 if (record.checkedOut()) Notices.checkoutAttention(this, false, "");
@@ -222,10 +272,14 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if (!prefs.raw.edit().putString("chrome_pending", key).putLong("chrome_pending_at",System.currentTimeMillis()).commit()) { fail("처리 상태 저장 실패", "앱에서 상태를 확인해 주세요"); return; }
         // Recheck after the durable write in case the phone clock changed while saving.
         if (!newClickAllowed(prefs)) { prefs.raw.edit().remove("chrome_pending").remove("chrome_pending_at").apply(); finishWork(); return; }
+        diagnostic("BEFORE_ATTENDANCE_CLICK",false);
         DiagnosticLog.add(this,DiagnosticLog.Event.CLICK_PLANNED,phase,"ATTENDANCE_BUTTON",attemptDetails());
         manualRetryApproved=false;
+        clickAttempted=true;
+        evidence.operation="ATTENDANCE_CLICK";
         clicked = click(button);
         DiagnosticLog.add(this,clicked?DiagnosticLog.Event.BUTTON_REQUEST:DiagnosticLog.Event.BUTTON_FAILED,phase,clicked?"UI_ACTION_ACCEPTED":"UI_ACTION_REJECTED",attemptDetails());
+        diagnostic(clicked?"UI_ACTION_ACCEPTED":"BUTTON_ACTION_REJECTED",false);
         if(clicked)waitForResult();
         traceLock((phase==Policy.Phase.ENTRY?"입실":"퇴실")+(clicked?" 버튼 클릭 요청 전달됨 · 사이트 기록 확인 전":" 버튼 클릭 요청 실패"));
         confirmationExpected = clicked && phase == Policy.Phase.CHECKOUT;
@@ -250,6 +304,14 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if(instance==null||!instance.working||instance.manualSession)return;
         if(instance.clicked&&new Prefs(instance).enabled())return;
         instance.finishWork();
+    }
+    private AccessibilityNodeInfo freshChromeRoot() {
+        // Dynamic input buttons and window focus can outlive the cached virtual tree.
+        if(Build.VERSION.SDK_INT>=33){boolean cleared=clearCache();if(working)evidence.readState=cleared?"CACHE_CLEARED":"CACHE_CLEAR_REJECTED";}
+        AccessibilityNodeInfo root=focusedRoot();
+        if(root!=null&&Build.VERSION.SDK_INT<33){boolean refreshed=root.refresh();if(working)evidence.readState=refreshed?"ROOT_REFRESHED":"ROOT_REFRESH_FAILED";if(!refreshed)root=null;}
+        if(working){evidence.owner=owner(root);observeWindows();}
+        return root;
     }
     private AccessibilityNodeInfo focusedRoot() {
         for (AccessibilityWindowInfo window : getWindows()) if (window.isFocused()) {
@@ -282,8 +344,73 @@ public final class ChromeAttendanceService extends AccessibilityService {
         return null;
     }
     private static boolean click(AccessibilityNodeInfo node) { return node.performAction(AccessibilityNodeInfo.ACTION_CLICK); }
-    private org.json.JSONObject attemptDetails(){org.json.JSONObject d=new org.json.JSONObject();try{d.put("attempt_id",attemptId);}catch(org.json.JSONException ignored){}return d;}
-    private void stage(String reason){lastStage=reason;if(seenStages.add(reason))DiagnosticLog.add(this,DiagnosticLog.Event.CHROME_STAGE,phase,reason,attemptDetails());}
+    private org.json.JSONObject attemptDetails(){org.json.JSONObject d=new org.json.JSONObject();try{d.put("attempt_id",attemptId).put("diagnostic_version",2);}catch(org.json.JSONException ignored){}return d;}
+    private String owner(AccessibilityNodeInfo node){
+        if(node==null)return "ROOT_UNAVAILABLE";
+        String pkg=string(node.getPackageName());
+        if("com.android.chrome".equals(pkg))return "CHROME";
+        if("com.android.systemui".equals(pkg))return "SYSTEM_UI";
+        return getPackageName().equals(pkg)?"OWN_APP":"OTHER_APP";
+    }
+    private void observeWindows(){
+        // Inspect package categories only. Never traverse or store another application's content.
+        try{List<AccessibilityWindowInfo> windows=getWindows();evidence.windows=windows.size();
+            for(int i=0;i<Math.min(16,windows.size());i++){
+                AccessibilityWindowInfo w=windows.get(i);String category=owner(w.getRoot());
+                if(w.isFocused())evidence.focusedOwner=category;
+                if("CHROME".equals(category))evidence.chromeWindow=true;
+            }
+        }catch(RuntimeException e){evidence.readError=DiagnosticLog.failureCode(e);}
+    }
+    private void readPageEvidence(List<AccessibilityNodeInfo> nodes,String text){
+        evidence.nodes=nodes.size();evidence.truncated=nodes.size()>=1200;
+        for(AccessibilityNodeInfo n:nodes){
+            if(n.isVisibleToUser()){
+                evidence.visible++;
+                if("android.webkit.WebView".equals(string(n.getClassName())))evidence.webNodes++;
+                if("com.android.chrome:id/url_bar".equals(n.getViewIdResourceName()))evidence.address=ChromeDiagnostics.address(string(n.getText()));
+            }
+        }
+        evidence.signal=ChromeDiagnostics.pageSignal(evidence.address,text);
+        // Do not inspect labels on unrelated tabs; only an enum leaves this method.
+        if(ChromeDiagnostics.siteAddress(evidence.address)){
+            String label=phase==Policy.Phase.ENTRY?"입실":"퇴실";evidence.button="ABSENT";
+            for(AccessibilityNodeInfo n:nodes)if(n.isVisibleToUser()&&(label.equals(string(n.getText()).trim())||label.equals(string(n.getContentDescription()).trim())))evidence.button=n.isEnabled()?"LABEL_ONLY":"DISABLED";
+            if(exactButton(nodes,label)!=null)evidence.button="READY";
+            lastSiteAt=SystemClock.elapsedRealtime();lastSiteSignal=evidence.signal;lastSiteAddress=evidence.address;
+        }
+    }
+    private void diagnostic(String stage,boolean failure){
+        String diagnosis=ChromeDiagnostics.diagnosis(evidence.owner,evidence.interactive,evidence.locked||evidence.deviceLocked,
+            evidence.readError,evidence.wifi,evidence.address,evidence.signal,evidence.visible,evidence.button,stage);
+        String fingerprint=stage+":"+diagnosis+":"+evidence.owner+":"+evidence.address+":"+evidence.signal+":"+evidence.button+":"+evidence.readState;
+        if(!failure&&(diagnosticCount>=14||fingerprint.equals(lastDiagnostic)))return;
+        lastDiagnostic=fingerprint;if(!failure)diagnosticCount++;
+        org.json.JSONObject d=attemptDetails();long now=SystemClock.elapsedRealtime();
+        try{d.put("diagnosis",diagnosis).put("stage",stage).put("window_state",evidence.owner).put("focused_owner",evidence.focusedOwner)
+            .put("screen_interactive",evidence.interactive).put("keyguard_locked",evidence.locked).put("device_locked",evidence.deviceLocked)
+            .put("chrome_window_present",evidence.chromeWindow).put("window_count",evidence.windows).put("read_state",evidence.readState).put("read_error",evidence.readError).put("read_operation",evidence.operation)
+            .put("address_state",evidence.address).put("page_signal",evidence.signal).put("button_state",evidence.button)
+            .put("node_count",evidence.nodes).put("visible_node_count",evidence.visible).put("web_node_count",evidence.webNodes).put("tree_limit_reached",evidence.truncated)
+            .put("wifi_check_code",evidence.wifi).put("click_attempted",clickAttempted).put("click_accepted",clicked).put("confirmation_attempted",confirmationClicked)
+            .put("pending_click",key!=null&&key.equals(new Prefs(this).raw.getString("chrome_pending","")))
+            .put("elapsed_ms",Math.max(0,now-started)).put("poll_count",pollCount).put("chrome_event_age_ms",lastChromeEventAt==0?-1:now-lastChromeEventAt)
+            .put("last_site_signal",lastSiteSignal).put("last_site_address",lastSiteAddress).put("last_site_age_ms",lastSiteAt==0?-1:now-lastSiteAt);
+        }catch(org.json.JSONException ignored){}
+        DiagnosticLog.add(this,failure?DiagnosticLog.Event.ATTEMPT_FAILED:DiagnosticLog.Event.CHROME_DIAGNOSTIC,phase,diagnosis,d);
+    }
+    private void windowStage(AccessibilityNodeInfo root){
+        String owner=root==null?"ROOT_UNAVAILABLE":
+            "com.android.systemui".equals(string(root.getPackageName()))?"SYSTEM_UI":"OTHER_APP";
+        lastStage="CHROME_NOT_VISIBLE";
+        diagnostic(lastStage,false);
+        if(seenStages.add(lastStage+":"+owner)){
+            org.json.JSONObject details=attemptDetails();
+            try{details.put("window_state",owner);}catch(org.json.JSONException ignored){}
+            DiagnosticLog.add(this,DiagnosticLog.Event.CHROME_STAGE,phase,lastStage,details);
+        }
+    }
+    private void stage(String reason){lastStage=reason;diagnostic(reason,false);if(seenStages.add(reason))DiagnosticLog.add(this,DiagnosticLog.Event.CHROME_STAGE,phase,reason,attemptDetails());}
     static void launchScheduledUnlock(Intent intent){
         if(instance==null)throw new IllegalStateException("Accessibility unavailable");
         instance.startActivity(intent);
@@ -296,7 +423,14 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if (!working) return;
         if (LockLab.readOnlyActive(this) || (!lockAttendanceToken.isEmpty() && !LockLab.live(this,lockAttendanceToken))) { finishWork(); return; }
         Prefs prefs = new Prefs(this);
-        TrafficGuard.pause(this,phase,reason);
+        diagnostic(reason,true);
+        boolean attempted=clickAttempted||key.equals(prefs.raw.getString("chrome_pending",""));
+        if(AttendanceAttemptPolicy.pauseAfterFailure(attempted,reason))TrafficGuard.pause(this,phase,reason);
+        else {
+            DiagnosticLog.add(this,DiagnosticLog.Event.PRECLICK_DEFERRED,phase,reason,attemptDetails());
+            title="클릭 전 화면 확인 대기";
+            detail="아직 버튼을 누르지 않았습니다. 예약 시간 안에서 접속 제한에 따라 다시 확인합니다";
+        }
         traceLock("Chrome 처리 중단: "+title+" · "+detail);
         prefs.status(title, detail);
         String failureKey = day + ":" + phase + ":" + title;
@@ -368,7 +502,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     }};
     private void inspectLocalClick(){
         if(SystemClock.elapsedRealtime()>=lockProbeUntil){endLockProbe(localClickRequested?"시험 클릭 후 화면 변경을 확인하지 못했습니다":"Chrome 시험 페이지·버튼을 확인하지 못했습니다");return;}
-        AccessibilityNodeInfo root=focusedRoot();
+        AccessibilityNodeInfo root=freshChromeRoot();
         if(root!=null&&"com.android.chrome".equals(string(root.getPackageName()))){
             List<AccessibilityNodeInfo> nodes=new ArrayList<>();collect(root,nodes,0);boolean address=false;
             for(AccessibilityNodeInfo node:nodes)if("com.android.chrome:id/url_bar".equals(node.getViewIdResourceName())&&localClickPage.matches(string(node.getText())))address=true;
@@ -497,8 +631,9 @@ public final class ChromeAttendanceService extends AccessibilityService {
             if (menu != null) menuOpened = click(menu);
         }
     }
-    @Override public void onInterrupt() { endSettingsMenu(false); endLockProbe("접근성 연결 중단"); finishWork(); }
+    @Override public void onInterrupt() { if(working)diagnostic("ACCESSIBILITY_INTERRUPTED",true);endSettingsMenu(false); endLockProbe("접근성 연결 중단"); finishWork(); }
     @Override public void onDestroy() {
+        if(working)diagnostic("ACCESSIBILITY_SERVICE_DESTROYED",true);
         endSettingsMenu(false); endLockProbe("접근성 연결 종료"); finishWork(); navigatingWifi = false; handler.removeCallbacksAndMessages(null); instance = null; super.onDestroy();
     }
 }
