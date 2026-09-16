@@ -1,0 +1,366 @@
+{
+  "schema_version": 2,
+  "report_id": "3ac2ded3-0612-47cb-af50-42413cba7620",
+  "exported_at": "2026-09-16T00:08:12.736972Z",
+  "timezone": "Asia\/Seoul",
+  "export_environment": {
+    "app_version": "0.9.1",
+    "device": "samsung SM-S947N · Android 16 \/ API 36",
+    "emulator": false,
+    "accessibility_enabled": true,
+    "accessibility_connected": true,
+    "exact_alarm_allowed": true,
+    "notifications_enabled": true,
+    "location_permission": true,
+    "background_location_permission": true,
+    "location_enabled": true,
+    "screen_interactive": true,
+    "keyguard_locked": false,
+    "device_locked": false,
+    "attendance_notifications_enabled": true,
+    "battery_optimization_exempt": false,
+    "registered_wifi_connected": true,
+    "wifi_check": "",
+    "wifi_check_code": "ALLOWED",
+    "wifi_transport_present": true,
+    "ssid_visible": true,
+    "schedule_enabled": true,
+    "auto_click": true,
+    "attendance_phase": "ENTRY",
+    "automation": {
+      "entry_start": "08:30",
+      "entry_end": "09:30",
+      "checkout_start": "17:50:05",
+      "checkout_retry_minutes": 10,
+      "class_day": true,
+      "entry_confirmed_today": false,
+      "checkout_confirmed_today": false,
+      "monitor_running": true,
+      "monitor_seen_at_ms": 1789517292268,
+      "next_alarm_at_ms": 1789518600000,
+      "scheduled_lock_mode": "TRUST",
+      "unlock_active": false,
+      "unlock_requested_at_ms": 1789516942709,
+      "unlock_result": "USER_AUTH_REQUIRED",
+      "pending_click": {
+        "day": "2026-09-15",
+        "phase": "CHECKOUT",
+        "prepared_at_ms": 1789462445142
+      }
+    }
+  },
+  "records": [
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:7a480512-52d7-45d0-ab78-13ee1cce4319",
+      "occurred_at_ms": 1789465754474,
+      "event_code": "ACCESSIBILITY_CONNECTED",
+      "phase": "IDLE",
+      "reason_code": "SERVICE_CONNECTED",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:ef24522e-bd7f-4c1a-b296-92626d4ca062",
+      "occurred_at_ms": 1789515000024,
+      "event_code": "ALARM_FIRED",
+      "phase": "ENTRY",
+      "reason_code": "RECEIVED",
+      "app_version": "0.9.1",
+      "details": {
+        "scheduled_at_ms": 1789515000000,
+        "delay_ms": 23
+      }
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:914c80a0-b043-4abc-b1ef-daf2ea85d2e7",
+      "occurred_at_ms": 1789515000035,
+      "event_code": "ALARM_ARMED",
+      "phase": "IDLE",
+      "reason_code": "SCHEDULE_BOUNDARY",
+      "app_version": "0.9.1",
+      "details": {
+        "scheduled_at_ms": 1789518600000
+      }
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:7c7ebec2-186c-4c57-b365-879a97a63c1c",
+      "occurred_at_ms": 1789515000037,
+      "event_code": "MONITOR_START_REQUEST",
+      "phase": "ENTRY",
+      "reason_code": "START_FOREGROUND_SERVICE",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:9a013671-f5d4-4842-a1f1-f2d7ce456a85",
+      "occurred_at_ms": 1789515000044,
+      "event_code": "MONITOR_START_RECEIVED",
+      "phase": "ENTRY",
+      "reason_code": "ON_START_COMMAND",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:8fef0749-fd46-4d2c-bbf0-9e2eb73654b7",
+      "occurred_at_ms": 1789515000057,
+      "event_code": "MONITOR_STARTED",
+      "phase": "ENTRY",
+      "reason_code": "SCHEDULE_WINDOW",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:1e2a5eef-bc9b-48b9-90d7-6d6643f22cb1",
+      "occurred_at_ms": 1789515000071,
+      "event_code": "WAITING",
+      "phase": "ENTRY",
+      "reason_code": "NO_WIFI_TRANSPORT",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:83efec51-3ec2-4565-8c5e-7c0f595be278",
+      "occurred_at_ms": 1789516942681,
+      "event_code": "WAITING",
+      "phase": "ENTRY",
+      "reason_code": "SCREEN_LOCKED",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:c5dee867-e4cb-4c7f-a58b-0ac950e7c669",
+      "occurred_at_ms": 1789516942713,
+      "event_code": "WAKE_REQUESTED",
+      "phase": "ENTRY",
+      "reason_code": "TRUST",
+      "app_version": "0.9.1",
+      "details": {
+        "attempt_id": "119fa1a9-a53f-4fdf-9f46-e73325bf723c"
+      }
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:d23e0fdd-5eff-4136-9a0e-522f8a486049",
+      "occurred_at_ms": 1789516943591,
+      "event_code": "WAKE_VISIBLE",
+      "phase": "ENTRY",
+      "reason_code": "ACTIVITY_VISIBLE",
+      "app_version": "0.9.1",
+      "details": {
+        "attempt_id": "119fa1a9-a53f-4fdf-9f46-e73325bf723c",
+        "delay_ms": 877
+      }
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:de9f0184-a08f-48c2-a447-33aaf0cc9be0",
+      "occurred_at_ms": 1789516943593,
+      "event_code": "WAKE_AUTH_REQUIRED",
+      "phase": "ENTRY",
+      "reason_code": "USER_AUTH_REQUIRED",
+      "app_version": "0.9.1",
+      "details": {
+        "attempt_id": "119fa1a9-a53f-4fdf-9f46-e73325bf723c",
+        "delay_ms": 877
+      }
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:cb54df4d-c7f7-4fe8-866b-899bbaad8bee",
+      "occurred_at_ms": 1789516943594,
+      "event_code": "WAKE_FINISHED",
+      "phase": "ENTRY",
+      "reason_code": "USER_AUTH_REQUIRED",
+      "app_version": "0.9.1",
+      "details": {
+        "attempt_id": "119fa1a9-a53f-4fdf-9f46-e73325bf723c",
+        "delay_ms": 877
+      }
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:b7583277-066e-48ac-bdc6-f442a692aec4",
+      "occurred_at_ms": 1789517044929,
+      "event_code": "WAITING",
+      "phase": "ENTRY",
+      "reason_code": "SCREEN_LOCKED",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:2b7a9d21-a61a-4033-be0b-65716b2f674a",
+      "occurred_at_ms": 1789517056564,
+      "event_code": "CHROME_OPEN_REQUEST",
+      "phase": "ENTRY",
+      "reason_code": "AUTOMATIC",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:16d33ea8-766e-482d-808d-4c053b50fc26",
+      "occurred_at_ms": 1789517056574,
+      "event_code": "CHROME_OPEN_DISPATCHED",
+      "phase": "ENTRY",
+      "reason_code": "AUTOMATIC",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:99257e6e-a228-489d-84f9-2bcf13defd25",
+      "occurred_at_ms": 1789517057949,
+      "event_code": "CHROME_STAGE",
+      "phase": "ENTRY",
+      "reason_code": "PAGE_SETTLING",
+      "app_version": "0.9.1",
+      "details": {
+        "attempt_id": "f5f85067-ed4f-4a52-9629-bd239d266e9c"
+      }
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:2e613c48-fbdc-4e9b-a6cb-c78f96d6cc22",
+      "occurred_at_ms": 1789517059366,
+      "event_code": "CHROME_STAGE",
+      "phase": "ENTRY",
+      "reason_code": "CHROME_NOT_VISIBLE",
+      "app_version": "0.9.1",
+      "details": {
+        "attempt_id": "f5f85067-ed4f-4a52-9629-bd239d266e9c"
+      }
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:d9376a6c-0dd2-47b7-a58a-d0557563afa0",
+      "occurred_at_ms": 1789517091584,
+      "event_code": "AUTOMATIC_PAUSED",
+      "phase": "ENTRY",
+      "reason_code": "TIMEOUT_CHROME_NOT_VISIBLE",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:bddfad81-6fac-4b83-899f-34da708de3b4",
+      "occurred_at_ms": 1789517095667,
+      "event_code": "ACCESS_BLOCKED",
+      "phase": "ENTRY",
+      "reason_code": "AUTOMATIC:PAUSED",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:3122dd4c-4208-4ed6-8bab-063bb12c77a2",
+      "occurred_at_ms": 1789517205816,
+      "event_code": "WAITING",
+      "phase": "ENTRY",
+      "reason_code": "SCREEN_LOCKED",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:bb37ddac-c163-471f-9a5d-dd5f9e3e5b1f",
+      "occurred_at_ms": 1789517205826,
+      "event_code": "WAKE_BLOCKED",
+      "phase": "ENTRY",
+      "reason_code": "ACCESS_PAUSED",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:43823a2b-06b8-4009-908b-85297858232d",
+      "occurred_at_ms": 1789517275430,
+      "event_code": "ACCESS_BLOCKED",
+      "phase": "ENTRY",
+      "reason_code": "AUTOMATIC:PAUSED",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:35f2e8f9-4a46-446d-aacc-fc328f492dc2",
+      "occurred_at_ms": 1789517277198,
+      "event_code": "MANUAL_REQUEST",
+      "phase": "ENTRY",
+      "reason_code": "ONE_SHOT",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:f2906d8a-5f16-4984-ba61-94c49d9ac556",
+      "occurred_at_ms": 1789517277208,
+      "event_code": "CHROME_OPEN_REQUEST",
+      "phase": "ENTRY",
+      "reason_code": "MANUAL",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:e87e1a50-e7a1-4eb8-94b0-ab4b1171b854",
+      "occurred_at_ms": 1789517277221,
+      "event_code": "CHROME_OPEN_DISPATCHED",
+      "phase": "ENTRY",
+      "reason_code": "MANUAL",
+      "app_version": "0.9.1",
+      "details": {}
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:3b87b05c-bc6c-4962-9d0f-983a5f608911",
+      "occurred_at_ms": 1789517278307,
+      "event_code": "CHROME_STAGE",
+      "phase": "ENTRY",
+      "reason_code": "PAGE_SETTLING",
+      "app_version": "0.9.1",
+      "details": {
+        "attempt_id": "69cf797d-31c3-42d8-9426-493caaa1c6fd"
+      }
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:6e231086-87c1-4d82-9572-7ff887d882d3",
+      "occurred_at_ms": 1789517279033,
+      "event_code": "CHROME_STAGE",
+      "phase": "ENTRY",
+      "reason_code": "ADDRESS_NOT_VISIBLE",
+      "app_version": "0.9.1",
+      "details": {
+        "attempt_id": "69cf797d-31c3-42d8-9426-493caaa1c6fd"
+      }
+    },
+    {
+      "record_type": "attendance_event",
+      "test_id": "event:66e6b405-cee5-4a59-8add-6c27b64223c8",
+      "occurred_at_ms": 1789517279516,
+      "event_code": "CHROME_STAGE",
+      "phase": "ENTRY",
+      "reason_code": "CHROME_NOT_VISIBLE",
+      "app_version": "0.9.1",
+      "details": {
+        "attempt_id": "69cf797d-31c3-42d8-9426-493caaa1c6fd"
+      }
+    }
+  ],
+  "analysis_note": "attendance_event는 앱 동작 기록이며 Chrome 실제 HTTP 요청 건수가 아닙니다. 과거 버전의 일반 출결 동작은 복원할 수 없습니다. 사용자 판정과 앱 관찰을 구분하세요. 예약 경로의 화면 진입은 자동 잠금 해제 증거가 아닙니다. user_interaction과 entry_delay_ms를 함께 확인하세요. Chrome 주소 확인은 출결 성공이 아니며, 서버 응답은 인증 성공이 아닙니다. 과거 legacy 기록의 날짜와 기기 설정은 알 수 없습니다. 메모는 사용자 입력입니다.",
+  "upload_window": {
+    "after_ms": 1789463391766,
+    "through_ms": 1789517292719,
+    "basis": "observed_log_changes"
+  }
+}
