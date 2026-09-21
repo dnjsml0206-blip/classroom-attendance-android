@@ -21,7 +21,7 @@ final class SetupStatusView extends LinearLayout {
     SetupStatusView(Activity activity,boolean extras){
         super(activity);this.activity=activity;this.extras=extras;setOrientation(VERTICAL);
         summary=label("",16);summary.setTypeface(null,Typeface.BOLD);addView(summary);
-        TextView hint=label("항목을 누르면 해당 설정으로 이동합니다. 돌아오면 다시 확인합니다.",12);hint.setTextColor(0xFF687D77);addView(hint);
+        if(extras){TextView hint=label("항목을 누르면 해당 설정으로 이동합니다. 돌아오면 다시 확인합니다.",12);hint.setTextColor(0xFF687D77);addView(hint);}
         initial=read();
         for(Row item:initial){
             LinearLayout row=new LinearLayout(activity);row.setGravity(android.view.Gravity.CENTER_VERTICAL);row.setMinimumHeight(dp(49));row.setPadding(0,dp(6),0,dp(6));

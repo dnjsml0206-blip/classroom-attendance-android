@@ -13,7 +13,7 @@ final class DiagnosticLog {
         CHROME_OPEN_FAILED, BUTTON_REQUEST, BUTTON_FAILED, CONFIRM_REQUEST, RECORD_CONFIRMED, AUTOMATIC_PAUSED, NETWORK_DIAGNOSTIC_LOCAL,
         ALARM_ARMED, ALARM_FIRED, ALARM_FAILED, MONITOR_START_REQUEST, MONITOR_START_RECEIVED, MONITOR_START_FAILED,
         CHROME_STAGE, CLICK_PLANNED, WAKE_REQUESTED, WAKE_VISIBLE, WAKE_BLOCKED, WAKE_AUTH_REQUIRED,
-        ACTIVATION_QUEUED, ACTIVATION_FIRED, WAKE_DISMISS_REQUEST, WAKE_DISMISS_RESULT, WAKE_FINISHED, ACCESSIBILITY_CONNECTED, RESULT_WAIT_STARTED, MANUAL_REQUEST, MANUAL_BLOCKED, MANUAL_FINISHED, PAGE_RECOVERY_WAIT, PRECLICK_DEFERRED, CHROME_DIAGNOSTIC, ATTEMPT_FAILED, ATTEMPT_CANCELLED, DIALOG_STATE_CHANGED, SCREEN_PRESENTATION, SCREEN_OFF_REQUEST, SCREEN_OFF_RESULT }
+        ACTIVATION_QUEUED, ACTIVATION_FIRED, WAKE_DISMISS_REQUEST, WAKE_DISMISS_RESULT, WAKE_FINISHED, ACCESSIBILITY_CONNECTED, RESULT_WAIT_STARTED, MANUAL_REQUEST, MANUAL_BLOCKED, MANUAL_FINISHED, PAGE_RECOVERY_WAIT, PRECLICK_DEFERRED, CHROME_DIAGNOSTIC, ATTEMPT_FAILED, ATTEMPT_CANCELLED, DIALOG_STATE_CHANGED, SCREEN_PRESENTATION, SCREEN_OFF_REQUEST, SCREEN_OFF_RESULT, WIFI_CONNECT_STEP, WIFI_CONNECT_FINISHED, SCHEDULE_CHANGED }
     static SharedPreferences prefs(Context c){return c.getSharedPreferences("attendance_diagnostics",Context.MODE_PRIVATE);}
     static synchronized void add(Context c,Event event,Policy.Phase phase,String reason){
         add(c,event,phase,reason,new JSONObject());
@@ -26,7 +26,10 @@ final class DiagnosticLog {
                 "address_state","page_signal","button_state","node_count","visible_node_count","web_node_count","tree_limit_reached","wifi_check_code",
                 "click_attempted","click_accepted","confirmation_attempted","pending_click","elapsed_ms","poll_count","chrome_event_age_ms",
                 "last_site_signal","last_site_address","last_site_age_ms","page_visible_ms","dialog_kind","confirm_button_state","confirm_target",
-                "confirmation_disappeared","confirmation_age_ms","confirmation_visible_ms","processing_page_visible"})if(details.has(key))safe.put(key,details.get(key));
+                "confirmation_disappeared","confirmation_age_ms","confirmation_visible_ms","processing_page_visible",
+                "entry_start","entry_end","checkout_start","checkout_retry_minutes","configured_days","schedule_enabled","auto_click","next_alarm_at_ms",
+                "previous_entry_start","previous_entry_end","previous_checkout_start","previous_checkout_retry_minutes","previous_configured_days",
+                "read_only","class_day","record_source","attendance_day","entry_time","checkout_time"})if(details.has(key))safe.put(key,details.get(key));
             long now=System.currentTimeMillis();SharedPreferences p=prefs(c);
             String signature=LocalDate.now(Policy.ZONE)+":"+event+":"+phase+":"+reason+":"+safe;
             if(signature.equals(p.getString("last_signature","")))return;
@@ -42,6 +45,18 @@ final class DiagnosticLog {
             if(event==Event.ATTEMPT_FAILED||event==Event.CLICK_PLANNED||event==Event.BUTTON_REQUEST||event==Event.BUTTON_FAILED||event==Event.CONFIRM_REQUEST)edit.commit();
             else edit.apply();
         }catch(JSONException ignored){}
+    }
+    static JSONObject scheduleDetails(Prefs p){
+        JSONObject d=new JSONObject();try{
+            d.put("entry_start",p.start()).put("entry_end",p.end()).put("checkout_start",Policy.checkoutStartTime(p.checkout()).toString())
+                .put("checkout_retry_minutes",p.retryMinutes()).put("configured_days",new JSONArray(new TreeSet<>(p.days())))
+                .put("schedule_enabled",p.enabled()).put("auto_click",p.auto()).put("next_alarm_at_ms",p.raw.getLong("next_alarm",0));
+        }catch(JSONException ignored){}return d;
+    }
+    static void scheduleChanged(Context c,String section,JSONObject before){
+        Prefs p=new Prefs(c);JSONObject d=scheduleDetails(p);
+        try{for(String key:new String[]{"entry_start","entry_end","checkout_start","checkout_retry_minutes","configured_days"})d.put("previous_"+key,before.get(key));}catch(JSONException ignored){}
+        add(c,Event.SCHEDULE_CHANGED,p.phase(ZonedDateTime.now(Policy.ZONE)),section+"_SETTINGS_SAVED",d);
     }
     static JSONObject alarmDetails(long scheduledAt){
         JSONObject d=new JSONObject();try{if(scheduledAt>0)d.put("scheduled_at_ms",scheduledAt);}catch(JSONException ignored){}return d;

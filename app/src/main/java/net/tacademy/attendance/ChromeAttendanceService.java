@@ -24,6 +24,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private LocalClickPage localClickPage;
     private boolean localClickRequested,localClickAccepted;
     private PhoneSettings.Target settingsTarget;
+    private WifiConnectAssist wifiConnect;
     private int settingsStep, settingsScrolls;
     private long settingsUntil, settingsActionAt;
     private boolean clickAttempted, recoveryExtended;
@@ -122,11 +123,19 @@ public final class ChromeAttendanceService extends AccessibilityService {
     }
     public static void beginManual(Activity context,Policy.Phase phase,boolean readOnly,boolean retryApproved) {
         Prefs p=new Prefs(context);
-        String problem=AttendanceAttemptPolicy.manualProblem(phase,ZonedDateTime.now(Policy.ZONE),p.days(),p.excluded(),p.start(),p.checkout(),readOnly);
-        if(problem.isEmpty()&&!NetworkAccess.inspect(context).allowed())problem=NetworkAccess.inspect(context).reason();
-        if(problem.isEmpty()&&!available())problem="Chrome 접근성 연결이 필요해요. 연결 탭에서 확인해 주세요.";
-        if(problem.isEmpty()&&(LockLab.readOnlyActive(context)||ScheduledUnlock.active(context)||instance!=null&&(instance.working||instance.navigatingWifi||instance.settingsTarget!=null||!instance.lockProbe.isEmpty())))problem="진행 중인 테스트나 화면 작업을 마친 뒤 다시 눌러 주세요.";
-        if(!problem.isEmpty()){p.status("직접 출결 확인 필요",problem);DiagnosticLog.add(context,DiagnosticLog.Event.MANUAL_BLOCKED,phase,"PREREQUISITE");Toast.makeText(context,problem,Toast.LENGTH_LONG).show();return;}
+        var now=ZonedDateTime.now(Policy.ZONE);
+        var gate=AttendanceAttemptPolicy.manualGate(phase,now,p.days(),p.excluded(),p.start(),p.checkout(),readOnly);
+        String problem=gate.problem(),reason=gate.code();
+        org.json.JSONObject details=DiagnosticLog.scheduleDetails(p);
+        try{details.put("read_only",readOnly).put("class_day",Policy.isClassDay(now,p.days(),p.excluded()));}catch(org.json.JSONException ignored){}
+        if(problem.isEmpty()){
+            NetworkAccess.State network=NetworkAccess.inspect(context);
+            try{details.put("wifi_check_code",network.code());}catch(org.json.JSONException ignored){}
+            if(!network.allowed()){problem=network.reason();reason=network.code();}
+        }
+        if(problem.isEmpty()&&!available()){problem="Chrome 접근성 연결이 필요해요. 연결 탭에서 확인해 주세요.";reason="ACCESSIBILITY_DISCONNECTED";}
+        if(problem.isEmpty()&&(LockLab.readOnlyActive(context)||ScheduledUnlock.active(context)||instance!=null&&(instance.working||instance.navigatingWifi||instance.settingsTarget!=null||!instance.lockProbe.isEmpty()))){problem="진행 중인 테스트나 화면 작업을 마친 뒤 다시 눌러 주세요.";reason="OTHER_UI_WORK";}
+        if(!problem.isEmpty()){p.status("직접 출결 확인 필요",problem);DiagnosticLog.add(context,DiagnosticLog.Event.MANUAL_BLOCKED,phase,reason,details);Toast.makeText(context,problem,Toast.LENGTH_LONG).show();return;}
         DiagnosticLog.add(context,DiagnosticLog.Event.MANUAL_REQUEST,phase,readOnly?"READ_RECORD":retryApproved?"USER_CONFIRMED_RETRY":"ONE_SHOT");
         begin(context,null,phase,true,readOnly,retryApproved);
     }
@@ -247,7 +256,10 @@ public final class ChromeAttendanceService extends AccessibilityService {
                 prefs.status(title + " · 감시 종료", "Chrome 사이트 기록 " + time);
                 prefs.log(title + " " + time);
                 diagnostic("SITE_TIME_OBSERVED",false);
-                DiagnosticLog.add(this,DiagnosticLog.Event.RECORD_CONFIRMED,phase,"SITE_TIME_OBSERVED",attemptDetails());
+                org.json.JSONObject confirmed=attemptDetails();
+                String source=clicked?"AFTER_APP_CLICK":"OBSERVED_WITHOUT_APP_CLICK";
+                try{confirmed.put("record_source",source).put("attendance_day",day).put("entry_time",record.in()).put("checkout_time",record.out());}catch(org.json.JSONException ignored){}
+                DiagnosticLog.add(this,DiagnosticLog.Event.RECORD_CONFIRMED,phase,source,confirmed);
                 Notices.attendanceCompleted(this, day, phase, record);
                 Notices.chromeAction(this, false, "");
                 if (record.checkedOut()) Notices.checkoutAttention(this, false, "");
@@ -642,6 +654,30 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if(result!=null&&!token.isEmpty())LockLab.finish(this,token,result);
     }
     public static void cancelLockProbe(){if(instance!=null)instance.endLockProbe(null);}
+    public static void connectWifi(Activity activity,String ssid){
+        if(!new Prefs(activity).ssids().contains(ssid)||!Policy.validSsid(ssid))return;
+        ChromeAttendanceService s=instance;
+        if(ActivationRun.pending()||ScheduledUnlock.active(activity)||s!=null&&(s.working||s.navigatingWifi||s.settingsTarget!=null||!s.lockProbe.isEmpty())){
+            Toast.makeText(activity,"진행 중인 출결·화면 작업을 마친 뒤 다시 눌러 주세요",Toast.LENGTH_LONG).show();return;
+        }
+        if(s!=null){
+            s.settingsTarget=PhoneSettings.Target.WIFI;s.wifiConnect=new WifiConnectAssist(s,ssid);
+            s.settingsUntil=SystemClock.elapsedRealtime()+WifiConnectPolicy.TIMEOUT_MS;s.events(true);
+            try{
+                activity.startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS).setPackage("com.android.settings"));
+                s.handler.postDelayed(s.settingsTick,700);
+                Toast.makeText(activity,ssid+" 연결을 시도해요",Toast.LENGTH_SHORT).show();return;
+            }catch(ActivityNotFoundException|SecurityException e){s.wifiConnect.finish("SETTINGS_UNAVAILABLE",false);s.endSettingsMenu(false);}
+        }
+        // Public system panel remains usable when accessibility is off or the OEM menu differs.
+        Intent panel=new Intent(Build.VERSION.SDK_INT>=29?Settings.Panel.ACTION_WIFI:Settings.ACTION_WIFI_SETTINGS);
+        try{activity.startActivity(panel);}catch(ActivityNotFoundException|SecurityException e){
+            try{activity.startActivity(new Intent(Settings.ACTION_WIFI_SETTINGS));}
+            catch(ActivityNotFoundException|SecurityException missing){Toast.makeText(activity,"휴대폰 Wi-Fi 설정에서 "+ssid+"를 선택해 주세요",Toast.LENGTH_LONG).show();return;}
+        }
+        DiagnosticLog.add(activity,DiagnosticLog.Event.WIFI_CONNECT_STEP,Policy.Phase.IDLE,"SYSTEM_PICKER_OPENED");
+        Toast.makeText(activity,ssid+"를 선택해 연결해 주세요",Toast.LENGTH_LONG).show();
+    }
     public static boolean settingsMenu(Activity activity,PhoneSettings.Target target){
         if(instance==null||instance.working||instance.navigatingWifi||!instance.lockProbe.isEmpty())return false;
         if(target!=PhoneSettings.Target.LOCATION_PERMISSION&&target!=PhoneSettings.Target.BATTERY&&target!=PhoneSettings.Target.EXTEND)return false;
@@ -651,8 +687,9 @@ public final class ChromeAttendanceService extends AccessibilityService {
     public static void cancelSettingsMenu(){if(instance!=null)instance.endSettingsMenu(false);}
     private void endSettingsMenu(boolean guide){
         PhoneSettings.Target target=settingsTarget;settingsTarget=null;handler.removeCallbacks(settingsTick);
+        if(wifiConnect!=null){wifiConnect.finish(guide?"TIMEOUT":"CANCELLED",guide);wifiConnect=null;}
         if(!working&&!navigatingWifi&&lockProbe.isEmpty())events(false);
-        if(guide&&target!=null)Toast.makeText(this,PhoneSettings.guide(target),Toast.LENGTH_LONG).show();
+        if(guide&&target!=null&&!PhoneSettings.guide(target).isEmpty())Toast.makeText(this,PhoneSettings.guide(target),Toast.LENGTH_LONG).show();
     }
     private final Runnable settingsTick=new Runnable(){@Override public void run(){
         if(settingsTarget==null)return;
@@ -660,6 +697,13 @@ public final class ChromeAttendanceService extends AccessibilityService {
         navigateSettingsMenu();if(settingsTarget!=null)handler.postDelayed(this,700);
     }};
     private void navigateSettingsMenu(){
+        if(settingsTarget==PhoneSettings.Target.WIFI){
+            // Read the current Settings tree after network scans and dialog transitions.
+            if(Build.VERSION.SDK_INT>=33)clearCache();
+            AccessibilityNodeInfo root=focusedRoot();
+            if(root!=null&&Build.VERSION.SDK_INT<33&&!root.refresh())root=null;
+            if(wifiConnect==null||wifiConnect.step(root))endSettingsMenu(false);return;
+        }
         if(getSystemService(KeyguardManager.class).isDeviceLocked()){endSettingsMenu(true);return;}
         AccessibilityNodeInfo root=focusedRoot();if(root==null)return;
         String pkg=string(root.getPackageName());

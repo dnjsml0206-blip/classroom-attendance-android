@@ -33,5 +33,16 @@ public final class AttendanceAttemptPolicyTest {
         assertEquals(Policy.Phase.IDLE,activation("17:50:04",true,false));
         assertEquals(Policy.Phase.CHECKOUT,activation("17:50:05",true,false));
     }
+    @Test public void manualReasonTracksConfiguredCheckoutInsteadOfDefaultTime(){
+        var blocked=AttendanceAttemptPolicy.manualGate(Policy.Phase.CHECKOUT,at("17:51:06"),Set.of(2),Set.of(),"08:30","17:52",false);
+        assertEquals("CHECKOUT_NOT_OPEN",blocked.code());assertTrue(blocked.problem().contains("17:52:05"));
+        assertEquals("ALLOWED",AttendanceAttemptPolicy.manualGate(Policy.Phase.CHECKOUT,at("17:51:26"),Set.of(2),Set.of(),"08:30","17:50",false).code());
+    }
+    @Test public void observationAndSubmissionHaveDistinctGateReasons(){
+        assertEquals("NON_CLASS_DAY",AttendanceAttemptPolicy.manualGate(Policy.Phase.ENTRY,at("08:00:00"),Set.of(),Set.of(),"08:30","17:50",false).code());
+        assertEquals("ALLOWED",AttendanceAttemptPolicy.manualGate(Policy.Phase.ENTRY,at("08:00:00"),Set.of(),Set.of(),"08:30","17:50",true).code());
+        assertEquals("ENTRY_NOT_OPEN",AttendanceAttemptPolicy.manualGate(Policy.Phase.ENTRY,at("08:00:00"),Set.of(2),Set.of(),"08:30","17:50",false).code());
+        assertEquals("PHASE_REQUIRED",AttendanceAttemptPolicy.manualGate(Policy.Phase.IDLE,at("08:00:00"),Set.of(2),Set.of(),"08:30","17:50",true).code());
+    }
     private Policy.Phase activation(String time,boolean in,boolean out){return AttendanceAttemptPolicy.activationPhase(at(time),Set.of(2),Set.of(),"08:30","09:30","17:50",in,out);}
 }

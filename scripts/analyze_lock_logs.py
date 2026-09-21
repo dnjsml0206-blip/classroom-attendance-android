@@ -179,10 +179,16 @@ def render(rows, skipped):
                   "CLICK_PLANNED": "클릭 직전 기록", "BUTTON_FAILED": "클릭 요청 거절", "CONFIRM_REQUEST": "퇴실 확인 요청",
                   "WAKE_REQUESTED": "화면 깨우기 요청", "WAKE_VISIBLE": "깨우기 화면 포커스", "WAKE_BLOCKED": "화면 깨우기 차단",
                   "WAKE_AUTH_REQUIRED": "사용자 인증 필요", "WAKE_DISMISS_REQUEST": "시스템 잠금 해제 요청",
-                  "WAKE_DISMISS_RESULT": "시스템 잠금 해제 응답", "WAKE_FINISHED": "잠금 처리 종료", "PAGE_RECOVERY_WAIT": "클릭 전 화면 복구 대기", "PRECLICK_DEFERRED": "클릭 전 일시 중단", "CHROME_DIAGNOSTIC": "화면·사이트 관찰", "ATTEMPT_FAILED": "출결 시도 중단 진단", "SCREEN_PRESENTATION": "출결 처리 화면 가림", "SCREEN_OFF_REQUEST": "완료 후 화면 끄기 요청", "SCREEN_OFF_RESULT": "화면 꺼짐 확인 결과", "DIALOG_STATE_CHANGED": "대화상자 상태 변화", "ATTEMPT_CANCELLED": "사용자가 출결 확인 취소"}
+                  "WAKE_DISMISS_RESULT": "시스템 잠금 해제 응답", "WAKE_FINISHED": "잠금 처리 종료", "PAGE_RECOVERY_WAIT": "클릭 전 화면 복구 대기", "PRECLICK_DEFERRED": "클릭 전 일시 중단", "CHROME_DIAGNOSTIC": "화면·사이트 관찰", "ATTEMPT_FAILED": "출결 시도 중단 진단", "SCREEN_PRESENTATION": "출결 처리 화면 가림", "SCREEN_OFF_REQUEST": "완료 후 화면 끄기 요청", "SCREEN_OFF_RESULT": "화면 꺼짐 확인 결과", "DIALOG_STATE_CHANGED": "대화상자 상태 변화", "ATTEMPT_CANCELLED": "사용자가 출결 확인 취소", "WIFI_CONNECT_STEP": "Wi-Fi 연결 단계", "WIFI_CONNECT_FINISHED": "Wi-Fi 연결 시도 종료", "MANUAL_REQUEST": "직접 실행 요청", "MANUAL_BLOCKED": "직접 실행 조건 미충족", "SCHEDULE_CHANGED": "시간·수업 요일 설정 변경"}
         lines += ["", "## 일반 출결 동작", "", f"일반 동작 {len(events)}건. Chrome 내부 HTTP 요청 건수와 다릅니다."]
         for code, label in labels.items():
             lines.append(f"- {label}: {counts[code]}건")
+        confirmed = [e for e in events if e.get("event_code") == "RECORD_CONFIRMED"]
+        sources = Counter(e.get("details", {}).get("record_source") for e in confirmed if isinstance(e.get("details"), dict) and isinstance(e["details"].get("record_source"), str))
+        clicked = sources["AFTER_APP_CLICK"]
+        observed = sources["OBSERVED_WITHOUT_APP_CLICK"]
+        lines += ["", f"완료 기록 구분: 앱 클릭 후 확인 {clicked}건 / 이번 실행에서 클릭 없이 확인 {observed}건 / 구분 정보 없음 {len(confirmed)-clicked-observed}건.",
+                  "클릭 없이 확인한 기록은 누가 처리했는지 증명하지 않습니다. 구버전 기록은 동작 이력과 별도로 대조해야 합니다."]
         def event_time(row):
             value=row.get("occurred_at_ms")
             return value if isinstance(value,(int,float)) and not isinstance(value,bool) else 0

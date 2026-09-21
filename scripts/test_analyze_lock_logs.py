@@ -103,3 +103,17 @@ class DiagnosticAnalysisTests(unittest.TestCase):
         self.assertNotIn("SECRET",report)
         self.assertNotIn("raw message",report)
         self.assertIn("내용 분류 불가",report)
+
+
+class CompletionSourceTests(unittest.TestCase):
+    def test_existing_record_is_not_counted_as_an_app_click(self):
+        events = [{"source": "s", "record_type": "attendance_event", "event_code": "RECORD_CONFIRMED", "details": {"record_source": source}} for source in ["AFTER_APP_CLICK", "OBSERVED_WITHOUT_APP_CLICK", "UNKNOWN"]]
+        report = render(events, 0)
+        self.assertIn("앱 클릭 후 확인 1건 / 이번 실행에서 클릭 없이 확인 1건 / 구분 정보 없음 1건", report)
+        self.assertIn("누가 처리했는지 증명하지 않습니다", report)
+
+    def test_untrusted_source_field_never_renders_or_crashes(self):
+        events = [{"source": "s", "record_type": "attendance_event", "event_code": "RECORD_CONFIRMED", "details": {"record_source": source}} for source in ["PRIVATE_ACCOUNT", {"cookie": "PRIVATE_COOKIE"}]]
+        report = render(events, 0)
+        self.assertNotIn("PRIVATE", report)
+        self.assertIn("구분 정보 없음 2건", report)
