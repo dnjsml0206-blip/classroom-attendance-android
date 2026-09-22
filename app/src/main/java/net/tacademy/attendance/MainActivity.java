@@ -482,6 +482,7 @@ public final class MainActivity extends Activity {
         LinearLayout checks=settingsCard("설정 확인", "checks", () -> "각 항목을 누르면 해당 설정으로 이동합니다. 앱으로 돌아오면 상태를 다시 확인합니다."
             + "\n\n‘완료’·‘켜짐’이면 확인된 상태입니다. ‘설정 필요’·‘연결 대기’ 항목을 눌러 필요한 설정을 마쳐 주세요.");setupStatus=new SetupStatusView(this,false);checks.addView(setupStatus);
         LinearLayout schedule = settingsCard("출석 시간", "schedule", () -> "모든 시간은 한국 시간입니다. 입실 시간과 퇴실 시간을 눌러 각각 변경할 수 있습니다."
+            + "\n\n입실 시간대에 등록 Wi-Fi의 인터넷 연결이 확인되면 바로 입실 확인을 시작합니다."
             + "\n\n" + getString(R.string.checkout_delay_notice,Policy.CHECKOUT_DELAY_SECONDS)
             + "\n\n자동 접속은 입실·퇴실 각 최대 3회입니다. 오류나 결과 확인 시간 초과 시 자동 재접속을 멈춥니다. 모든 사이트 열기는 최소 3초 간격, 하루 최대 20회입니다."
             + "\n\n입실·퇴실 완료를 확인하면 해당 감시를 종료합니다. 퇴실 재시도 시간 안에서, 퇴실 미확인 상태로 강의실을 벗어나면 알립니다."

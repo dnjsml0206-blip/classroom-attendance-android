@@ -84,6 +84,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         return false;
     }
     public static boolean busy() { return instance != null && instance.working; }
+    static boolean otherUiBusy() { return instance != null && (instance.navigatingWifi || instance.settingsTarget != null || !instance.lockProbe.isEmpty()); }
     @Override protected void onServiceConnected() {
         instance = this; events(false);
         Prefs p=new Prefs(this);DiagnosticLog.add(this,DiagnosticLog.Event.ACCESSIBILITY_CONNECTED,p.phase(ZonedDateTime.now(Policy.ZONE)),"SERVICE_CONNECTED");
@@ -690,6 +691,9 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if(wifiConnect!=null){wifiConnect.finish(guide?"TIMEOUT":"CANCELLED",guide);wifiConnect=null;}
         if(!working&&!navigatingWifi&&lockProbe.isEmpty())events(false);
         if(guide&&target!=null&&!PhoneSettings.guide(target).isEmpty())Toast.makeText(this,PhoneSettings.guide(target),Toast.LENGTH_LONG).show();
+        // The network callback may have arrived while this helper still owned Settings.
+        if(target==PhoneSettings.Target.WIFI && new Prefs(this).auto())
+            handler.post(() -> AttendanceEngine.request(this,false,null));
     }
     private final Runnable settingsTick=new Runnable(){@Override public void run(){
         if(settingsTarget==null)return;

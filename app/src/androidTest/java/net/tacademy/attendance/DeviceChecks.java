@@ -9,13 +9,15 @@ import java.util.*;
 /** Emulator-only lifecycle checks. Uses a deliberately unmatched SSID and never clicks Chrome. */
 public final class DeviceChecks extends Instrumentation {
     private Bundle replicaArgs;
+    private boolean networkArrival;
     private Context context;
     private Map<String,?> saved;
     private MainActivity activity;
     private int checks;
     private boolean stand, manual, clickTest, wake, themes, locks, upload, settings, departure, calendar, traffic;
-    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments);if(arguments!=null&&"replica".equals(arguments.getString("suite")))replicaArgs=arguments;stand=arguments!=null&&"stand".equals(arguments.getString("suite"));manual=arguments!=null&&"manual".equals(arguments.getString("suite"));clickTest=arguments!=null&&"click".equals(arguments.getString("suite")); wake=arguments!=null&&"wake".equals(arguments.getString("suite")); traffic=arguments!=null&&"traffic".equals(arguments.getString("suite")); calendar=arguments!=null&&"calendar".equals(arguments.getString("suite")); departure=arguments!=null&&"departure".equals(arguments.getString("suite")); settings=arguments!=null&&"settings".equals(arguments.getString("suite")); upload = arguments != null && "upload".equals(arguments.getString("suite")); themes = arguments != null && "themes".equals(arguments.getString("suite")); locks = arguments != null && "locks".equals(arguments.getString("suite")); start(); }
+    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments);networkArrival=arguments!=null&&"network-arrival".equals(arguments.getString("suite"));if(arguments!=null&&"replica".equals(arguments.getString("suite")))replicaArgs=arguments;stand=arguments!=null&&"stand".equals(arguments.getString("suite"));manual=arguments!=null&&"manual".equals(arguments.getString("suite"));clickTest=arguments!=null&&"click".equals(arguments.getString("suite")); wake=arguments!=null&&"wake".equals(arguments.getString("suite")); traffic=arguments!=null&&"traffic".equals(arguments.getString("suite")); calendar=arguments!=null&&"calendar".equals(arguments.getString("suite")); departure=arguments!=null&&"departure".equals(arguments.getString("suite")); settings=arguments!=null&&"settings".equals(arguments.getString("suite")); upload = arguments != null && "upload".equals(arguments.getString("suite")); themes = arguments != null && "themes".equals(arguments.getString("suite")); locks = arguments != null && "locks".equals(arguments.getString("suite")); start(); }
     @Override public void onStart() {
+        if(networkArrival){new NetworkArrivalChecks(this).run();return;}
         if(replicaArgs!=null){new ReplicaChecks(this,replicaArgs).run();return;}
         if(stand){new StandTouchChecks(this).run();return;}
         if(manual){new ManualAttendanceChecks(this).run();return;}

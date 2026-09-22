@@ -15,7 +15,19 @@ public final class MonitorService extends Service implements LocationListener {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private LocationManager locations;
     private ConnectivityManager connectivity;
-    private ConnectivityManager.NetworkCallback callback;
+    private ConnectivityManager.NetworkCallback callback, defaultCallback;
+    private String networkTrigger = "LOCAL_CHECK", lastWifiCode = "";
+    private long networkEventAt, networkEventElapsed;
+    private int networkRechecks;
+    private final Runnable networkCheck = new Runnable() {
+        @Override public void run() {
+            evaluate(networkTrigger);
+            // Connectivity snapshots can lag the callback. Recheck locally for at most
+            // three seconds; this never requests a network or contacts the attendance site.
+            if (!stopping && !"ALLOWED".equals(lastWifiCode) && networkRechecks-- > 0)
+                handler.postDelayed(this, 1000);
+        }
+    };
     private Location latest;
     private boolean started, stopping, locationUpdates;
     private final DepartureCheck departure = new DepartureCheck();
@@ -58,14 +70,15 @@ public final class MonitorService extends Service implements LocationListener {
             started = true; stopping = false;
             locations = getSystemService(LocationManager.class);
             connectivity = getSystemService(ConnectivityManager.class);
+            callback = networkCallback("WIFI");
+            defaultCallback = networkCallback("DEFAULT");
             try {
-                callback = new ConnectivityManager.NetworkCallback() {
-                    @Override public void onAvailable(Network n) { handler.post(() -> evaluate()); }
-                    @Override public void onLost(Network n) { handler.post(() -> evaluate()); }
-                    @Override public void onCapabilitiesChanged(Network n, NetworkCapabilities c) { handler.post(() -> evaluate()); }
-                };
                 connectivity.registerNetworkCallback(new NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), callback);
-            } catch (SecurityException e) { prefs.status("권한 확인 필요", "위치 권한을 다시 확인해 주세요"); }
+            } catch (RuntimeException e) { networkWatchFailed("WIFI", e); }
+            try {
+                // Wi-Fi can validate before Android selects it as Chrome's default route.
+                connectivity.registerDefaultNetworkCallback(defaultCallback);
+            } catch (RuntimeException e) { networkWatchFailed("DEFAULT", e); }
             DiagnosticLog.add(this,DiagnosticLog.Event.MONITOR_STARTED,phase,"SCHEDULE_WINDOW");
             prefs.log(phase == Policy.Phase.ENTRY ? "입실 시간 감시 시작" : "퇴실 시간 확인 시작");
             AlarmScheduler.arm(this, false);
@@ -74,7 +87,31 @@ public final class MonitorService extends Service implements LocationListener {
         // A scheduled alarm restores eligible work. Do not restart a continuous service.
         return START_NOT_STICKY;
     }
-    private void evaluate() {
+    private ConnectivityManager.NetworkCallback networkCallback(String source) {
+        return new ConnectivityManager.NetworkCallback() {
+            @Override public void onAvailable(Network n) { changed("AVAILABLE"); }
+            @Override public void onLost(Network n) { changed("LOST"); }
+            @Override public void onCapabilitiesChanged(Network n, NetworkCapabilities c) { changed("CAPABILITIES"); }
+            @Override public void onLinkPropertiesChanged(Network n, LinkProperties p) { changed("LINK"); }
+            private void changed(String event) {
+                long at = System.currentTimeMillis(), elapsed = SystemClock.elapsedRealtime();
+                // Do not query synchronous network properties inside a system callback.
+                handler.post(() -> {
+                    if (stopping) return;
+                    networkTrigger = source + "_" + event;
+                    networkEventAt = at; networkEventElapsed = elapsed; networkRechecks = 3;
+                    handler.removeCallbacks(networkCheck);
+                    handler.post(networkCheck);
+                });
+            }
+        };
+    }
+    private void networkWatchFailed(String source, RuntimeException e) {
+        DiagnosticLog.add(this, DiagnosticLog.Event.NETWORK_WATCH_FAILED,
+            new Prefs(this).phase(ZonedDateTime.now(Policy.ZONE)), source + ":" + DiagnosticLog.failureCode(e));
+    }
+    private void evaluate() { evaluate("LOCAL_CHECK"); }
+    private void evaluate(String trigger) {
         if (stopping) return;
         Prefs prefs = new Prefs(this);
         ZonedDateTime now = ZonedDateTime.now(Policy.ZONE);
@@ -83,6 +120,16 @@ public final class MonitorService extends Service implements LocationListener {
         boolean departureWatch = prefs.departureWatching(now);
         updateLocationRequests(prefs.hasLocation() && (phase == Policy.Phase.ENTRY || departureWatch));
         NetworkAccess.State wifi = NetworkAccess.inspect(this);
+        if (!wifi.code().equals(lastWifiCode)) {
+            org.json.JSONObject details = new org.json.JSONObject();
+            try {
+                details.put("network_trigger", trigger).put("wifi_check_code", wifi.code());
+                if (!"LOCAL_CHECK".equals(trigger)) details.put("network_event_at_ms", networkEventAt)
+                    .put("elapsed_ms", Math.max(0, SystemClock.elapsedRealtime() - networkEventElapsed));
+            } catch (org.json.JSONException ignored) {}
+            DiagnosticLog.add(this, DiagnosticLog.Event.NETWORK_STATE_CHANGED, phase, wifi.code(), details);
+            lastWifiCode = wifi.code();
+        }
         if (wifi.allowed()) rememberClassroom(prefs,now);
         String proximity = "강의실 위치 미등록";
         boolean near = false;
@@ -164,8 +211,9 @@ public final class MonitorService extends Service implements LocationListener {
     @Override public void onDestroy() {
         stopping = true; running = false; ChromeAttendanceService.cancelScheduledWork(); handler.removeCallbacksAndMessages(null);
         if (locations != null) { try { locations.removeUpdates(this); } catch (SecurityException ignored) {} }
-        if (connectivity != null && callback != null) {
-            try { connectivity.unregisterNetworkCallback(callback); } catch (RuntimeException ignored) {}
+        if (connectivity != null) {
+            for (ConnectivityManager.NetworkCallback watcher : new ConnectivityManager.NetworkCallback[]{callback, defaultCallback})
+                if (watcher != null) try { connectivity.unregisterNetworkCallback(watcher); } catch (RuntimeException ignored) {}
         }
         Notices.wifi(this, false, "");
         new Prefs(this).raw.edit().putLong("monitor_seen", 0).apply();

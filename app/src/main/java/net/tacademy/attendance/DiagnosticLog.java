@@ -13,7 +13,7 @@ final class DiagnosticLog {
         CHROME_OPEN_FAILED, BUTTON_REQUEST, BUTTON_FAILED, CONFIRM_REQUEST, RECORD_CONFIRMED, AUTOMATIC_PAUSED, NETWORK_DIAGNOSTIC_LOCAL,
         ALARM_ARMED, ALARM_FIRED, ALARM_FAILED, MONITOR_START_REQUEST, MONITOR_START_RECEIVED, MONITOR_START_FAILED,
         CHROME_STAGE, CLICK_PLANNED, WAKE_REQUESTED, WAKE_VISIBLE, WAKE_BLOCKED, WAKE_AUTH_REQUIRED,
-        ACTIVATION_QUEUED, ACTIVATION_FIRED, WAKE_DISMISS_REQUEST, WAKE_DISMISS_RESULT, WAKE_FINISHED, ACCESSIBILITY_CONNECTED, RESULT_WAIT_STARTED, MANUAL_REQUEST, MANUAL_BLOCKED, MANUAL_FINISHED, PAGE_RECOVERY_WAIT, PRECLICK_DEFERRED, CHROME_DIAGNOSTIC, ATTEMPT_FAILED, ATTEMPT_CANCELLED, DIALOG_STATE_CHANGED, SCREEN_PRESENTATION, SCREEN_OFF_REQUEST, SCREEN_OFF_RESULT, WIFI_CONNECT_STEP, WIFI_CONNECT_FINISHED, SCHEDULE_CHANGED }
+        ACTIVATION_QUEUED, ACTIVATION_FIRED, WAKE_DISMISS_REQUEST, WAKE_DISMISS_RESULT, WAKE_FINISHED, ACCESSIBILITY_CONNECTED, RESULT_WAIT_STARTED, MANUAL_REQUEST, MANUAL_BLOCKED, MANUAL_FINISHED, PAGE_RECOVERY_WAIT, PRECLICK_DEFERRED, CHROME_DIAGNOSTIC, ATTEMPT_FAILED, ATTEMPT_CANCELLED, DIALOG_STATE_CHANGED, SCREEN_PRESENTATION, SCREEN_OFF_REQUEST, SCREEN_OFF_RESULT, WIFI_CONNECT_STEP, WIFI_CONNECT_FINISHED, SCHEDULE_CHANGED, NETWORK_STATE_CHANGED, NETWORK_WATCH_FAILED, AUTOMATIC_TRIGGER }
     static SharedPreferences prefs(Context c){return c.getSharedPreferences("attendance_diagnostics",Context.MODE_PRIVATE);}
     static synchronized void add(Context c,Event event,Policy.Phase phase,String reason){
         add(c,event,phase,reason,new JSONObject());
@@ -29,7 +29,7 @@ final class DiagnosticLog {
                 "confirmation_disappeared","confirmation_age_ms","confirmation_visible_ms","processing_page_visible",
                 "entry_start","entry_end","checkout_start","checkout_retry_minutes","configured_days","schedule_enabled","auto_click","next_alarm_at_ms",
                 "previous_entry_start","previous_entry_end","previous_checkout_start","previous_checkout_retry_minutes","previous_configured_days",
-                "read_only","class_day","record_source","attendance_day","entry_time","checkout_time"})if(details.has(key))safe.put(key,details.get(key));
+                "network_trigger","network_event_at_ms","read_only","class_day","record_source","attendance_day","entry_time","checkout_time"})if(details.has(key))safe.put(key,details.get(key));
             long now=System.currentTimeMillis();SharedPreferences p=prefs(c);
             String signature=LocalDate.now(Policy.ZONE)+":"+event+":"+phase+":"+reason+":"+safe;
             if(signature.equals(p.getString("last_signature","")))return;
