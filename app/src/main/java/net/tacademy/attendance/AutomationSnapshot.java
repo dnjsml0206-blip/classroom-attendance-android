@@ -8,7 +8,7 @@ final class AutomationSnapshot {
     static JSONObject read(Context c){
         JSONObject result=new JSONObject();Prefs p=new Prefs(c);
         try{
-            result.put("entry_start",p.start()).put("entry_end",p.end()).put("checkout_start",Policy.checkoutStartTime(p.checkout()).toString())
+            result.put("entry_start",p.start()).put("entry_end",p.end()).put("checkout_start",p.checkoutStartToday().toString())
                 .put("checkout_retry_minutes",p.retryMinutes()).put("class_day",Policy.isClassDay(ZonedDateTime.now(Policy.ZONE),p.days(),p.excluded()))
                 .put("entry_confirmed_today",p.checkedInToday()).put("checkout_confirmed_today",p.checkedOutToday())
                 .put("monitor_running",MonitorService.running).put("monitor_seen_at_ms",p.raw.getLong("monitor_seen",0)).put("next_alarm_at_ms",p.raw.getLong("next_alarm",0))

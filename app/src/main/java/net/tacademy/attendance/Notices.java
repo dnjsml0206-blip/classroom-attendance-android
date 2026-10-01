@@ -39,7 +39,7 @@ public final class Notices {
                 (phase == Policy.Phase.CHECKOUT && !record.checkedOut())) return;
         java.time.LocalDate date = java.time.LocalDate.parse(day);
         if (record.checkedOut()) clearDeparture(context,day);
-        String title = phase == Policy.Phase.ENTRY ? "입실 완료" : "퇴실 완료";
+        String title = phase == Policy.Phase.ENTRY ? "입실 완료" : AttendanceMetrics.isEarly(record.out(),new Prefs(context).checkoutFor(date)) ? "조퇴 완료" : "퇴실 완료";
         String time = phase == Policy.Phase.ENTRY ? record.in() : record.out();
         String detail = date + " · Chrome 사이트 기록 " + time;
         int id = phase == Policy.Phase.ENTRY ? ENTRY_RESULT : CHECKOUT_RESULT;
@@ -123,11 +123,12 @@ public final class Notices {
         new Prefs(context).raw.edit().putBoolean("guidance_notifications",enabled).apply();
         if (!enabled) {
             NotificationManager nm=context.getSystemService(NotificationManager.class);
-            for (int id : new int[]{WIFI,RESULT,14,15}) nm.cancel(id);
+            for (int id : new int[]{WIFI,RESULT,14,15,ShortDayReminder.ID}) nm.cancel(id);
             for (android.service.notification.StatusBarNotification notice : nm.getActiveNotifications())
                 if (notice.getId()==DEPARTURE && notice.getTag()!=null && notice.getTag().startsWith("departure:"))
                     nm.cancel(notice.getTag(),DEPARTURE);
         }
+        ShortDayReminder.reconcile(context);
     }
     private static void publish(Context context, int id, Notification notification) {
         if (!new Prefs(context).guidanceNotifications()) return;

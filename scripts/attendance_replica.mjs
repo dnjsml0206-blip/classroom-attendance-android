@@ -10,7 +10,7 @@ const ws=new WebSocket(version.webSocketDebuggerUrl);await new Promise((yes,no)=
 let serial=0;const pending=new Map(),sessions=new Set(),ready=new Set(),targetBySession=new Map();let errors=[];
 function cmd(method,params={},sessionId){return new Promise((resolve,reject)=>{let id=++serial;pending.set(id,{resolve,reject,method});ws.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));});}
 let state;
-function reset(name){state={runId,case:name,in:(name.startsWith('checkout')||name.startsWith('already-in'))?'08:45:00':'',out:'',requests:[],entries:0,exits:0,dialogs:0,documents:0};}
+function reset(name){state={runId,case:name,in:(name.startsWith('checkout')||name.startsWith('already-in'))?'08:45:00':'',out:name==='checkout-read'?'15:30:00':'',requests:[],entries:0,exits:0,dialogs:0,documents:0};}
 reset('entry');
 function record(item){state.requests.push({...item,at:new Date().toISOString()});fs.writeFileSync(`${dir}/router-state.json`,JSON.stringify(state,null,2));}
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
@@ -43,7 +43,7 @@ async function respond(e,sid){
    if(snapshot.case==='checkout-wifi')body='0';
    else if(snapshot.case==='checkout-no-result'){} // Successful HTTP response without a saved server time.
    else if(snapshot.case==='checkout-unknown-alert')body="<script>";
-   else snapshot.out='17:50:05';
+   else snapshot.out=snapshot.case==='checkout-early'?'15:30:00':'17:50:05';
  }
  else {status=404;body='Blocked by local replica';}
  record({url:e.request.url,method:e.request.method,action:'fulfilled',status});

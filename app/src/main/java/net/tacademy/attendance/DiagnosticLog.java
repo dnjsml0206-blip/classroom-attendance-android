@@ -29,7 +29,7 @@ final class DiagnosticLog {
                 "confirmation_disappeared","confirmation_age_ms","confirmation_visible_ms","processing_page_visible",
                 "entry_start","entry_end","checkout_start","checkout_retry_minutes","configured_days","schedule_enabled","auto_click","next_alarm_at_ms",
                 "previous_entry_start","previous_entry_end","previous_checkout_start","previous_checkout_retry_minutes","previous_configured_days",
-                "network_trigger","network_event_at_ms","read_only","class_day","record_source","attendance_day","entry_time","checkout_time"})if(details.has(key))safe.put(key,details.get(key));
+                "early_leave_approved","network_trigger","network_event_at_ms","read_only","class_day","record_source","attendance_day","entry_time","checkout_time"})if(details.has(key))safe.put(key,details.get(key));
             long now=System.currentTimeMillis();SharedPreferences p=prefs(c);
             String signature=LocalDate.now(Policy.ZONE)+":"+event+":"+phase+":"+reason+":"+safe;
             if(signature.equals(p.getString("last_signature","")))return;
@@ -48,7 +48,7 @@ final class DiagnosticLog {
     }
     static JSONObject scheduleDetails(Prefs p){
         JSONObject d=new JSONObject();try{
-            d.put("entry_start",p.start()).put("entry_end",p.end()).put("checkout_start",Policy.checkoutStartTime(p.checkout()).toString())
+            d.put("entry_start",p.start()).put("entry_end",p.end()).put("checkout_start",p.checkoutStartToday().toString())
                 .put("checkout_retry_minutes",p.retryMinutes()).put("configured_days",new JSONArray(new TreeSet<>(p.days())))
                 .put("schedule_enabled",p.enabled()).put("auto_click",p.auto()).put("next_alarm_at_ms",p.raw.getLong("next_alarm",0));
         }catch(JSONException ignored){}return d;

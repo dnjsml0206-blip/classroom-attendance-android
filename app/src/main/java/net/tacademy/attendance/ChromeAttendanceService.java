@@ -36,7 +36,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private boolean confirmationGone;
     private String lastDialogState="";
     private int dialogTransitions;
-    private boolean manualSession, manualReadOnly, manualRetryApproved;
+    private boolean manualSession, manualReadOnly, manualRetryApproved, manualEarlyApproved;
     private String attemptId="",lastStage="CHROME_NOT_VISIBLE";
     private final Set<String> seenStages=new HashSet<>();
     private ReadEvidence evidence=new ReadEvidence();
@@ -120,15 +120,21 @@ public final class ChromeAttendanceService extends AccessibilityService {
     }
     public static void begin(Context context, Runnable done) {
         if(ActivationRun.pending()){if(done!=null)done.run();return;}
-        begin(context,done,new Prefs(context).phase(ZonedDateTime.now(Policy.ZONE)),false,false,false);
+        begin(context,done,new Prefs(context).phase(ZonedDateTime.now(Policy.ZONE)),false,false,false,false);
     }
     public static void beginManual(Activity context,Policy.Phase phase,boolean readOnly,boolean retryApproved) {
+        beginManual(context,phase,readOnly,retryApproved,false);
+    }
+    public static void beginEarlyCheckout(Activity context,boolean retryApproved) {
+        beginManual(context,Policy.Phase.CHECKOUT,false,retryApproved,true);
+    }
+    private static void beginManual(Activity context,Policy.Phase phase,boolean readOnly,boolean retryApproved,boolean earlyApproved) {
         Prefs p=new Prefs(context);
         var now=ZonedDateTime.now(Policy.ZONE);
-        var gate=AttendanceAttemptPolicy.manualGate(phase,now,p.days(),p.excluded(),p.start(),p.checkout(),readOnly);
+        var gate=AttendanceAttemptPolicy.manualGate(phase,now,p.days(),p.excluded(),p.start(),p.checkout(),readOnly,earlyApproved);
         String problem=gate.problem(),reason=gate.code();
         org.json.JSONObject details=DiagnosticLog.scheduleDetails(p);
-        try{details.put("read_only",readOnly).put("class_day",Policy.isClassDay(now,p.days(),p.excluded()));}catch(org.json.JSONException ignored){}
+        try{details.put("early_leave_approved",earlyApproved).put("read_only",readOnly).put("class_day",Policy.isClassDay(now,p.days(),p.excluded()));}catch(org.json.JSONException ignored){}
         if(problem.isEmpty()){
             NetworkAccess.State network=NetworkAccess.inspect(context);
             try{details.put("wifi_check_code",network.code());}catch(org.json.JSONException ignored){}
@@ -137,10 +143,10 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if(problem.isEmpty()&&!available()){problem="Chrome 접근성 연결이 필요해요. 연결 탭에서 확인해 주세요.";reason="ACCESSIBILITY_DISCONNECTED";}
         if(problem.isEmpty()&&(LockLab.readOnlyActive(context)||ScheduledUnlock.active(context)||instance!=null&&(instance.working||instance.navigatingWifi||instance.settingsTarget!=null||!instance.lockProbe.isEmpty()))){problem="진행 중인 테스트나 화면 작업을 마친 뒤 다시 눌러 주세요.";reason="OTHER_UI_WORK";}
         if(!problem.isEmpty()){p.status("직접 출결 확인 필요",problem);DiagnosticLog.add(context,DiagnosticLog.Event.MANUAL_BLOCKED,phase,reason,details);Toast.makeText(context,problem,Toast.LENGTH_LONG).show();return;}
-        DiagnosticLog.add(context,DiagnosticLog.Event.MANUAL_REQUEST,phase,readOnly?"READ_RECORD":retryApproved?"USER_CONFIRMED_RETRY":"ONE_SHOT");
-        begin(context,null,phase,true,readOnly,retryApproved);
+        DiagnosticLog.add(context,DiagnosticLog.Event.MANUAL_REQUEST,phase,readOnly?"READ_RECORD":earlyApproved?"EARLY_LEAVE_APPROVED":retryApproved?"USER_CONFIRMED_RETRY":"ONE_SHOT");
+        begin(context,null,phase,true,readOnly,retryApproved,earlyApproved);
     }
-    private static void begin(Context context,Runnable done,Policy.Phase target,boolean manual,boolean readOnly,boolean retryApproved) {
+    private static void begin(Context context,Runnable done,Policy.Phase target,boolean manual,boolean readOnly,boolean retryApproved,boolean earlyApproved) {
         if (LockLab.readOnlyActive(context)) { DiagnosticLog.add(context,DiagnosticLog.Event.WAITING,new Prefs(context).phase(ZonedDateTime.now(Policy.ZONE)),"READ_ONLY_TRIAL_ACTIVE");if (done != null) done.run(); return; }
         Prefs prefs = new Prefs(context);
         if (instance == null) {
@@ -170,7 +176,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
             if(admission.reason()!=AccessPolicy.Reason.COOLDOWN)Notices.chromeAction(context,true,message);
             if(done!=null)done.run();return;
         }
-        service.manualSession=manual;service.manualReadOnly=readOnly;service.manualRetryApproved=retryApproved;
+        service.manualSession=manual;service.manualReadOnly=readOnly;service.manualRetryApproved=retryApproved;service.manualEarlyApproved=earlyApproved;
         service.day = LocalDate.now(Policy.ZONE).toString();
         service.key = service.day + ":" + service.phase.name();
         prefs.attendanceHint(service.day,service.phase,"");
@@ -247,11 +253,12 @@ public final class ChromeAttendanceService extends AccessibilityService {
         Policy.Record record;
         try { record = ChromePage.record(text); } catch (RuntimeException e) { stage("RECORD_UNREADABLE");traceLock("입실·퇴실 기록 읽기 대기 · 사이트 화면 형식 확인 필요"); return; }
         if (record.checkedIn()) {
-            prefs.record(day, record);
+            Policy.Record existing=prefs.history(LocalDate.parse(day));
+            if(!(manualReadOnly&&existing!=null&&existing.checkedOut()&&!record.checkedOut()))prefs.record(day, record);
             boolean completed = phase == Policy.Phase.ENTRY || record.checkedOut();
             if (completed) {
                 prefs.raw.edit().remove("chrome_pending").remove("chrome_pending_at").apply();
-                String title = phase == Policy.Phase.ENTRY ? "입실 완료" : "퇴실 완료";
+                String title = phase == Policy.Phase.ENTRY ? "입실 완료" : AttendanceMetrics.isEarly(record.out(),prefs.checkoutFor(LocalDate.parse(day))) ? "조퇴 완료" : "퇴실 완료";
                 String time = phase == Policy.Phase.ENTRY ? record.in() : record.out();
                 prefs.attendanceHint(day,phase,"");
                 prefs.status(title + " · 감시 종료", "Chrome 사이트 기록 " + time);
@@ -261,6 +268,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
                 String source=clicked?"AFTER_APP_CLICK":"OBSERVED_WITHOUT_APP_CLICK";
                 try{confirmed.put("record_source",source).put("attendance_day",day).put("entry_time",record.in()).put("checkout_time",record.out());}catch(org.json.JSONException ignored){}
                 DiagnosticLog.add(this,DiagnosticLog.Event.RECORD_CONFIRMED,phase,source,confirmed);
+                if(manualReadOnly&&phase==Policy.Phase.CHECKOUT)Notices.attendanceCompleted(this,day,Policy.Phase.ENTRY,record);
                 Notices.attendanceCompleted(this, day, phase, record);
                 Notices.chromeAction(this, false, "");
                 if (record.checkedOut()) Notices.checkoutAttention(this, false, "");
@@ -271,8 +279,12 @@ public final class ChromeAttendanceService extends AccessibilityService {
         // Existing confirmed records can be read immediately. Only a NEW click needs settling.
         if (SystemClock.elapsedRealtime() - pageSeen < 1800) {stage("PAGE_SETTLING");return;}
         if(manualSession&&manualReadOnly){
+            if(record.checkedIn()){
+                if((day+":ENTRY").equals(prefs.raw.getString("chrome_pending","")))prefs.raw.edit().remove("chrome_pending").remove("chrome_pending_at").apply();
+                Notices.attendanceCompleted(this,day,Policy.Phase.ENTRY,record);
+            }
             prefs.status("출결 기록 확인",phase==Policy.Phase.ENTRY?"아직 입실 완료 시간을 확인하지 못했어요.":"아직 퇴실 완료 시간을 확인하지 못했어요. 실제 미처리를 확인한 뒤 다시 실행해 주세요.");
-            DiagnosticLog.add(this,DiagnosticLog.Event.MANUAL_FINISHED,phase,"RECORD_NOT_CONFIRMED");finishWork();return;
+            DiagnosticLog.add(this,DiagnosticLog.Event.MANUAL_FINISHED,phase,"RECORD_NOT_CONFIRMED");finishWork();ScheduleController.reconcile(this);return;
         }
         if (!manualSession&&!prefs.auto()) { stage("AUTO_CLICK_DISABLED");prefs.status("Chrome 조회 모드", "설정에서 자동 처리를 켜면 출석 버튼을 누릅니다"); finishWork(); return; }
         if (phase == Policy.Phase.CHECKOUT && !record.checkedIn()) { stage("ENTRY_RECORD_MISSING");traceLock("오늘 입실 기록 없음 · 퇴실 클릭 보류"); return; }
@@ -376,7 +388,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private boolean newClickAllowed(Prefs p){
         ZonedDateTime now=ZonedDateTime.now(Policy.ZONE);
         if(!day.equals(now.toLocalDate().toString()))return false;
-        return manualSession?!manualReadOnly&&AttendanceAttemptPolicy.manualProblem(phase,now,p.days(),p.excluded(),p.start(),p.checkout(),false).isEmpty():p.phase(now)==phase;
+        return manualSession?!manualReadOnly&&AttendanceAttemptPolicy.manualGate(phase,now,p.days(),p.excluded(),p.start(),p.checkout(),false,manualEarlyApproved).problem().isEmpty():p.phase(now)==phase;
     }
     private boolean observationAllowed(Prefs p){
         if(!day.equals(LocalDate.now(Policy.ZONE).toString()))return false;
@@ -534,7 +546,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     }
     private void finishWork() {
         screen.finish();
-        working = false; manualSession=false;manualReadOnly=false;manualRetryApproved=false;lockAttendanceToken=""; handler.removeCallbacks(timeout); handler.removeCallbacks(tick); handler.removeCallbacks(eventInspect);eventReadQueued=false;
+        working = false; manualSession=false;manualReadOnly=false;manualRetryApproved=false;manualEarlyApproved=false;lockAttendanceToken=""; handler.removeCallbacks(timeout); handler.removeCallbacks(tick); handler.removeCallbacks(eventInspect);eventReadQueued=false;
         if (!navigatingWifi && settingsTarget==null && lockProbe.isEmpty()) events(false);
         Runnable done = finished; finished = null;
         if (done != null) done.run();

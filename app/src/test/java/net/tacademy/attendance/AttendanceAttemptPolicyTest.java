@@ -45,4 +45,11 @@ public final class AttendanceAttemptPolicyTest {
         assertEquals("PHASE_REQUIRED",AttendanceAttemptPolicy.manualGate(Policy.Phase.IDLE,at("08:00:00"),Set.of(2),Set.of(),"08:30","17:50",true).code());
     }
     private Policy.Phase activation(String time,boolean in,boolean out){return AttendanceAttemptPolicy.activationPhase(at(time),Set.of(2),Set.of(),"08:30","09:30","17:50",in,out);}
+    @Test public void onlyExplicitEarlyApprovalBypassesCheckoutTime(){
+        assertEquals("CHECKOUT_NOT_OPEN",AttendanceAttemptPolicy.manualGate(Policy.Phase.CHECKOUT,at("15:00:00"),Set.of(2),Set.of(),"08:30","17:50",false,false).code());
+        assertEquals("ALLOWED",AttendanceAttemptPolicy.manualGate(Policy.Phase.CHECKOUT,at("15:00:00"),Set.of(2),Set.of(),"08:30","17:50",false,true).code());
+        assertEquals("NON_CLASS_DAY",AttendanceAttemptPolicy.manualGate(Policy.Phase.CHECKOUT,at("15:00:00"),Set.of(2),Set.of("2026-09-15"),"08:30","17:50",false,true).code());
+        assertEquals("ENTRY_NOT_OPEN",AttendanceAttemptPolicy.manualGate(Policy.Phase.ENTRY,at("08:00:00"),Set.of(2),Set.of(),"08:30","17:50",false,true).code());
+        assertEquals(Policy.Phase.IDLE,activation("15:00:00",true,false));
+    }
 }

@@ -42,6 +42,8 @@ final class ReplicaChecks {
             .putStringSet("days",Set.of("1","2","3","4","5","6","7")).putStringSet("excluded",Set.of())
             .putString("start","00:00").putString("end",checkout?"00:01":"23:50").putString("checkout",checkout?"00:02":"23:51")
             .putInt("checkout_retry_minutes",automatic&&checkout?5:1).putBoolean("screen_off_after_attendance",screenOff).putBoolean("show_processing_screen",processing).commit();
+        if(scenario.equals("checkout-early")||scenario.startsWith("checkout-read"))p.raw.edit().putString("checkout","23:51").commit();
+        if(scenario.equals("checkout-read-entry"))p.raw.edit().putString("chrome_pending",LocalDate.now(Policy.ZONE)+":ENTRY").putLong("chrome_pending_at",System.currentTimeMillis()-10000).commit();
         if(automatic&&checkout)p.raw.edit().putString("checkout",LocalTime.now(Policy.ZONE).minusMinutes(1).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))).commit();
         check(NetworkAccess.inspect(c).allowed(),"Real network guard passes using the emulator Wi-Fi");
         if(checkout)p.raw.edit().putString("record_day",LocalDate.now(Policy.ZONE).toString()).putString("in","08:45:00").commit();
@@ -50,7 +52,7 @@ final class ReplicaChecks {
             p.raw.edit().putString("chrome_pending",LocalDate.now(Policy.ZONE)+":ENTRY").putLong("chrome_pending_at",System.currentTimeMillis()-10000).commit();
             ui(()->{main.getWindow().getDecorView().findViewWithTag("reservation-stand").performClick();main.getWindow().getDecorView().findViewWithTag("reservation-stand").performClick();});
             check(p.enabled()&&ActivationRun.pending(),"Real stand OFF/ON re-enables the reservation and queues its countdown");
-        }else ui(()->{if(scenario.startsWith("already-in"))main.getWindow().getDecorView().findViewWithTag("attendance-enter-now").performClick();else if(scenario.equals("early-return")||scenario.equals("return-after-click")){ChromeAttendanceService.beginManual(main,Policy.Phase.ENTRY,false,false);}else if(automatic)ChromeAttendanceService.begin(main,null);else if(checkout)ChromeAttendanceService.beginManual(main,Policy.Phase.CHECKOUT,false,false);else ChromeAttendanceService.begin(main,null);});
+        }else ui(()->{if(scenario.startsWith("already-in"))main.getWindow().getDecorView().findViewWithTag("attendance-enter-now").performClick();else if(scenario.equals("early-return")||scenario.equals("return-after-click")){ChromeAttendanceService.beginManual(main,Policy.Phase.ENTRY,false,false);}else if(automatic)ChromeAttendanceService.begin(main,null);else if(scenario.equals("checkout-early"))ChromeAttendanceService.beginEarlyCheckout(main,false);else if(scenario.startsWith("checkout-read"))ChromeAttendanceService.beginManual(main,Policy.Phase.CHECKOUT,true,false);else if(checkout)ChromeAttendanceService.beginManual(main,Policy.Phase.CHECKOUT,false,false);else ChromeAttendanceService.begin(main,null);});
         await(()->ChromeAttendanceService.busy(),scenario.equals("pending-read")?10000:3000,"Production attendance session started");
         if(processing&&(automatic||!checkout&&!scenario.startsWith("already-in"))){
             await(()->hasReason("PROCESSING_PAGE_SHOWN"),3000,"Automatic work installs its processing page");
@@ -120,6 +122,12 @@ final class ReplicaChecks {
             JSONObject state=control("/state");
             if(Set.of("auth","wrong-date","server-error","no-course","auth-message","denied","rate-limit","human-check","network-error").contains(scenario)){
                 check(state.getInt("entries")==0,"Invalid page never submits entry");check(!p.checkedInToday(),"Invalid page never reports success");
+            }else if(scenario.startsWith("checkout-read")){
+                check(state.getInt("entries")==0&&state.getInt("exits")==0&&countEvent("BUTTON_REQUEST")==0&&countEvent("CONFIRM_REQUEST")==0,"Read-only lookup never submits or confirms attendance");
+                check(p.checkedInToday()&&p.checkedOutToday()==scenario.equals("checkout-read"),"Read-only lookup saves only observed site times");
+                check(p.raw.getString("chrome_pending","").isEmpty(),"A confirmed entry clears its old pending entry marker");
+                if(scenario.equals("checkout-read"))check(p.calendarState(LocalDate.now(Policy.ZONE),LocalDate.now(Policy.ZONE))==MonthAttendance.State.EARLY_LEAVE,"Observed manual early checkout is classified as early leave");
+                check(!MonitorService.running,"Observed attendance stops the completed monitoring phase");
             }else if(scenario.equals("pending-read")){
                 check(state.getInt("entries")==0&&countEvent("BUTTON_REQUEST")==0&&!p.checkedInToday(),"OFF/ON of an uncertain click only reads the page; it never resubmits or invents success");
                 check((LocalDate.now(Policy.ZONE)+":ENTRY").equals(p.raw.getString("chrome_pending",""))&&countEvent("MANUAL_FINISHED")==1,"Record-only activation keeps the uncertain click marker after the read");
@@ -152,6 +160,7 @@ final class ReplicaChecks {
                     check(settled,"Only the settled native positive button is used");
                 }
                 check(countEvent("RECORD_CONFIRMED")==1,"Completion event requires the observed server time");
+                if(scenario.equals("checkout-early"))check(p.calendarState(LocalDate.now(Policy.ZONE),LocalDate.now(Policy.ZONE))==MonthAttendance.State.EARLY_LEAVE&&p.history(LocalDate.now(Policy.ZONE)).out().equals("15:30:00"),"Approved early checkout is recorded only after its actual site time appears");
             }
         }
         boolean completed=checkout?p.checkedOutToday():p.checkedInToday();

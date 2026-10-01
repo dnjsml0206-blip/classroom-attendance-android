@@ -26,6 +26,9 @@
             </intent-filter>
         </activity>
         <activity android:name=".NotificationSettingsActivity" android:exported="false"/>
+        <activity android:name=".OrientationActivity" android:exported="false"/>
+        <activity android:name=".TimetableActivity" android:exported="false"/>
+        <activity android:name=".AttendanceManagementActivity" android:exported="false"/>
         <activity android:name=".AttendanceCalendarActivity" android:exported="false"/>
         <activity android:name=".ChromeLaunchActivity" android:exported="false"/>
         <activity android:name=".ScheduledUnlockActivity" android:exported="false" android:excludeFromRecents="true"/>
@@ -41,6 +44,7 @@
         </service>
         <service android:name=".MonitorService" android:exported="false" android:foregroundServiceType="location"/>
 
+        <receiver android:name=".ShortDayReceiver" android:exported="false"/>
         <receiver android:name=".AlarmReceiver" android:exported="false"/>
         <receiver android:name=".RestoreReceiver" android:exported="true">
             <intent-filter>

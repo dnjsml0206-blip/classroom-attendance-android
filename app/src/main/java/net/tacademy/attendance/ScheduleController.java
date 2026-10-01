@@ -15,6 +15,7 @@ public final class ScheduleController {
     }
     public static void reconcile(Context context) {
         Prefs prefs = new Prefs(context);
+        ShortDayReminder.reconcile(context);
         AlarmScheduler.arm(context, false);
         if(ActivationRun.pending()&&prefs.enabled())return;
         if (!prefs.enabled() || prefs.checkedOutToday()) Notices.clearDeparture(context,java.time.LocalDate.now(Policy.ZONE).toString());

@@ -15,3 +15,5 @@ case: entry, checkout, slow-page, slow-result, focus, focus-expire, no-result, a
 실제 휴대폰에서는 실행하지 않는다. 검사 코드는 androidTest에만 포함된다. 사용자 Chrome 쿠키·인증 정보는 읽거나 복사하지 않는다.
 
 2026-09-16 퇴실 확인창 보완: `checkout-wifi`는 퇴실 응답 0과 사이트 원본의 Wi-Fi 안내 alert, `checkout-unknown-alert`는 분류 불가 안내, `checkout-no-result`는 응답 후 퇴실 시각 미저장, `checkout-reappeared`는 동일 확인창이 즉시 다시 표시되는 조건이다. 마지막 두 안내 변형은 원본 페이지에 없는 검증용 주입이다. CDP는 확인창을 대신 누르지 않으며 앱 접근성의 클릭으로 닫혔는지를 `javascriptDialogClosed` 이벤트와 로컬 제출 횟수로 대조한다.
+
+2026-09-30 출결 관리 검사: `checkout-early`는 예정 시간 전 명시적으로 승인한 조퇴와 실제 Chrome 확인창을 검사한다. `checkout-read`는 이미 수동으로 조퇴한 사이트 시각을 조회하며, `checkout-read-entry`는 입실만 있는 페이지를 조회한다. 조회 검사는 입실·퇴실 제출 및 버튼/확인 클릭이 모두 0건인지 대조한다.

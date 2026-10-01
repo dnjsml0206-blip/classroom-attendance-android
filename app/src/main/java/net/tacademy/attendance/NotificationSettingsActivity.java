@@ -34,7 +34,7 @@ public final class NotificationSettingsActivity extends Activity {
         note(result,"출결 완료를 확인하면 입실·퇴실 알림을 각각 남깁니다. 직접 지우기 전까지 유지됩니다.");
         LinearLayout guidance=card(content,"연결 · 처리 안내");
         Switch toggle=new Switch(this);toggle.setTag("notification-guidance");toggle.setText("안내 알림 받기");toggle.setTextSize(17);toggle.setTextColor(INK);toggle.setMinHeight(dp(48));toggle.setChecked(prefs.guidanceNotifications());guidance.addView(toggle,new LinearLayout.LayoutParams(-1,-2));
-        note(guidance,"Wi-Fi 연결 요청, 퇴실 미완료·강의실 이탈, Chrome 확인과 오류 안내를 받습니다.");
+        note(guidance,"단축수업 당일 안내, Wi-Fi 연결 요청, 퇴실 미완료·강의실 이탈, Chrome 확인과 오류 안내를 받습니다.");
         guidanceState=text("",13,MUTED,false);guidanceState.setTag("notification-guidance-state");guidance.addView(guidanceState);
         toggle.setOnCheckedChangeListener((button,on)->{Notices.guidanceNotifications(this,on);refresh();});
         LinearLayout permission=card(content,"휴대폰 알림 허용 상태");
@@ -50,7 +50,7 @@ public final class NotificationSettingsActivity extends Activity {
         TextView hint=text("감시 중 표시와 실행한 테스트의 결과 알림은 해당 기능이 동작할 때 유지됩니다.",12,MUTED,false);hint.setPadding(dp(4),dp(4),dp(4),0);content.addView(hint);
         refresh();
     }
-    @Override protected void onResume(){super.onResume();refresh();}
+    @Override protected void onResume(){super.onResume();refresh();ShortDayReminder.reconcile(this);}
     @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){super.onRequestPermissionsResult(code,permissions,results);if(code==PERMISSION)refresh();}
     private void refresh(){
         if(permissionState==null)return;

@@ -37,6 +37,9 @@ public final class Prefs {
     public String start() { return raw.getString("start", "08:30"); }
     public String end() { return raw.getString("end", "09:30"); }
     public String checkout() { return raw.getString("checkout", "17:50"); }
+    public String checkoutFor(LocalDate day) { return CourseSchedule.checkout(day,checkout()); }
+    public String checkoutToday() { return checkoutFor(LocalDate.now(Policy.ZONE)); }
+    public LocalTime checkoutStartToday() { return Policy.checkoutStartTime(LocalDate.now(Policy.ZONE),checkout()); }
     public int retryMinutes() { return raw.getInt("checkout_retry_minutes", 10); }
     public boolean classroomSeenToday() {
         return checkedInToday() || LocalDate.now(Policy.ZONE).toString().equals(raw.getString("departure_seen_day",""));
@@ -60,7 +63,22 @@ public final class Prefs {
         }
         return values;
     }
-    public Set<String> excluded() { return new HashSet<>(raw.getStringSet("excluded", Set.of())); }
+    public Set<String> userExcluded() { return new HashSet<>(raw.getStringSet("excluded", Set.of())); }
+    public Set<String> excluded() { Set<String> all=userExcluded();all.addAll(CourseCalendar.HOLIDAYS.keySet());all.addAll(CourseCalendar.BREAKS.keySet());return all; }
+    public String lateAfter() { return raw.getString("late_after", ""); }
+    AttendanceMetrics.Summary attendanceSummary() {
+        return AttendanceMetrics.summarize(LocalDate.now(Policy.ZONE),days(),excluded(),this::history,this::manualAttendance,lateAfter(),checkout());
+    }
+    MonthAttendance.State calendarState(LocalDate date,LocalDate today) {
+        Policy.Record record=history(date);MonthAttendance.ManualStatus manual=manualAttendance(date);
+        if(!date.isAfter(today)&&manual==null&&record!=null&&record.checkedOut()){
+            AttendanceMetrics.Day d=AttendanceMetrics.day(record,null,lateAfter(),checkoutFor(date));
+            if(d.late()&&d.early())return MonthAttendance.State.LATE_EARLY;
+            if(d.late())return MonthAttendance.State.LATE;
+            if(d.early())return MonthAttendance.State.EARLY_LEAVE;
+        }
+        return MonthAttendance.state(date,today,record,manual,days(),excluded());
+    }
     public boolean hasLocation() { return raw.contains("latitude") && raw.contains("longitude"); }
     public double latitude() { return Double.longBitsToDouble(raw.getLong("latitude", 0)); }
     public double longitude() { return Double.longBitsToDouble(raw.getLong("longitude", 0)); }

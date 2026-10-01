@@ -47,6 +47,10 @@ final class CalendarChecks {
             check(view("manual-status:PRESENT").isSelected()&&value("calendar-source").contains("직접 선택"),"Reopening preserves the toggle and source label");
             choose(MonthAttendance.ManualStatus.EARLY_LEAVE);
             check(!view("manual-status:PRESENT").isSelected()&&view("manual-status:EARLY_LEAVE").isSelected()&&value("calendar-summary").contains("조퇴 1일"),"Choosing a different status switches exclusively and updates the month");
+            choose(MonthAttendance.ManualStatus.LATE);
+            check(value("calendar-selected-status").equals("지각")&&value("calendar-summary").contains("지각 1일"),"Late attendance can be toggled without a time field");
+            choose(MonthAttendance.ManualStatus.LATE_EARLY);
+            check(value("calendar-selected-status").equals("지각·조퇴")&&value("calendar-summary").contains("지각 1일")&&value("calendar-summary").contains("조퇴 1일"),"Combined late and early counts both occurrences");
             choose(MonthAttendance.ManualStatus.ABSENT);
             check(value("calendar-selected-status").equals("결석")&&value("calendar-summary").contains("결석 1일"),"Absence saves immediately");
             choose(MonthAttendance.ManualStatus.ABSENT);
@@ -60,7 +64,7 @@ final class CalendarChecks {
             check(value("calendar-in").equals("08:40:00")&&value("calendar-out").equals("15:30:00")&&view("calendar-times").getVisibility()==View.VISIBLE,"Observed times remain visible alongside a selected status");
             capture("calendar-toggles-night.png");
             choose(MonthAttendance.ManualStatus.EARLY_LEAVE);
-            check(value("calendar-selected-status").equals("완료")&&prefs.history(observed).out().equals("15:30:00"),"Turning off the correction restores the observed status and keeps its times");
+            check(value("calendar-selected-status").equals("조퇴")&&prefs.history(observed).out().equals("15:30:00"),"Turning off the correction restores the observed status and keeps its times");
             close();open(today,HomeTheme.WARM);
             main(()->prefs.raw.edit().putString("manual_attendance:"+today,"PRESENT").putString("manual_times:"+today,"07:00|18:00").commit());settle();
             check(value("calendar-in").equals("08:41:00")&&value("calendar-out").equals("—"),"Legacy manual times cannot override actual app records");

@@ -38,7 +38,7 @@ public final class Policy {
     }
     public static boolean isClassDay(ZonedDateTime now, Set<Integer> days, Set<String> excluded) {
         ZonedDateTime local = now.withZoneSameInstant(ZONE);
-        return days.contains(local.getDayOfWeek().getValue()) && !excluded.contains(local.toLocalDate().toString());
+        return days.contains(local.getDayOfWeek().getValue()) && !excluded.contains(local.toLocalDate().toString()) && CourseCalendar.dayOff(local.toLocalDate()).isEmpty();
     }
     public static boolean validSchedule(String start, String end, String checkout, int retryMinutes) {
         try {
@@ -53,10 +53,11 @@ public final class Policy {
         return !time.isBefore(LocalTime.parse(start)) && time.isBefore(LocalTime.parse(end));
     }
     public static LocalTime checkoutStartTime(String checkout) { return LocalTime.parse(checkout).plusSeconds(CHECKOUT_DELAY_SECONDS); }
+    public static LocalTime checkoutStartTime(LocalDate day,String checkout) { return CourseSchedule.dispatch(day,checkout); }
     public static boolean checkoutDue(ZonedDateTime now, String checkout, int retryMinutes) {
         ZonedDateTime local = now.withZoneSameInstant(ZONE);
-        ZonedDateTime start = local.toLocalDate().atTime(LocalTime.parse(checkout)).atZone(ZONE);
-        return !local.isBefore(start.plusSeconds(CHECKOUT_DELAY_SECONDS)) && local.isBefore(start.plusMinutes(retryMinutes));
+        ZonedDateTime start = local.toLocalDate().atTime(LocalTime.parse(CourseSchedule.checkout(local.toLocalDate(),checkout))).atZone(ZONE);
+        return !local.isBefore(start.plusSeconds(CourseSchedule.cushion(local.toLocalDate()))) && local.isBefore(start.plusMinutes(retryMinutes));
     }
     public static Phase phase(ZonedDateTime now, Set<Integer> days, Set<String> excluded,
             String start, String end, String checkout, int retryMinutes, boolean checkedIn, boolean checkedOut) {
@@ -79,8 +80,8 @@ public final class Policy {
                 candidates.add(day.atTime(LocalTime.parse(end)).atZone(ZONE));
             }
             if (offset > 0 || !checkedOut) {
-                ZonedDateTime out = day.atTime(LocalTime.parse(checkout)).atZone(ZONE);
-                candidates.add(out.plusSeconds(CHECKOUT_DELAY_SECONDS)); candidates.add(out.plusMinutes(retryMinutes));
+                ZonedDateTime out = day.atTime(LocalTime.parse(CourseSchedule.checkout(day,checkout))).atZone(ZONE);
+                candidates.add(out.plusSeconds(CourseSchedule.cushion(day))); candidates.add(out.plusMinutes(retryMinutes));
             }
             for (ZonedDateTime candidate : candidates) if (candidate.isAfter(local)) return candidate;
         }

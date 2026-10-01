@@ -27,11 +27,13 @@ public final class MainActivity extends Activity {
     private boolean pendingStart, pendingLocation;
     private SetupStatusView setupStatus;
     private TextView status, detail, inTime, outTime, todayLog, todayWifi, todayWifiHint, todayWifiIcon;
-    private LinearLayout todayWifiPanel;
+    private LinearLayout todayWifiPanel,shortDayCard;
+    private TextView shortDayText;
     private HomeTheme homeTheme;
     private StandSceneView reservationScene;
     private TextView reservationState, entryReceipt, exitReceipt;
-    private Button enterNow, leaveNow;
+    private Button enterNow, leaveNow, readAttendance;
+    private TextView attendanceOverview;
     private LocalDate homeDay;
     private String homeCheckout, homeEntryEnd;
     private Clock homeClock = Clock.system(Policy.ZONE);
@@ -65,6 +67,7 @@ public final class MainActivity extends Activity {
         ChromeAttendanceService.returnedToAttendanceApp();
         handler.removeCallbacks(refresh); handler.post(refresh);
         if (selected != 0) render(selected);
+        ShortDayReminder.reconcile(this);
         if (prefs.enabled()) ScheduleController.reconcile(this);
     }
     @Override protected void onPause() { handler.removeCallbacks(refresh); super.onPause(); }
@@ -143,7 +146,7 @@ public final class MainActivity extends Activity {
     private void render(int tab) {
         selected = tab; setupStatus=null; root.removeAllViews();
         ZonedDateTime now = ZonedDateTime.now(homeClock).withZoneSameInstant(Policy.ZONE);
-        homeDay = now.toLocalDate(); homeCheckout = prefs.checkout(); homeEntryEnd = prefs.end();
+        homeDay = now.toLocalDate(); homeCheckout = prefs.checkoutFor(homeDay); homeEntryEnd = prefs.end();
         homeTheme = HomeTheme.at(now, homeEntryEnd, homeCheckout);
         boolean night = tab == 0 && homeTheme == HomeTheme.NIGHT;
         int background = tab == 0 ? homeTheme.background : BG;
@@ -222,6 +225,10 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams heroParams = new LinearLayout.LayoutParams(-1, -2); heroParams.bottomMargin = dp(16);
         content.addView(hero, heroParams);
 
+        shortDayCard=card("오늘은 단축수업이에요");shortDayCard.setTag("today-short-day");
+        shortDayText=text("",15,homeTheme.accent,true);shortDayText.setTag("today-short-day-text");shortDayCard.addView(shortDayText);
+        Button shortDayLink=button("오늘 시간표 보기  ›",false,()->startActivity(new Intent(this,TimetableActivity.class).putExtra("initial_date",homeDay.toString())));
+        shortDayLink.setTag("today-short-day-link");shortDayCard.addView(shortDayLink,new LinearLayout.LayoutParams(-1,dp(48)));
         LinearLayout state = card("출결 현황");
         status = text("", 20, homeTheme.ink, true); detail = text("", 12, homeTheme.muted, false);
         state.addView(status); gap(state, 6); state.addView(detail); gap(state, 18);
@@ -249,8 +256,22 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams enterParams=new LinearLayout.LayoutParams(0,-2,1);enterParams.rightMargin=dp(8);
         quick.addView(enterColumn,enterParams);quick.addView(leaveColumn,new LinearLayout.LayoutParams(0,-2,1));state.addView(quick);
         TextView quickHint=text("버튼을 누르면 Chrome에서 한 번 처리해요.",11,homeTheme.muted,false);quickHint.setPadding(0,dp(7),0,0);state.addView(quickHint);
+        readAttendance=button("출결 기록 확인  ↻",false,()->ChromeAttendanceService.beginManual(this,Policy.Phase.CHECKOUT,true,false));
+        readAttendance.setTag("attendance-read-record");readAttendance.setTextSize(12);readAttendance.setTextColor(homeTheme.muted);
+        readAttendance.setBackgroundColor(Color.TRANSPARENT);readAttendance.setMinimumHeight(dp(48));
+        state.addView(readAttendance,new LinearLayout.LayoutParams(-1,dp(48)));
         gap(state, 10);
         state.addView(button("달력에서 출결 조회  ›", true, this::attendanceCalendar), new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout management=card("출결 관리");
+        attendanceOverview=text("",13,homeTheme.muted,false);attendanceOverview.setTag("attendance-overview");management.addView(attendanceOverview);
+        gap(management,8);
+        Button manage=button("출결률 · 남은 결석 확인  ›",true,()->startActivity(new Intent(this,AttendanceManagementActivity.class)));
+        manage.setTag("attendance-management");management.addView(manage,new LinearLayout.LayoutParams(-1,-2));
+        Button timetable=button("시간표 보기  ›",false,()->startActivity(new Intent(this,TimetableActivity.class)));
+        timetable.setTag("attendance-timetable");timetable.setTextSize(12);management.addView(timetable,new LinearLayout.LayoutParams(-1,dp(48)));
+        Button orientation=button("오리엔테이션 자료  ›",false,()->startActivity(new Intent(this,OrientationActivity.class)));
+        orientation.setTag("attendance-orientation");orientation.setTextSize(12);
+        management.addView(orientation,new LinearLayout.LayoutParams(-1,dp(48)));
         LinearLayout log = card("오늘 출석 기록");
         todayLog = text("", 13, homeTheme.muted, false); todayLog.setLineSpacing(dp(8), 1); log.addView(todayLog);
         updateHome();
@@ -291,16 +312,24 @@ public final class MainActivity extends Activity {
         Policy.Record confirmed=prefs.history(LocalDate.now(Policy.ZONE));
         if(confirmed!=null&&(phase==Policy.Phase.ENTRY?confirmed.checkedIn():confirmed.checkedOut())){updateHome();return;}
         if(ChromeAttendanceService.busy()){toast("출결 결과를 확인하고 있어요. 잠시 기다려 주세요.");return;}
+        if(phase==Policy.Phase.CHECKOUT&&LocalTime.now(Policy.ZONE).isBefore(LocalTime.parse(prefs.checkoutToday()))){
+            new AlertDialog.Builder(this).setTitle("지금 조퇴하시겠어요?")
+                .setMessage("예정 퇴실 시각은 "+prefs.checkoutToday()+"입니다. 확인하면 Chrome에서 퇴실을 진행하고, 사이트의 퇴실 시각을 확인한 뒤 조퇴로 기록해요.")
+                .setNegativeButton("취소",null).setPositiveButton("조퇴하기",(dialog,which)->submitManualAttendance(phase,true)).show();return;
+        }
+        submitManualAttendance(phase,false);
+    }
+    private void submitManualAttendance(Policy.Phase phase,boolean earlyApproved){
         String key=LocalDate.now(Policy.ZONE)+":"+phase;
         if(key.equals(prefs.raw.getString("chrome_pending",""))){
             String name=phase==Policy.Phase.ENTRY?"입실":"퇴실";
             new AlertDialog.Builder(this).setTitle("이전 "+name+" 요청을 확인해요")
                 .setMessage("이전에 버튼을 눌렀지만 결과가 확인되지 않았어요. 먼저 Chrome 기록을 확인해 주세요. 실제 미처리를 확인했다면 한 번 다시 실행할 수 있어요.")
                 .setPositiveButton("기록 먼저 확인",(d,w)->ChromeAttendanceService.beginManual(this,phase,true,false))
-                .setNeutralButton("미처리 확인 · 재시도",(d,w)->ChromeAttendanceService.beginManual(this,phase,false,true))
+                .setNeutralButton("미처리 확인 · 재시도",(d,w)->{if(earlyApproved)ChromeAttendanceService.beginEarlyCheckout(this,true);else ChromeAttendanceService.beginManual(this,phase,false,true);})
                 .setNegativeButton("취소",null).show();return;
         }
-        ChromeAttendanceService.beginManual(this,phase,false,false);
+        if(earlyApproved)ChromeAttendanceService.beginEarlyCheckout(this,false);else ChromeAttendanceService.beginManual(this,phase,false,false);
     }
     private void attendanceCalendar() {
         LocalDate today = ZonedDateTime.now(homeClock).withZoneSameInstant(Policy.ZONE).toLocalDate();
@@ -313,30 +342,41 @@ public final class MainActivity extends Activity {
     private void updateHome() {
         if (status == null || selected != 0) return;
         ZonedDateTime now = ZonedDateTime.now(homeClock).withZoneSameInstant(Policy.ZONE);
-        if (HomeTheme.at(now, prefs.end(), prefs.checkout()) != homeTheme || !now.toLocalDate().equals(homeDay) || !prefs.checkout().equals(homeCheckout) || !prefs.end().equals(homeEntryEnd)) {
+        if (HomeTheme.at(now, prefs.end(), prefs.checkoutFor(now.toLocalDate())) != homeTheme || !now.toLocalDate().equals(homeDay) || !prefs.checkoutFor(now.toLocalDate()).equals(homeCheckout) || !prefs.end().equals(homeEntryEnd)) {
             int position = homeScroll.getScrollY(); render(0); homeScroll.post(() -> homeScroll.scrollTo(0, position)); return;
         }
+        boolean shortDay=CourseSchedule.activeShortDay(now.toLocalDate(),prefs.days(),prefs.excluded());
+        shortDayCard.setVisibility(shortDay?View.VISIBLE:View.GONE);
+        if(shortDay)setIfChanged(shortDayText,CourseSchedule.summary(now.toLocalDate())+(prefs.enabled()&&prefs.auto()?"":"\n자동 출결 꺼짐 · 예약과 자동 클릭을 확인해 주세요."));
         boolean reservationEnabled=prefs.enabled();
         reservationScene.setLit(reservationEnabled);
         setIfChanged(reservationState,reservationEnabled?"출석 예약 켜짐":"출석 예약 꺼짐");
         reservationState.setTextColor(reservationEnabled?(homeTheme==HomeTheme.NIGHT?0xFFF5D294:0xFF875024):homeTheme.muted);
         Policy.Record record = prefs.history(now.toLocalDate());
         String entry = record == null ? "" : record.in(), exit = record == null ? "" : record.out();
-        String title = !exit.isEmpty() ? "오늘 출결 완료" : !entry.isEmpty() ? "입실 완료"
+        boolean earlyExit=AttendanceMetrics.isEarly(exit,prefs.checkoutFor(now.toLocalDate()));
+        String title = !exit.isEmpty() ? (earlyExit?"오늘 조퇴 완료":"오늘 출결 완료") : !entry.isEmpty() ? "입실 완료"
             : MonitorService.running ? prefs.raw.getString("status", "입실 확인 중")
             : prefs.enabled() ? "출석 예약 대기" : "출석 예약 꺼짐";
-        String description = prefs.enabled() ? "입실 " + prefs.start() + "–" + prefs.end() + " · 퇴실 " + Policy.checkoutStartTime(prefs.checkout())
+        String description = prefs.enabled() ? "입실 " + prefs.start() + "–" + prefs.end() + " · 퇴실 " + Policy.checkoutStartTime(now.toLocalDate(),prefs.checkout())
             : "설정에서 출석 예약을 켜 주세요.";
+        if(prefs.enabled()&&!Policy.isClassDay(now,prefs.days(),prefs.excluded()))description="오늘은 수업 없는 날 · 자동 출결 쉬어요";
+        else if(prefs.enabled()&&CourseSchedule.shortened(now.toLocalDate()))description+="\n단축수업 · "+CourseSchedule.classEnd(now.toLocalDate())+" 종료";
         if (MonitorService.running) description = prefs.raw.getString("detail", description);
         boolean busy=ChromeAttendanceService.busy()||ActivationRun.pending();
         if(ActivationRun.pending()){title=ActivationRun.label();description="완료 기록을 먼저 확인해요. 이전 요청이 있으면 중복으로 누르지 않아요.";}
         setIfChanged(enterNow,!entry.isEmpty()?"✓  입실 완료":"☀  입실하기");enterNow.setEnabled(entry.isEmpty()&&!busy);enterNow.setAlpha(enterNow.isEnabled()?1f:.55f);
         setIfChanged(leaveNow,!exit.isEmpty()?"✓  퇴실 완료":"☾  퇴실하기");leaveNow.setEnabled(exit.isEmpty()&&!busy);leaveNow.setAlpha(leaveNow.isEnabled()?1f:.55f);
+        readAttendance.setEnabled(!busy);
+        AttendanceMetrics.Summary summary=prefs.attendanceSummary();
+        setIfChanged(attendanceOverview,"현재 "+AttendanceMetrics.percent(summary.currentRate())+" · 확인된 "+summary.known()+"일 기준"
+            +"\n"+(summary.exceeded()>0?"80% 기준 초과 "+summary.exceeded()+"일":"추가 결석 최대 "+summary.remaining()+"일")
+            +(summary.missing()>0?" · 미확인 "+summary.missing()+"일 출석 가정":" · 남은 날 출석 가정"));
         showReceipt(entryReceipt,"입실",entry);showReceipt(exitReceipt,"퇴실",exit);
         setIfChanged(status, title); setIfChanged(detail, description);
         setIfChanged(inTime, entry.isEmpty() ? "—" : entry); setIfChanged(outTime, exit.isEmpty() ? "—" : exit);
         // Show confirmed attendance times; operational diagnostics stay in their existing log.
-        String log = exit.isEmpty() ? "" : exit + "  퇴실 완료";
+        String log = exit.isEmpty() ? "" : exit + (earlyExit?"  조퇴 완료":"  퇴실 완료");
         if (!entry.isEmpty()) log += (log.isEmpty() ? "" : "\n") + entry + "  입실 완료";
         setIfChanged(todayLog, log.isEmpty() ? "아직 확인된 출석 기록이 없습니다." : log);
         NetworkAccess.State wifi=NetworkAccess.inspect(this);
@@ -393,10 +433,10 @@ public final class MainActivity extends Activity {
 
     private void reservationSettings() {
         LinearLayout automation = settingsCard("출석 예약", "reservation", () -> {
-            String checkoutEnd=LocalTime.parse(prefs.checkout()).plusMinutes(prefs.retryMinutes()).format(DateTimeFormatter.ofPattern("HH:mm"));
+            String checkoutEnd=LocalTime.parse(prefs.checkoutToday()).plusMinutes(prefs.retryMinutes()).format(DateTimeFormatter.ofPattern("HH:mm"));
             return "켜기를 누르면 자동 클릭도 켜지고, 지금 가능한 미처리 출결을 5초 뒤 한 번 실행해요. 이전 요청이 있으면 완료 기록만 먼저 확인해요. 예약이 이미 켜져 있어도 다시 누를 수 있어요."
                 + "\n\n자동 감시는 수업일의 아래 시간에만 작동합니다.\n입실 " + prefs.start() + "–" + prefs.end()
-                + "\n퇴실 " + Policy.checkoutStartTime(prefs.checkout()) + "–" + checkoutEnd + "\n출석 완료 또는 시간 종료 시 GPS 감시도 멈춥니다."
+                + "\n퇴실 " + prefs.checkoutStartToday() + "–" + checkoutEnd + "\n출석 완료 또는 시간 종료 시 GPS 감시도 멈춥니다."
                 + "\n\n기존 Chrome 인증을 사용합니다. 화면이 꺼지거나 잠긴 경우 ‘잠금 중 처리 방식’을 사용합니다. 자동 클릭을 끄면 조회만 합니다.";
         });automation.setTag("automation");
         LinearLayout choices = new LinearLayout(this);
@@ -483,18 +523,21 @@ public final class MainActivity extends Activity {
             + "\n\n‘완료’·‘켜짐’이면 확인된 상태입니다. ‘설정 필요’·‘연결 대기’ 항목을 눌러 필요한 설정을 마쳐 주세요.");setupStatus=new SetupStatusView(this,false);checks.addView(setupStatus);
         LinearLayout schedule = settingsCard("출석 시간", "schedule", () -> "모든 시간은 한국 시간입니다. 입실 시간과 퇴실 시간을 눌러 각각 변경할 수 있습니다."
             + "\n\n입실 시간대에 등록 Wi-Fi의 인터넷 연결이 확인되면 바로 입실 확인을 시작합니다."
-            + "\n\n" + getString(R.string.checkout_delay_notice,Policy.CHECKOUT_DELAY_SECONDS)
+            + "\n\n" + getString(R.string.checkout_delay_notice,Policy.CHECKOUT_DELAY_SECONDS) + " 단축수업일은 시간표별 시각에 2초 여유를 적용합니다."
             + "\n\n자동 접속은 입실·퇴실 각 최대 3회입니다. 오류나 결과 확인 시간 초과 시 자동 재접속을 멈춥니다. 모든 사이트 열기는 최소 3초 간격, 하루 최대 20회입니다."
             + "\n\n입실·퇴실 완료를 확인하면 해당 감시를 종료합니다. 퇴실 재시도 시간 안에서, 퇴실 미확인 상태로 강의실을 벗어나면 알립니다."
-            + "\n\n오늘 화면은 " + HomeTheme.nightStarts(prefs.end(), prefs.checkout()) + "부터 야간 테마로 전환합니다.");
+            + "\n\n오늘 화면은 " + HomeTheme.nightStarts(prefs.end(), prefs.checkoutToday()) + "부터 야간 테마로 전환합니다.");
         action(schedule, "입실 시간  ›\n" + prefs.start() + "–" + prefs.end(), false, () -> editSchedule(ScheduleSection.ENTRY));
-        action(schedule, "퇴실 시간  ›\n" + Policy.checkoutStartTime(prefs.checkout()) + " · 최대 " + prefs.retryMinutes() + "분 재시도", false, () -> editSchedule(ScheduleSection.CHECKOUT));
+        action(schedule, "기본 퇴실 시간  ›\n" + Policy.checkoutStartTime(prefs.checkout()) + " · 최대 " + prefs.retryMinutes() + "분 재시도", false, () -> editSchedule(ScheduleSection.CHECKOUT));
+        action(schedule,"시간표별 출결 시간  ›",false,()->new AlertDialog.Builder(this).setTitle("시간표 자동 반영")
+            .setMessage("휴강·공휴일은 자동 출결을 쉬어요.\n\n전체 기간의 6시간 수업: 16:00 종료 · 15:50:02 퇴실\n7시간 수업: 17:00 종료 · 16:50:02 퇴실\n\n단축수업 당일 입실 시작 시각에 한 번 안내하며, 오늘 탭에도 표시합니다. 안내 알림 설정을 따릅니다.\n\n단축수업일은 시간표의 퇴실 시간이 기본 설정보다 우선합니다. 입실 시간과 재시도 기간은 설정대로 유지됩니다.")
+            .setPositiveButton("시간표 보기",(dialog,which)->startActivity(new Intent(this,TimetableActivity.class))).setNegativeButton("닫기",null).show());
         LinearLayout classDays = card("수업일");
         String[] weekdayLabels = {"월","화","수","목","금","토","일"};
         List<String> weekdays = new ArrayList<>();
         for (int i=0; i<weekdayLabels.length; i++) if (prefs.days().contains(i+1)) weekdays.add(weekdayLabels[i]);
         action(classDays, "수업 요일 선택  ›\n" + (weekdays.isEmpty() ? "선택 필요" : String.join(" · ", weekdays)), false, () -> editSchedule(ScheduleSection.DAYS));
-        action(classDays, "달력에서 휴강일 등록 (" + prefs.excluded().size() + "일)", false, this::editExcluded);
+        action(classDays, "추가 휴강일 등록 (" + prefs.userExcluded().size() + "일)", false, this::editExcluded);
         LinearLayout notifications = settingsCard("알림", "notifications", () -> "완료를 확인할 때마다 입실과 퇴실 알림을 따로 남깁니다. 앱을 열거나 감시가 끝나도 유지되며 직접 지울 수 있습니다."
             + "\n\n휴대폰에서 알림이 차단된 경우 앱 알림과 ‘입실·퇴실 결과’ 알림을 허용해 주세요. ‘앱 알림 설정’에서 안내 알림과 현재 허용 상태를 확인할 수 있습니다.");
         notifications.addView(text("입실 · 퇴실 완료 알림 항상 표시",17,INK,true));
@@ -634,7 +677,7 @@ public final class MainActivity extends Activity {
         }
         Spinner retry = new Spinner(this);
         if (section == ScheduleSection.CHECKOUT) {
-            note(view,getString(R.string.checkout_delay_notice,Policy.CHECKOUT_DELAY_SECONDS));
+            note(view,getString(R.string.checkout_delay_notice,Policy.CHECKOUT_DELAY_SECONDS) + " 단축수업일은 시간표별 시각에 2초 여유를 적용합니다.");
             gap(view,10); note(view,"퇴실 실패 시 재시도할 시간");
             String[] options = new String[60];
             for (int i=0; i<options.length; i++) options[i] = (i+1) + "분";
@@ -682,9 +725,9 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
     private void editExcluded() {
-        Set<String> values = new TreeSet<>(prefs.excluded());
+        Set<String> values = new TreeSet<>(prefs.userExcluded());
         LinearLayout view = form(), dates = new LinearLayout(this); dates.setOrientation(LinearLayout.VERTICAL);
-        note(view,"달력에서 날짜를 골라 추가하고 저장해 주세요.");
+        note(view,"공휴일·대체공휴일과 과정명세서의 휴강일은 자동 제외됩니다. 추가 휴강일만 골라 저장해 주세요.");
         action(view,"달력에서 날짜 추가",true,() -> {
             LocalDate today = LocalDate.now(Policy.ZONE);
             new DatePickerDialog(this,(picker,y,m,d) -> { values.add(LocalDate.of(y,m+1,d).toString()); excludedRows(dates,values); },
