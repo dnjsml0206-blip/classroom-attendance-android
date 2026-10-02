@@ -13,7 +13,7 @@ final class DiagnosticLog {
         CHROME_OPEN_FAILED, BUTTON_REQUEST, BUTTON_FAILED, CONFIRM_REQUEST, RECORD_CONFIRMED, AUTOMATIC_PAUSED, NETWORK_DIAGNOSTIC_LOCAL,
         ALARM_ARMED, ALARM_FIRED, ALARM_FAILED, MONITOR_START_REQUEST, MONITOR_START_RECEIVED, MONITOR_START_FAILED,
         CHROME_STAGE, CLICK_PLANNED, WAKE_REQUESTED, WAKE_VISIBLE, WAKE_BLOCKED, WAKE_AUTH_REQUIRED,
-        ACTIVATION_QUEUED, ACTIVATION_FIRED, WAKE_DISMISS_REQUEST, WAKE_DISMISS_RESULT, WAKE_FINISHED, ACCESSIBILITY_CONNECTED, RESULT_WAIT_STARTED, MANUAL_REQUEST, MANUAL_BLOCKED, MANUAL_FINISHED, PAGE_RECOVERY_WAIT, PRECLICK_DEFERRED, CHROME_DIAGNOSTIC, ATTEMPT_FAILED, ATTEMPT_CANCELLED, DIALOG_STATE_CHANGED, SCREEN_PRESENTATION, SCREEN_OFF_REQUEST, SCREEN_OFF_RESULT, WIFI_CONNECT_STEP, WIFI_CONNECT_FINISHED, SCHEDULE_CHANGED, NETWORK_STATE_CHANGED, NETWORK_WATCH_FAILED, AUTOMATIC_TRIGGER }
+        ACTIVATION_QUEUED, ACTIVATION_FIRED, WAKE_DISMISS_REQUEST, WAKE_DISMISS_RESULT, WAKE_FINISHED, ACCESSIBILITY_CONNECTED, RESULT_WAIT_STARTED, MANUAL_REQUEST, MANUAL_BLOCKED, MANUAL_FINISHED, PAGE_RECOVERY_WAIT, PRECLICK_DEFERRED, CHROME_DIAGNOSTIC, ATTEMPT_FAILED, ATTEMPT_CANCELLED, DIALOG_STATE_CHANGED, SCREEN_PRESENTATION, SCREEN_OFF_REQUEST, SCREEN_OFF_RESULT, LOCKDOWN_REQUEST, LOCKDOWN_STEP, LOCKDOWN_RESULT, WIFI_CONNECT_STEP, WIFI_CONNECT_FINISHED, SCHEDULE_CHANGED, NETWORK_STATE_CHANGED, NETWORK_WATCH_FAILED, AUTOMATIC_TRIGGER }
     static SharedPreferences prefs(Context c){return c.getSharedPreferences("attendance_diagnostics",Context.MODE_PRIVATE);}
     static synchronized void add(Context c,Event event,Policy.Phase phase,String reason){
         add(c,event,phase,reason,new JSONObject());
@@ -22,7 +22,7 @@ final class DiagnosticLog {
         try{
             JSONObject safe=new JSONObject();
             for(String key:new String[]{"attempt_id","scheduled_at_ms","delay_ms","window_state","diagnostic_version","diagnosis","stage","focused_owner",
-                "screen_interactive","keyguard_locked","device_locked","chrome_window_present","window_count","read_state","read_error","read_operation",
+                "screen_interactive","keyguard_locked","device_locked","device_secure","chrome_window_present","window_count","read_state","read_error","read_operation",
                 "address_state","page_signal","button_state","node_count","visible_node_count","web_node_count","tree_limit_reached","wifi_check_code",
                 "click_attempted","click_accepted","confirmation_attempted","pending_click","elapsed_ms","poll_count","chrome_event_age_ms",
                 "last_site_signal","last_site_address","last_site_age_ms","page_visible_ms","dialog_kind","confirm_button_state","confirm_target",
@@ -42,7 +42,7 @@ final class DiagnosticLog {
             while(start>0){int size=next.getJSONObject(start-1).toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8).length+16;if(bytes+size>DETAIL_BYTES)break;bytes+=size;start--;}
             for(int i=start;i<next.length();i++)bounded.put(next.get(i));
             SharedPreferences.Editor edit=p.edit().putString("events",bounded.toString()).putString("last_signature",signature);
-            if(event==Event.ATTEMPT_FAILED||event==Event.CLICK_PLANNED||event==Event.BUTTON_REQUEST||event==Event.BUTTON_FAILED||event==Event.CONFIRM_REQUEST)edit.commit();
+            if(event==Event.LOCKDOWN_STEP||event==Event.ATTEMPT_FAILED||event==Event.CLICK_PLANNED||event==Event.BUTTON_REQUEST||event==Event.BUTTON_FAILED||event==Event.CONFIRM_REQUEST)edit.commit();
             else edit.apply();
         }catch(JSONException ignored){}
     }

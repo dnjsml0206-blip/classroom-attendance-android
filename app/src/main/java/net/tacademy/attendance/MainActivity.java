@@ -165,7 +165,10 @@ public final class MainActivity extends Activity {
             mode.setLetterSpacing(.12f); heading.addView(mode); content.addView(heading); gap(content, 8);
             LinearLayout titleRow=new LinearLayout(this);titleRow.setTag("today-header");titleRow.setGravity(Gravity.CENTER_VERTICAL);
             LinearLayout titles=new LinearLayout(this);titles.setOrientation(LinearLayout.VERTICAL);
-            titles.addView(text("오늘 출결",29,homeTheme.ink,true));gap(titles,4);
+            LinearLayout titleLine=new LinearLayout(this);titleLine.setTag("today-attendance-heading");titleLine.setGravity(Gravity.CENTER_VERTICAL);
+            TextView todayTitle=text("오늘 출결",29,homeTheme.ink,true);todayTitle.setSingleLine(true);todayTitle.setAutoSizeTextTypeUniformWithConfiguration(20,29,1,android.util.TypedValue.COMPLEX_UNIT_SP);titleLine.addView(todayTitle,new LinearLayout.LayoutParams(0,dp(48),1));
+            Button calendarLink=compactHomeButton("달력 ›",this::attendanceCalendar);calendarLink.setTag("attendance-calendar");calendarLink.setContentDescription("달력에서 출결 조회");calendarLink.setBackground(shape(homeTheme.soft,12));titleLine.addView(calendarLink,new LinearLayout.LayoutParams(dp(52),dp(40)));
+            titles.addView(titleLine,new LinearLayout.LayoutParams(-1,-2));gap(titles,4);
             titles.addView(text(now.format(DateTimeFormatter.ofPattern("M월 d일 EEEE",Locale.KOREAN)),13,homeTheme.muted,false));
             titleRow.addView(titles,new LinearLayout.LayoutParams(0,-2,1));
             LinearLayout.LayoutParams wifiParams=new LinearLayout.LayoutParams(dp(140),-2);wifiParams.leftMargin=dp(10);
@@ -231,8 +234,12 @@ public final class MainActivity extends Activity {
         Button shortDayLink=button("오늘 시간표 보기  ›",false,()->startActivity(new Intent(this,TimetableActivity.class).putExtra("initial_date",homeDay.toString())));
         shortDayLink.setTag("today-short-day-link");shortDayCard.addView(shortDayLink,new LinearLayout.LayoutParams(-1,dp(48)));
         LinearLayout state = card("출결 현황");
-        status = text("", 20, homeTheme.ink, true); detail = text("", 12, homeTheme.muted, false);
-        state.addView(status); gap(state, 6); state.addView(detail); gap(state, 18);
+        status = text("", 20, homeTheme.ink, true);status.setTag("today-attendance-status");detail = text("", 12, homeTheme.muted, false);
+        LinearLayout statusRow=new LinearLayout(this);statusRow.setGravity(Gravity.CENTER_VERTICAL);statusRow.setTag("today-attendance-status-row");
+        statusRow.addView(status,new LinearLayout.LayoutParams(0,-2,1));
+        readAttendance=compactHomeButton("출결 기록 확인 ↻",()->ChromeAttendanceService.beginManual(this,Policy.Phase.CHECKOUT,true,false));
+        readAttendance.setTag("attendance-read-record");statusRow.addView(readAttendance,new LinearLayout.LayoutParams(-2,dp(48)));
+        state.addView(statusRow);gap(state,6);state.addView(detail);gap(state,18);
         LinearLayout times = new LinearLayout(this);
         LinearLayout left = new LinearLayout(this); left.setOrientation(LinearLayout.VERTICAL);
         left.addView(text("입실", 12, homeTheme.muted, false)); gap(left, 3);
@@ -256,13 +263,6 @@ public final class MainActivity extends Activity {
         enterColumn.addView(entryReceipt,new LinearLayout.LayoutParams(-1,-2));leaveColumn.addView(exitReceipt,new LinearLayout.LayoutParams(-1,-2));
         LinearLayout.LayoutParams enterParams=new LinearLayout.LayoutParams(0,-2,1);enterParams.rightMargin=dp(8);
         quick.addView(enterColumn,enterParams);quick.addView(leaveColumn,new LinearLayout.LayoutParams(0,-2,1));state.addView(quick);
-        TextView quickHint=text("버튼을 누르면 Chrome에서 한 번 처리해요.",11,homeTheme.muted,false);quickHint.setPadding(0,dp(7),0,0);state.addView(quickHint);
-        readAttendance=button("출결 기록 확인  ↻",false,()->ChromeAttendanceService.beginManual(this,Policy.Phase.CHECKOUT,true,false));
-        readAttendance.setTag("attendance-read-record");readAttendance.setTextSize(12);readAttendance.setTextColor(homeTheme.muted);
-        readAttendance.setBackgroundColor(Color.TRANSPARENT);readAttendance.setMinimumHeight(dp(48));
-        state.addView(readAttendance,new LinearLayout.LayoutParams(-1,dp(48)));
-        gap(state, 10);
-        state.addView(button("달력에서 출결 조회  ›", true, this::attendanceCalendar), new LinearLayout.LayoutParams(-1, -2));
         LinearLayout management=card("출결 관리");
         attendanceOverview=text("",13,homeTheme.muted,false);attendanceOverview.setTag("attendance-overview");management.addView(attendanceOverview);
         gap(management,8);
@@ -301,6 +301,10 @@ public final class MainActivity extends Activity {
         todayWifiHint=text("WI-FI",9,homeTheme.muted,true);todayWifiHint.setLetterSpacing(.08f);labels.addView(todayWifiHint);
         todayWifi=text("",12,homeTheme.ink,true);todayWifi.setTag("today-wifi");labels.addView(todayWifi);
         todayWifiPanel.addView(labels,new LinearLayout.LayoutParams(0,-2,1));return todayWifiPanel;
+    }
+    private Button compactHomeButton(String label,Runnable action){
+        Button b=button(label,false,action);b.setTextSize(11);b.setTextColor(homeTheme.muted);b.setBackgroundColor(Color.TRANSPARENT);
+        b.setMinWidth(0);b.setMinimumWidth(0);b.setMinHeight(0);b.setMinimumHeight(0);b.setPadding(dp(8),0,dp(8),0);return b;
     }
     private TextView receiptLabel(String tag){
         TextView label=text("",12,homeTheme==HomeTheme.NIGHT?0xFFA8ADB6:0xFF75736F,false);
@@ -370,7 +374,7 @@ public final class MainActivity extends Activity {
             : prefs.enabled() ? "출석 예약 대기" : "출석 예약 꺼짐";
         String description = prefs.enabled() ? "입실 " + prefs.start() + "–" + prefs.end() + " · 퇴실 " + Policy.checkoutStartTime(now.toLocalDate(),prefs.checkout())
             : "설정에서 출석 예약을 켜 주세요.";
-        if(prefs.enabled()&&!Policy.isClassDay(now,prefs.days(),prefs.excluded()))description="오늘은 수업 없는 날 · 자동 출결 쉬어요";
+        if(prefs.enabled()&&!Policy.isClassDay(now,prefs.days(),prefs.automationExcluded()))description=prefs.manualAttendance(now.toLocalDate())==MonthAttendance.ManualStatus.VACATION?"오늘은 휴가 · 자동 출결 쉬어요":"오늘은 수업 없는 날 · 자동 출결 쉬어요";
         else if(prefs.enabled()&&CourseSchedule.shortened(now.toLocalDate()))description+="\n단축수업 · "+CourseSchedule.classEnd(now.toLocalDate())+" 종료";
         if (MonitorService.running) description = prefs.raw.getString("detail", description);
         boolean busy=ChromeAttendanceService.busy()||ActivationRun.pending();
@@ -379,9 +383,10 @@ public final class MainActivity extends Activity {
         setIfChanged(leaveNow,!exit.isEmpty()?"✓  퇴실 완료":"☾  퇴실하기");leaveNow.setEnabled(exit.isEmpty()&&!busy);leaveNow.setAlpha(leaveNow.isEnabled()?1f:.55f);
         readAttendance.setEnabled(!busy);
         AttendanceMetrics.Summary summary=prefs.attendanceSummary();
-        setIfChanged(attendanceOverview,"현재 "+AttendanceMetrics.percent(summary.currentRate())+" · 확인된 "+summary.known()+"일 기준"
-            +"\n"+(summary.exceeded()>0?"80% 기준 초과 "+summary.exceeded()+"일":"추가 결석 최대 "+summary.remaining()+"일")
-            +(summary.missing()>0?" · 미확인 "+summary.missing()+"일 출석 가정":" · 남은 날 출석 가정"));
+        setIfChanged(attendanceOverview,"현재 "+summary.currentDisplay()+" · 종료된 수업 "+summary.elapsed()+"일 기준"
+            +"\n"+(summary.exceeded()>0?"80% 기준 초과 "+summary.exceeded()+"일":"80% 기준 · 결석 "+summary.absenceBudget()+"일 또는 지각·조퇴 "+summary.eventBudget()+"회 가능")
+            +(summary.missing()>0?"\n미기록 "+summary.missing()+"일은 출석으로 계산":"")
+            +"\n휴가 잔여 "+prefs.vacationBalance().available()+"일 · 예약 "+prefs.vacationBalance().reserved()+"일");
         showReceipt(entryReceipt,"입실",entry);showReceipt(exitReceipt,"퇴실",exit);
         setIfChanged(status, title); setIfChanged(detail, description);
         setIfChanged(inTime, entry.isEmpty() ? "—" : entry); setIfChanged(outTime, exit.isEmpty() ? "—" : exit);
@@ -500,10 +505,20 @@ public final class MainActivity extends Activity {
     private void screenSettings(){
         LinearLayout box=settingsCard("출결 처리 화면", "screen", () -> "자동 처리 중에는 ‘출결 처리 중’ 화면이 보입니다. ‘Chrome 화면 보기’를 누르면 진행 화면을 확인할 수 있습니다. 완료 시각을 확인하면 화면을 끄고, 오류가 나면 진행 화면을 보여줍니다."
             + "\n\nChrome 처리 중에는 화면이 켜지고 잠금이 해제되어 있어야 합니다. 직접 실행하거나 기록만 조회할 때는 Chrome을 보여주며, 이미 완료된 기록만 조회하면 화면을 끄지 않습니다."
-            + "\n\n완료 후 화면 끄기는 Android 9 이상에서 지원합니다.");
+            + "\n\n잠금 모드를 사용하면 전원 메뉴에서 ‘잠금 모드’만 확인해 한 번 누릅니다. 다음 사용 때 지문 대신 PIN·패턴·비밀번호가 필요하며, Wi-Fi 재연결만으로 풀리지 않습니다. PIN 해제 후 신뢰 조건에서 Extend Unlock이 다시 적용될 수 있습니다(최대 4시간)."
+            + "\n\n잠금 항목을 찾지 못하면 일반 화면 끄기로 마무리하고 결과를 기록합니다. 휴대폰에서 잠금 모드 표시를 켜야 할 수 있습니다. 완료 후 화면 끄기는 Android 9 이상에서 지원합니다.");
         Switch off=new Switch(this);off.setTag("attendance-screen-off");off.setText("입실·퇴실 완료 후 화면 끄기");off.setTextSize(16);off.setTextColor(INK);off.setMinHeight(dp(48));
         off.setChecked(prefs.screenOffAfterAttendance());off.setEnabled(Build.VERSION.SDK_INT>=28);box.addView(off);
         off.setOnCheckedChangeListener((v,yes)->prefs.raw.edit().putBoolean("screen_off_after_attendance",yes).apply());
+        Switch lockdown=new Switch(this);lockdown.setTag("attendance-lockdown");lockdown.setText("완료 후 잠금 모드 · 다음 해제는 PIN");lockdown.setTextSize(15);lockdown.setTextColor(INK);lockdown.setMinHeight(dp(48));
+        lockdown.setChecked(prefs.lockdownAfterAttendance());lockdown.setEnabled(prefs.screenOffAfterAttendance());box.addView(lockdown);
+        lockdown.setOnCheckedChangeListener((v,yes)->prefs.raw.edit().putBoolean("lockdown_after_attendance",yes).apply());
+        off.setOnCheckedChangeListener((v,yes)->{prefs.raw.edit().putBoolean("screen_off_after_attendance",yes).apply();lockdown.setEnabled(yes);});
+        action(box,"잠금 모드만 테스트",false,()->new AlertDialog.Builder(this).setTitle("잠금 모드를 시험할까요?")
+            .setMessage("실제 출결 없이 전원 메뉴의 잠금 모드를 실행합니다. 다음에 휴대폰을 열 때 PIN·패턴·비밀번호가 필요합니다.")
+            .setNegativeButton("취소",null).setPositiveButton("테스트",(d,w)->{if(!ChromeAttendanceService.testLockdown(this))toast("접근성 연결을 확인하고 진행 중인 작업을 마친 뒤 다시 눌러 주세요.");}).show());
+        String lockResult=prefs.raw.getString("lockdown_last_result","");
+        note(box,lockResult.isEmpty()?"잠금 모드: 아직 테스트하지 않았어요":lockResult.equals("LOCKDOWN_LOCK_OBSERVED")?"잠금 모드 클릭 후 인증 잠금 확인":"잠금 모드 미확인 · 일반 화면 끄기 사용 (진단 로그 확인)");
         Switch hide=new Switch(this);hide.setTag("attendance-processing-page");hide.setText("자동 처리 중 간단한 안내 화면 표시");hide.setTextSize(16);hide.setTextColor(INK);hide.setMinHeight(dp(48));
         hide.setChecked(prefs.showProcessingScreen());box.addView(hide);
         hide.setOnCheckedChangeListener((v,yes)->prefs.raw.edit().putBoolean("show_processing_screen",yes).apply());

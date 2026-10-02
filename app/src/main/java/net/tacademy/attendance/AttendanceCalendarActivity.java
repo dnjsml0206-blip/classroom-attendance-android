@@ -22,7 +22,7 @@ public final class AttendanceCalendarActivity extends Activity {
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable refresh=this::render;
     private final SharedPreferences.OnSharedPreferenceChangeListener changes=(p,key)->{
-        if(key==null||key.startsWith("record:")||key.startsWith("manual_attendance:")||key.startsWith("manual_times:")||"late_after".equals(key)||"late_disabled".equals(key)||"checkout".equals(key)||Set.of("record_day","in","out","days","excluded").contains(key)){
+        if(key==null||key.startsWith("record:")||key.startsWith("manual_attendance:")||key.startsWith("manual_times:")||"vacation_rule".equals(key)||"late_after".equals(key)||"late_disabled".equals(key)||"checkout".equals(key)||Set.of("record_day","in","out","days","excluded").contains(key)){
             handler.removeCallbacks(refresh);handler.postDelayed(refresh,100);
         }
     };
@@ -71,7 +71,7 @@ public final class AttendanceCalendarActivity extends Activity {
         heading.addView(label,new LinearLayout.LayoutParams(0,-2,1));
         Button next=button("›","다음 달",()->moveMonth(1));next.setTag("calendar-next");next.setEnabled(month.getYear()<9999||month.getMonthValue()<12);
         heading.addView(next,new LinearLayout.LayoutParams(dp(48),dp(48)));calendar.addView(heading);
-        int complete=0,early=0,late=0,absent=0,entered=0,unknown=0,pending=0;
+        int complete=0,early=0,late=0,absent=0,entered=0,unknown=0,pending=0,vacation=0;
         List<LocalDate> dates=MonthAttendance.cells(month);
         for(LocalDate date:dates)if(date!=null){switch(prefs.calendarState(date,today)){
             case ATTENDED -> complete++;
@@ -80,11 +80,12 @@ public final class AttendanceCalendarActivity extends Activity {
             case LATE -> late++;
             case LATE_EARLY -> {late++;early++;}
             case ABSENT -> absent++;
+            case VACATION -> vacation++;
             case ENTERED -> entered++;
             case UNKNOWN -> unknown++;
             default -> {}
         }}
-        TextView summary=text(getString(R.string.calendar_summary,complete,early,absent,entered,unknown)+" · 지각 "+late+"일 · 판정대기 "+pending+"일",12,theme.muted,false);summary.setTag("calendar-summary");summary.setGravity(Gravity.CENTER);calendar.addView(summary);
+        TextView summary=text(getString(R.string.calendar_summary,complete,early,absent,entered,unknown)+" · 지각 "+late+"일 · 판정대기 "+pending+"일 · 휴가 "+vacation+"일",12,theme.muted,false);summary.setTag("calendar-summary");summary.setGravity(Gravity.CENTER);calendar.addView(summary);
         if(dates.stream().filter(Objects::nonNull).anyMatch(date->!date.isAfter(today)&&prefs.manualAttendance(date)!=null)){
             TextView legend=text("* 직접 선택한 출결",11,theme.muted,false);legend.setGravity(Gravity.CENTER);calendar.addView(legend);
         }
@@ -102,7 +103,7 @@ public final class AttendanceCalendarActivity extends Activity {
                     boolean chosen=date.equals(selected),isToday=date.equals(today);int color=color(status);
                     tile.setBackground(shape(chosen?theme.soft:theme.surface,chosen?theme.accent:isToday?theme.border:theme.surface,chosen||isToday?2:0,10));
                     TextView number=text(String.valueOf(date.getDayOfMonth()),16,chosen?theme.accent:theme.ink,chosen||isToday);number.setGravity(Gravity.CENTER);tile.addView(number);
-                    TextView state=text(status.label+(!date.isAfter(today)&&prefs.manualAttendance(date)!=null?"*":""),11,color,false);state.setGravity(Gravity.CENTER);state.setSingleLine(true);tile.addView(state);
+                    TextView state=text(status.label+(!date.isAfter(today)&&prefs.manualAttendance(date)!=null?"*":""),11,color,false);state.setGravity(Gravity.CENTER);state.setSingleLine(status!=MonthAttendance.State.LATE_EARLY);if(status==MonthAttendance.State.LATE_EARLY){state.setText("지각\n조퇴"+(prefs.manualAttendance(date)!=null?"*":""));state.setTextSize(10);}tile.addView(state);
                     tile.setTag("calendar-day:"+date);tile.setFocusable(true);tile.setClickable(true);tile.setContentDescription(date+" "+status.label+(!date.isAfter(today)&&prefs.manualAttendance(date)!=null?" 직접 선택":"")+(isToday?" 오늘":"")+(chosen?" 선택됨":""));
                     tile.setOnClickListener(v->{selected=date;render();scroll.post(()->{View details=content.findViewWithTag("calendar-detail");if(details!=null)scroll.smoothScrollTo(0,details.getTop());});});cell=tile;
                 }
@@ -113,7 +114,7 @@ public final class AttendanceCalendarActivity extends Activity {
         }
         gap(content,14);
         Policy.Record record=prefs.history(selected);
-        MonthAttendance.ManualStatus manual=!selected.isAfter(today)?prefs.manualAttendance(selected):null;
+        MonthAttendance.ManualStatus manual=prefs.manualAttendance(selected);
         MonthAttendance.State state=prefs.calendarState(selected,today);
         LinearLayout detail=card();detail.setTag("calendar-detail");
         TextView date=text(selected.format(DateTimeFormatter.ofPattern("M월 d일 EEEE",Locale.KOREAN)),18,theme.ink,true);date.setTag("calendar-selected-date");detail.addView(date);
@@ -122,6 +123,7 @@ public final class AttendanceCalendarActivity extends Activity {
         times.addView(time("입실",record==null?"":record.in(),"calendar-in"),new LinearLayout.LayoutParams(0,-2,1));
         times.addView(time("퇴실",record==null?"":record.out(),"calendar-out"),new LinearLayout.LayoutParams(0,-2,1));detail.addView(times);
         if(record!=null&&record.checkedIn()){
+            if(!record.checkedOut())detail.addView(text("퇴실 시각 미확인 · 지각 여부는 확인된 입실 시각 기준",12,theme.muted,false));
             String basis="앱에 저장된 시각 기준 · 지각 "+(prefs.lateAfter().isEmpty()?"기준 미설정":prefs.lateAfter()+"부터")+" / 조퇴 "+prefs.checkoutFor(selected)+" 이전";
             TextView reason=text(basis,12,theme.muted,false);reason.setTag("calendar-classification-basis");detail.addView(reason);
             if(manual==null&&prefs.lateAfter().isEmpty()){
@@ -132,33 +134,45 @@ public final class AttendanceCalendarActivity extends Activity {
         if(manual!=null){
             TextView source=text("OWNER_CONFIRMED_20261001".equals(prefs.raw.getString("manual_source:"+selected,""))?"사용자 확인 · 업데이트에서 반영 (시각은 변경하지 않음)":"직접 선택 · 앱에 저장한 상태",12,theme.accent,true);source.setTag("calendar-source");detail.addView(source);
         }
+        if(manual==null&&state==MonthAttendance.State.ATTENDED&&(record==null||!record.checkedIn()))detail.addView(text("미기록 · 사용자 요청에 따라 출석으로 계산 (시각 없음)",12,theme.muted,false));
+        if(manual==MonthAttendance.ManualStatus.VACATION&&!CourseCalendar.classDay(selected,prefs.days(),prefs.excluded()))detail.addView(text("현재 비수업일 · 휴가 차감 제외 (아래 휴가 버튼으로 취소)",12,theme.muted,false));
+        if(state==MonthAttendance.State.VACATION)detail.addView(text("휴가 1일 사용 · 출석 인정 · 자동 출결 쉬어요",12,theme.accent,false));
         if(state==MonthAttendance.State.UNKNOWN)detail.addView(text("앱에서 확인된 입실·퇴실 기록이 없습니다.",12,theme.muted,false));
         else if(state==MonthAttendance.State.HOLIDAY)detail.addView(text(CourseCalendar.dayOff(selected).isEmpty()?"등록된 휴강일입니다.":CourseCalendar.dayOff(selected),12,theme.muted,false));
         else if(state==MonthAttendance.State.NO_CLASS)detail.addView(text("현재 설정한 수업 요일에 포함되지 않습니다.",12,theme.muted,false));
         else if(state==MonthAttendance.State.PLANNED)detail.addView(text("현재 설정에 따른 수업 예정일입니다.",12,theme.muted,false));
-        if(!selected.isAfter(today)){
+        if(!selected.isAfter(today)||manual==MonthAttendance.ManualStatus.VACATION||CourseCalendar.classDay(selected,prefs.days(),prefs.excluded())){
             gap(detail,12);LocalDate editDate=selected;
             LinearLayout choices=new LinearLayout(this);choices.setOrientation(LinearLayout.VERTICAL);choices.setTag("calendar-status-toggles");
             LinearLayout choiceRow=null;int choiceIndex=0;
-            for(MonthAttendance.ManualStatus option:MonthAttendance.ManualStatus.values()){
+            for(MonthAttendance.ManualStatus option:new MonthAttendance.ManualStatus[]{MonthAttendance.ManualStatus.PRESENT,MonthAttendance.ManualStatus.ABSENT,MonthAttendance.ManualStatus.VACATION,MonthAttendance.ManualStatus.LATE,MonthAttendance.ManualStatus.EARLY_LEAVE}){
+                if(selected.isAfter(today)&&option!=MonthAttendance.ManualStatus.VACATION)continue;
                 if(choiceIndex++%3==0){choiceRow=new LinearLayout(this);LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,-2);rp.bottomMargin=dp(6);choices.addView(choiceRow,rp);}
-                boolean on=manual==option;String statusText=option.state.label;
+                MonthAttendance.ManualStatus effective=manual;
+                if(effective==null)effective=switch(state){case LATE -> MonthAttendance.ManualStatus.LATE;case EARLY_LEAVE -> MonthAttendance.ManualStatus.EARLY_LEAVE;case LATE_EARLY -> MonthAttendance.ManualStatus.LATE_EARLY;default -> null;};
+                boolean on=MonthAttendance.selected(effective,option);String statusText=option.state.label;
                 Button toggle=button((on?"✓  ":"")+statusText,statusText+(on?" 선택됨 · 눌러 해제":" · 눌러 저장"),()->toggleAttendance(editDate,option));
                 toggle.setTag("manual-status:"+option.name());toggle.setSelected(on);toggle.setTextColor(on?color(option.state):theme.muted);
                 toggle.setTypeface(null,on?Typeface.BOLD:Typeface.NORMAL);toggle.setBackground(shape(on?theme.soft:theme.surface,on?color(option.state):theme.border,on?2:1,14));
                 if(Build.VERSION.SDK_INT>=30)toggle.setStateDescription(on?"켜짐":"꺼짐");
                 LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(0,dp(50),1);if(choiceRow.getChildCount()>0)size.leftMargin=dp(8);choiceRow.addView(toggle,size);
             }
-            detail.addView(choices);gap(detail,6);detail.addView(text("누르면 바로 저장 · 한 번 더 누르면 해제",12,theme.muted,false));
-        } else detail.addView(text("미래 날짜는 아직 수정할 수 없습니다.",12,theme.muted,false));
-        gap(content,12);content.addView(text("오늘 또는 지난 날짜에서 출석·지각·조퇴·결석을 선택하세요. 상태는 앱에만 저장되며, 시각은 앱이 확인한 출결 기록이 있을 때만 표시합니다. 사이트 출결은 변경되지 않습니다.",12,theme.muted,false));
+            detail.addView(choices);gap(detail,6);detail.addView(text("지각·조퇴는 함께 선택 가능 · 휴가는 출석 인정",12,theme.muted,false));
+        } else detail.addView(text("수업이 있는 날에 휴가를 예약할 수 있어요.",12,theme.muted,false));
+        gap(content,12);content.addView(text("오늘 또는 지난 날짜에서 출석·지각·조퇴·결석·휴가를 선택하세요. 미래 날짜는 휴가만 예약할 수 있어요. 상태는 앱에만 저장되며, 시각은 앱이 확인한 출결 기록이 있을 때만 표시합니다. 사이트 출결은 변경되지 않습니다.",12,theme.muted,false));
         gap(content,10);content.addView(button("Chrome 출결 화면 열기","Chrome 출결 화면 열기",()->ChromeAttendanceService.openChrome(this,SiteProtocol.PAGE)),new LinearLayout.LayoutParams(-1,dp(48)));
         scroll.post(()->scroll.scrollTo(0,position));
     }
     private void toggleAttendance(LocalDate date,MonthAttendance.ManualStatus choice){
-        if(date.isAfter(LocalDate.now(Policy.ZONE))){render();return;}
-        MonthAttendance.ManualStatus next=prefs.manualAttendance(date)==choice?null:choice;
+        MonthAttendance.ManualStatus current=prefs.manualAttendance(date);
+        if(current==null){MonthAttendance.State observed=prefs.calendarState(date,LocalDate.now(Policy.ZONE));current=switch(observed){case LATE -> MonthAttendance.ManualStatus.LATE;case EARLY_LEAVE -> MonthAttendance.ManualStatus.EARLY_LEAVE;case LATE_EARLY -> MonthAttendance.ManualStatus.LATE_EARLY;default -> null;};}
+        MonthAttendance.ManualStatus next=MonthAttendance.toggle(current,choice);
+        if(next==MonthAttendance.ManualStatus.VACATION&&!prefs.vacationProblem(date).isEmpty()){Toast.makeText(this,prefs.vacationProblem(date),Toast.LENGTH_LONG).show();return;}
         if(!prefs.saveManualAttendance(date,next)){Toast.makeText(this,"저장하지 못했습니다. 다시 눌러 주세요.",Toast.LENGTH_LONG).show();return;}
+        if(choice==MonthAttendance.ManualStatus.VACATION||current==MonthAttendance.ManualStatus.VACATION){
+            if(date.equals(LocalDate.now(Policy.ZONE))&&next==MonthAttendance.ManualStatus.VACATION){ActivationRun.cancel();ChromeAttendanceService.cancelWork();ScheduledUnlock.cancel(this,"VACATION");stopService(new Intent(this,MonitorService.class));}
+            ScheduleController.reconcile(this);
+        }
         handler.removeCallbacks(refresh);render();
     }
     private LinearLayout time(String label,String value,String tag){LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.addView(text(label,12,theme.muted,false));TextView time=text(value.isEmpty()?"—":value,23,theme.ink,true);time.setFontFeatureSettings("tnum");time.setTag(tag);box.addView(time);return box;}
@@ -166,7 +180,7 @@ public final class AttendanceCalendarActivity extends Activity {
         case ATTENDED -> night?0xFF8CDCC3:0xFF196A51;
         case ABSENT -> night?0xFFFFB4AB:0xFFAD3434;
         case COMPLETE, EARLY_LEAVE, LATE, LATE_EARLY, ENTERED -> night?0xFFF4CA91:0xFF885118;
-        case HOLIDAY -> night?0xFFD0B7F3:0xFF73508F;
+        case VACATION, HOLIDAY -> night?0xFFD0B7F3:0xFF73508F;
         case PLANNED -> night?0xFFA7CFF5:0xFF386785;
         default -> theme.muted;
     };}

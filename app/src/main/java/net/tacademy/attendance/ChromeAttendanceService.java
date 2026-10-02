@@ -76,6 +76,10 @@ public final class ChromeAttendanceService extends AccessibilityService {
         }
     };
     public static boolean available() { return instance != null; }
+    static boolean testLockdown(Activity activity){
+        if(instance==null||busy()||otherUiBusy()||ScheduledUnlock.active(activity)||ActivationRun.pending())return false;
+        instance.screen.testLockdown();return true;
+    }
     public static boolean configured(Context c) {
         String enabled=Settings.Secure.getString(c.getContentResolver(),Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
         if(enabled==null)return false;
@@ -83,8 +87,8 @@ public final class ChromeAttendanceService extends AccessibilityService {
         for(String name:enabled.split(":"))if(target.equals(ComponentName.unflattenFromString(name)))return true;
         return false;
     }
-    public static boolean busy() { return instance != null && instance.working; }
-    static boolean otherUiBusy() { return instance != null && (instance.navigatingWifi || instance.settingsTarget != null || !instance.lockProbe.isEmpty()); }
+    public static boolean busy() { return instance != null && (instance.working||instance.screen.busy()); }
+    static boolean otherUiBusy() { return instance != null && (instance.screen.busy() || instance.navigatingWifi || instance.settingsTarget != null || !instance.lockProbe.isEmpty()); }
     @Override protected void onServiceConnected() {
         instance = this; events(false);
         Prefs p=new Prefs(this);DiagnosticLog.add(this,DiagnosticLog.Event.ACCESSIBILITY_CONNECTED,p.phase(ZonedDateTime.now(Policy.ZONE)),"SERVICE_CONNECTED");
@@ -131,17 +135,17 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private static void beginManual(Activity context,Policy.Phase phase,boolean readOnly,boolean retryApproved,boolean earlyApproved) {
         Prefs p=new Prefs(context);
         var now=ZonedDateTime.now(Policy.ZONE);
-        var gate=AttendanceAttemptPolicy.manualGate(phase,now,p.days(),p.excluded(),p.start(),p.checkout(),readOnly,earlyApproved);
+        var gate=AttendanceAttemptPolicy.manualGate(phase,now,p.days(),p.automationExcluded(),p.start(),p.checkout(),readOnly,earlyApproved);
         String problem=gate.problem(),reason=gate.code();
         org.json.JSONObject details=DiagnosticLog.scheduleDetails(p);
-        try{details.put("early_leave_approved",earlyApproved).put("read_only",readOnly).put("class_day",Policy.isClassDay(now,p.days(),p.excluded()));}catch(org.json.JSONException ignored){}
+        try{details.put("early_leave_approved",earlyApproved).put("read_only",readOnly).put("class_day",Policy.isClassDay(now,p.days(),p.automationExcluded()));}catch(org.json.JSONException ignored){}
         if(problem.isEmpty()){
             NetworkAccess.State network=NetworkAccess.inspect(context);
             try{details.put("wifi_check_code",network.code());}catch(org.json.JSONException ignored){}
             if(!network.allowed()){problem=network.reason();reason=network.code();}
         }
         if(problem.isEmpty()&&!available()){problem="Chrome 접근성 연결이 필요해요. 연결 탭에서 확인해 주세요.";reason="ACCESSIBILITY_DISCONNECTED";}
-        if(problem.isEmpty()&&(LockLab.readOnlyActive(context)||ScheduledUnlock.active(context)||instance!=null&&(instance.working||instance.navigatingWifi||instance.settingsTarget!=null||!instance.lockProbe.isEmpty()))){problem="진행 중인 테스트나 화면 작업을 마친 뒤 다시 눌러 주세요.";reason="OTHER_UI_WORK";}
+        if(problem.isEmpty()&&(LockLab.readOnlyActive(context)||ScheduledUnlock.active(context)||instance!=null&&(instance.working||instance.screen.busy()||instance.navigatingWifi||instance.settingsTarget!=null||!instance.lockProbe.isEmpty()))){problem="진행 중인 테스트나 화면 작업을 마친 뒤 다시 눌러 주세요.";reason="OTHER_UI_WORK";}
         if(!problem.isEmpty()){p.status("직접 출결 확인 필요",problem);DiagnosticLog.add(context,DiagnosticLog.Event.MANUAL_BLOCKED,phase,reason,details);Toast.makeText(context,problem,Toast.LENGTH_LONG).show();return;}
         DiagnosticLog.add(context,DiagnosticLog.Event.MANUAL_REQUEST,phase,readOnly?"READ_RECORD":earlyApproved?"EARLY_LEAVE_APPROVED":retryApproved?"USER_CONFIRMED_RETRY":"ONE_SHOT");
         begin(context,null,phase,true,readOnly,retryApproved,earlyApproved);
@@ -156,7 +160,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
             if (done != null) done.run(); return;
         }
         if(ScheduledUnlock.active(context)){if(done!=null)done.run();return;}
-        if (instance.working || instance.navigatingWifi || instance.settingsTarget!=null || !instance.lockProbe.isEmpty()) { DiagnosticLog.add(context,DiagnosticLog.Event.WAITING,prefs.phase(ZonedDateTime.now(Policy.ZONE)),"OTHER_UI_WORK");if (done != null) done.run(); return; }
+        if (instance.working || instance.screen.busy() || instance.navigatingWifi || instance.settingsTarget!=null || !instance.lockProbe.isEmpty()) { DiagnosticLog.add(context,DiagnosticLog.Event.WAITING,prefs.phase(ZonedDateTime.now(Policy.ZONE)),"OTHER_UI_WORK");if (done != null) done.run(); return; }
         if (context.getSystemService(KeyguardManager.class).isKeyguardLocked() ||
                 context.getSystemService(KeyguardManager.class).isDeviceLocked() || !context.getSystemService(PowerManager.class).isInteractive()) {
             DiagnosticLog.add(context,DiagnosticLog.Event.WAITING,prefs.phase(ZonedDateTime.now(Policy.ZONE)),"SCREEN_LOCKED");
@@ -388,7 +392,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private boolean newClickAllowed(Prefs p){
         ZonedDateTime now=ZonedDateTime.now(Policy.ZONE);
         if(!day.equals(now.toLocalDate().toString()))return false;
-        return manualSession?!manualReadOnly&&AttendanceAttemptPolicy.manualGate(phase,now,p.days(),p.excluded(),p.start(),p.checkout(),false,manualEarlyApproved).problem().isEmpty():p.phase(now)==phase;
+        return manualSession?!manualReadOnly&&AttendanceAttemptPolicy.manualGate(phase,now,p.days(),p.automationExcluded(),p.start(),p.checkout(),false,manualEarlyApproved).problem().isEmpty():p.phase(now)==phase;
     }
     private boolean observationAllowed(Prefs p){
         if(!day.equals(LocalDate.now(Policy.ZONE).toString()))return false;
@@ -571,14 +575,15 @@ public final class ChromeAttendanceService extends AccessibilityService {
     }
     /** An explicit OFF stops manual/activation work too, while retaining any durable click marker. */
     public static void cancelForReservationOff(){
-        if(instance==null||!instance.working)return;
+        if(instance==null)return;
+        instance.screen.cancel();if(!instance.working)return;
         ChromeAttendanceService s=instance;org.json.JSONObject d=s.attemptDetails();
         try{d.put("click_attempted",s.clickAttempted||s.clicked).put("click_accepted",s.clicked)
             .put("pending_click",s.key!=null&&s.key.equals(new Prefs(s).raw.getString("chrome_pending","")));}catch(org.json.JSONException ignored){}
         DiagnosticLog.add(s,DiagnosticLog.Event.ATTEMPT_CANCELLED,s.phase,"RESERVATION_OFF",d);
         s.finishWork();
     }
-    public static void cancelWork() { if (instance != null) instance.finishWork(); }
+    public static void cancelWork() { if (instance != null) { instance.screen.cancel();instance.finishWork(); } }
     public static void launchLockTest(Context context, Intent intent) {
         Context source=instance!=null?instance:context;
         LockLab.event(context,intent.getStringExtra(LockLab.TOKEN),instance!=null?"접근성 서비스에서 화면 진입 시도":"앱에서 화면 진입 시도 · Android 제한 가능");
@@ -588,7 +593,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if(!LockLab.live(context,token)||!LockLab.localClick(context))return;
         if(instance==null){LockLab.finish(context,token,"접근성 연결이 없어 시험 버튼을 누르지 못했습니다");return;}
         ChromeAttendanceService s=instance;
-        if(s.working||s.navigatingWifi||s.settingsTarget!=null){LockLab.finish(context,token,"다른 작업이 진행 중입니다");return;}
+        if(s.working||s.screen.busy()||s.navigatingWifi||s.settingsTarget!=null){LockLab.finish(context,token,"다른 작업이 진행 중입니다");return;}
         s.endLockProbe(null);s.lockProbe=token;s.localClickRequested=false;s.localClickAccepted=false;
         LockLab.stage(context,token,"대체 클릭 시험 준비 · 실제 출결 없음");
         new Thread(()->{
@@ -670,7 +675,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     public static void connectWifi(Activity activity,String ssid){
         if(!new Prefs(activity).ssids().contains(ssid)||!Policy.validSsid(ssid))return;
         ChromeAttendanceService s=instance;
-        if(ActivationRun.pending()||ScheduledUnlock.active(activity)||s!=null&&(s.working||s.navigatingWifi||s.settingsTarget!=null||!s.lockProbe.isEmpty())){
+        if(ActivationRun.pending()||ScheduledUnlock.active(activity)||s!=null&&(s.working||s.screen.busy()||s.navigatingWifi||s.settingsTarget!=null||!s.lockProbe.isEmpty())){
             Toast.makeText(activity,"진행 중인 출결·화면 작업을 마친 뒤 다시 눌러 주세요",Toast.LENGTH_LONG).show();return;
         }
         if(s!=null){
@@ -692,7 +697,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         Toast.makeText(activity,ssid+"를 선택해 연결해 주세요",Toast.LENGTH_LONG).show();
     }
     public static boolean settingsMenu(Activity activity,PhoneSettings.Target target){
-        if(instance==null||instance.working||instance.navigatingWifi||!instance.lockProbe.isEmpty())return false;
+        if(instance==null||instance.working||instance.screen.busy()||instance.navigatingWifi||!instance.lockProbe.isEmpty())return false;
         if(target!=PhoneSettings.Target.LOCATION_PERMISSION&&target!=PhoneSettings.Target.BATTERY&&target!=PhoneSettings.Target.EXTEND)return false;
         cancelSettingsMenu();ChromeAttendanceService s=instance;s.settingsTarget=target;s.settingsStep=0;s.settingsScrolls=0;
         s.settingsUntil=SystemClock.elapsedRealtime()+15000;s.settingsActionAt=SystemClock.elapsedRealtime();s.events(true);s.handler.postDelayed(s.settingsTick,700);return true;

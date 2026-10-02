@@ -32,6 +32,7 @@ public final class Prefs {
     public void enabled(boolean value) { raw.edit().putBoolean("enabled", value).apply(); }
     public boolean guidanceNotifications() { return raw.getBoolean("guidance_notifications",true); }
     public boolean screenOffAfterAttendance() { return raw.getBoolean("screen_off_after_attendance",true); }
+    public boolean lockdownAfterAttendance() { return raw.getBoolean("lockdown_after_attendance",true); }
     public boolean showProcessingScreen() { return raw.getBoolean("show_processing_screen",true); }
     public boolean auto() { return raw.getBoolean("auto", false); }
     public String start() { return raw.getString("start", "08:30"); }
@@ -54,7 +55,7 @@ public final class Prefs {
     private boolean today() { return LocalDate.now(Policy.ZONE).toString().equals(raw.getString("record_day", "")); }
     public Policy.Phase phase(ZonedDateTime now) {
         if (!enabled()) return Policy.Phase.IDLE;
-        return Policy.phase(now, days(), excluded(), start(), end(), checkout(), retryMinutes(), checkedInToday(), checkedOutToday());
+        return Policy.phase(now, days(), automationExcluded(), start(), end(), checkout(), retryMinutes(), checkedInToday(), checkedOutToday());
     }
     public Set<Integer> days() {
         Set<Integer> values = new HashSet<>();
@@ -65,15 +66,33 @@ public final class Prefs {
     }
     public Set<String> userExcluded() { return new HashSet<>(raw.getStringSet("excluded", Set.of())); }
     public Set<String> excluded() { Set<String> all=userExcluded();all.addAll(CourseCalendar.HOLIDAYS.keySet());all.addAll(CourseCalendar.BREAKS.keySet());return all; }
+    public Set<String> automationExcluded(){Set<String> all=excluded();for(LocalDate day:vacations())all.add(day.toString());return all;}
+    VacationLedger.GrantRule vacationRule(){try{return VacationLedger.GrantRule.valueOf(raw.getString("vacation_rule","COURSE_START"));}catch(IllegalArgumentException e){return VacationLedger.GrantRule.COURSE_START;}}
+    Set<LocalDate> vacations(){
+        Set<LocalDate> result=new TreeSet<>();for(String key:raw.getAll().keySet())if(key.startsWith("manual_attendance:")&&"VACATION".equals(raw.getString(key,"")))try{
+            LocalDate day=LocalDate.parse(key.substring("manual_attendance:".length()));if(CourseCalendar.classDay(day,days(),excluded()))result.add(day);
+        }catch(RuntimeException ignored){}return result;
+    }
+    VacationLedger.Balance vacationBalance(){return VacationLedger.balance(LocalDate.now(Policy.ZONE),vacations(),vacationRule());}
+    String vacationProblem(LocalDate day){
+        if(!CourseCalendar.classDay(day,days(),excluded()))return "수업이 있는 날에만 휴가를 등록할 수 있어요.";
+        Set<LocalDate> leave=vacations();leave.add(day);
+        return VacationLedger.valid(leave,vacationRule())?"":"해당 날짜까지 부여된 휴가가 부족하거나 뒤의 휴가 예약과 겹칩니다.";
+    }
     public String lateAfter() { return raw.getBoolean("late_disabled",false)?"":raw.getString("late_after", "09:11"); }
     AttendanceMetrics.Summary attendanceSummary() {
-        return AttendanceMetrics.summarize(LocalDate.now(Policy.ZONE),days(),excluded(),this::history,this::manualAttendance,lateAfter(),checkout());
+        return AttendanceMetrics.summarize(ZonedDateTime.now(Policy.ZONE),days(),excluded(),this::history,this::manualAttendance,lateAfter(),checkout());
     }
     MonthAttendance.State calendarState(LocalDate date,LocalDate today) {
         Policy.Record record=history(date);MonthAttendance.ManualStatus manual=manualAttendance(date);
+        if(manual==MonthAttendance.ManualStatus.VACATION&&!CourseCalendar.classDay(date,days(),excluded()))return excluded().contains(date.toString())?MonthAttendance.State.HOLIDAY:MonthAttendance.State.NO_CLASS;
         if(!date.isAfter(today)&&manual==null&&record!=null&&record.checkedOut()){
             return AttendanceMetrics.observedState(record,lateAfter(),checkoutFor(date));
         }
+        if(manual==null&&(record==null||!record.checkedIn())&&CourseCalendar.classDay(date,days(),excluded())
+                &&(date.isBefore(today)||date.equals(today)&&!LocalTime.now(Policy.ZONE).isBefore(LocalTime.parse(CourseSchedule.classEnd(date)))))return MonthAttendance.State.ATTENDED;
+        if(manual==null&&record!=null&&record.checkedIn()&&!record.checkedOut()&&AttendanceMetrics.isLate(record.in(),lateAfter())
+                &&(date.isBefore(today)||date.equals(today)&&!LocalTime.now(Policy.ZONE).isBefore(LocalTime.parse(CourseSchedule.classEnd(date)))))return MonthAttendance.State.LATE;
         return MonthAttendance.state(date,today,record,manual,days(),excluded());
     }
     public boolean hasLocation() { return raw.contains("latitude") && raw.contains("longitude"); }
@@ -105,7 +124,9 @@ public final class Prefs {
     }
     @android.annotation.SuppressLint("ApplySharedPref") // Report a failed toggle without showing a saved selection.
     public boolean saveManualAttendance(LocalDate day,MonthAttendance.ManualStatus status) {
-        if(day==null||day.isAfter(LocalDate.now(Policy.ZONE)))throw new IllegalArgumentException("오늘과 지난 날짜만 직접 기록할 수 있습니다.");
+        if(day==null)throw new IllegalArgumentException("날짜가 필요합니다.");
+        if(day.isAfter(LocalDate.now(Policy.ZONE))&&status!=MonthAttendance.ManualStatus.VACATION&&!(status==null&&manualAttendance(day)==MonthAttendance.ManualStatus.VACATION))throw new IllegalArgumentException("미래에는 휴가만 예약할 수 있습니다.");
+        if(status==MonthAttendance.ManualStatus.VACATION&&!vacationProblem(day).isEmpty())return false;
         SharedPreferences.Editor edit=raw.edit().remove("manual_times:"+day).remove("manual_source:"+day);
         String key="manual_attendance:"+day;
         if(status==null)edit.remove(key);else edit.putString(key,status.name());

@@ -9,7 +9,7 @@ final class AutomationSnapshot {
         JSONObject result=new JSONObject();Prefs p=new Prefs(c);
         try{
             result.put("entry_start",p.start()).put("entry_end",p.end()).put("checkout_start",p.checkoutStartToday().toString())
-                .put("checkout_retry_minutes",p.retryMinutes()).put("class_day",Policy.isClassDay(ZonedDateTime.now(Policy.ZONE),p.days(),p.excluded()))
+                .put("checkout_retry_minutes",p.retryMinutes()).put("class_day",Policy.isClassDay(ZonedDateTime.now(Policy.ZONE),p.days(),p.automationExcluded()))
                 .put("entry_confirmed_today",p.checkedInToday()).put("checkout_confirmed_today",p.checkedOutToday())
                 .put("monitor_running",MonitorService.running).put("monitor_seen_at_ms",p.raw.getLong("monitor_seen",0)).put("next_alarm_at_ms",p.raw.getLong("next_alarm",0))
                 .put("scheduled_lock_mode",ScheduledUnlock.mode(c).name()).put("unlock_active",ScheduledUnlock.active(c))

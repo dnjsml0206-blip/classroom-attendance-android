@@ -5,7 +5,7 @@ import java.util.Set;
 final class CourseSchedule {
     private CourseSchedule(){}
     static boolean shortened(LocalDate day){var lesson=CourseTimetable.on(day);return lesson!=null&&(lesson.hours()==6||lesson.hours()==7);}
-    static String classEnd(LocalDate day){var lesson=CourseTimetable.on(day);return shortened(day)?LocalTime.of(lesson.hours()+10,0).toString():"";}
+    static String classEnd(LocalDate day){var lesson=CourseTimetable.on(day);return shortened(day)?LocalTime.of(lesson.hours()+10,0).toString():"18:00";}
     static String checkout(LocalDate day,String configured){return shortened(day)?LocalTime.parse(classEnd(day)).minusMinutes(10).toString():configured;}
     static int cushion(LocalDate day){return shortened(day)?2:Policy.CHECKOUT_DELAY_SECONDS;}
     static LocalTime dispatch(LocalDate day,String configured){return LocalTime.parse(checkout(day,configured)).plusSeconds(cushion(day));}

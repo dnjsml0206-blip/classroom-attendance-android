@@ -18,7 +18,7 @@ public final class AttendanceMetricsTest {
     }
     @Test public void unrecordedDatesAndPartialEntryAreUnknown(){
         var s=summary(LocalDate.of(2026,9,2),Map.of(CourseCalendar.START,new Policy.Record("08:40","")),Map.of(),Set.of());
-        assertEquals(0,s.known());assertEquals(3,s.missing());assertEquals(0,s.equivalent());assertTrue(Double.isNaN(s.currentRate()));
+        assertEquals(0,s.known());assertEquals(3,s.missing());assertEquals(0,s.equivalent());assertEquals(100.0,s.currentRate(),0.001);
     }
     @Test public void mixedLateAndEarlyAccumulateAcrossDates(){
         Map<LocalDate,Policy.Record> records=Map.of(CourseCalendar.START,new Policy.Record("09:01","17:50"),

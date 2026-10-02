@@ -11,10 +11,10 @@ final class ShortDayReminder {
     static void cancel(Context c){c.getSystemService(AlarmManager.class).cancel(operation(c));store(c).edit().remove("next_at").apply();}
     static synchronized void reconcile(Context c){
         Prefs p=new Prefs(c);ZonedDateTime now=ZonedDateTime.now(Policy.ZONE);cancel(c);
-        if(!p.guidanceNotifications()||!CourseSchedule.activeShortDay(now.toLocalDate(),p.days(),p.excluded()))c.getSystemService(NotificationManager.class).cancel(ID);
+        if(!p.guidanceNotifications()||!CourseSchedule.activeShortDay(now.toLocalDate(),p.days(),p.automationExcluded()))c.getSystemService(NotificationManager.class).cancel(ID);
         if(!p.guidanceNotifications())return;
         postIfDue(c,p,now);
-        ZonedDateTime next=CourseSchedule.nextNotice(now,p.days(),p.excluded(),p.start());if(next==null)return;
+        ZonedDateTime next=CourseSchedule.nextNotice(now,p.days(),p.automationExcluded(),p.start());if(next==null)return;
         AlarmManager alarm=c.getSystemService(AlarmManager.class);long at=next.toInstant().toEpochMilli();
         try{
             if(AlarmScheduler.allowed(c))alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,operation(c));
@@ -27,7 +27,7 @@ final class ShortDayReminder {
     }
     static synchronized boolean postIfDue(Context c,Prefs p,ZonedDateTime time){
         ZonedDateTime now=time.withZoneSameInstant(Policy.ZONE);LocalDate day=now.toLocalDate();String key="sent:"+day;
-        if(!p.guidanceNotifications()||!CourseSchedule.noticeDue(now,p.days(),p.excluded(),p.start())||store(c).getBoolean(key,false)||!Notices.attentionNotificationsAllowed(c))return false;
+        if(!p.guidanceNotifications()||!CourseSchedule.noticeDue(now,p.days(),p.automationExcluded(),p.start())||store(c).getBoolean(key,false)||!Notices.attentionNotificationsAllowed(c))return false;
         String detail=day+" · "+CourseTimetable.on(day).title()+"\n"+CourseSchedule.summary(day)+(p.enabled()&&p.auto()?"":"\n자동 출결이 꺼져 있어요. 예약·자동 클릭 설정을 확인해 주세요.");
         PendingIntent open=PendingIntent.getActivity(c,1902,new Intent(c,MainActivity.class).putExtra("open_tab",0).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification notice=new Notification.Builder(c,"attention").setSmallIcon(R.drawable.ic_notification)

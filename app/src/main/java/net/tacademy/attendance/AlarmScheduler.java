@@ -27,7 +27,7 @@ public final class AlarmScheduler {
         if (!prefs.enabled()) return false;
         if(!allowed(context)){DiagnosticLog.add(context,DiagnosticLog.Event.ALARM_FAILED,prefs.phase(ZonedDateTime.now(Policy.ZONE)),"EXACT_ALARM_DENIED");return false;}
         ZonedDateTime now = ZonedDateTime.now(Policy.ZONE);
-        ZonedDateTime next = Policy.nextWake(now, prefs.days(), prefs.excluded(), prefs.start(), prefs.end(),
+        ZonedDateTime next = Policy.nextWake(now, prefs.days(), prefs.automationExcluded(), prefs.start(), prefs.end(),
             prefs.checkout(), prefs.retryMinutes(), prefs.checkedInToday(), prefs.checkedOutToday());
         if (recover && prefs.monitoringNeeded(now)) next = now.plusSeconds(2);
         if (next == null) return false;

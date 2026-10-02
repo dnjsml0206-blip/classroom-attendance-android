@@ -38,7 +38,7 @@ final class CalendarChecks {
             });
             open(start,HomeTheme.WARM);
             check(value("calendar-month").equals("2026년 8월")&&view("calendar-status-toggles")!=null,"Course start before installation offers immediate status toggles");
-            check(value("calendar-selected-status").equals("미확인")&&!view("manual-status:PRESENT").isSelected(),"No attendance is preselected");
+            check(value("calendar-selected-status").equals("출석")&&!view("manual-status:PRESENT").isSelected(),"Unrecorded past class is credited without a manual override");
             choose(MonthAttendance.ManualStatus.PRESENT);
             check(prefs.manualAttendance(start)==MonthAttendance.ManualStatus.PRESENT&&value("calendar-selected-status").equals("출석")&&view("manual-status:PRESENT").isSelected(),"One tap saves and selects presence without a dialog");
             check(value("calendar-summary").contains("출석 1일")&&view("calendar-times").getVisibility()==View.GONE,"Manual-only attendance counts without displaying invented times");
@@ -48,13 +48,15 @@ final class CalendarChecks {
             choose(MonthAttendance.ManualStatus.EARLY_LEAVE);
             check(!view("manual-status:PRESENT").isSelected()&&view("manual-status:EARLY_LEAVE").isSelected()&&value("calendar-summary").contains("조퇴 1일"),"Choosing a different status switches exclusively and updates the month");
             choose(MonthAttendance.ManualStatus.LATE);
-            check(value("calendar-selected-status").equals("지각")&&value("calendar-summary").contains("지각 1일"),"Late attendance can be toggled without a time field");
-            choose(MonthAttendance.ManualStatus.LATE_EARLY);
+            check(value("calendar-selected-status").equals("지각·조퇴")&&view("manual-status:LATE").isSelected()&&view("manual-status:EARLY_LEAVE").isSelected(),"Late attendance can combine with early leave");
+            choose(MonthAttendance.ManualStatus.EARLY_LEAVE);
+            check(value("calendar-selected-status").equals("지각"),"Turning early leave off retains late attendance");
+            choose(MonthAttendance.ManualStatus.EARLY_LEAVE);
             check(value("calendar-selected-status").equals("지각·조퇴")&&value("calendar-summary").contains("지각 1일")&&value("calendar-summary").contains("조퇴 1일"),"Combined late and early counts both occurrences");
             choose(MonthAttendance.ManualStatus.ABSENT);
             check(value("calendar-selected-status").equals("결석")&&value("calendar-summary").contains("결석 1일"),"Absence saves immediately");
             choose(MonthAttendance.ManualStatus.ABSENT);
-            check(prefs.manualAttendance(start)==null&&value("calendar-selected-status").equals("미확인"),"Tapping the active status again turns it off");
+            check(prefs.manualAttendance(start)==null&&value("calendar-selected-status").equals("출석"),"Tapping the active status again turns it off");
             main(()->prefs.raw.edit().putString("manual_attendance:"+start,"PRESENT").putString("manual_times:"+start,"08:30|17:50").commit());settle();
             check(view("calendar-times").getVisibility()==View.GONE,"Legacy manually entered times never become observed times");
             choose(MonthAttendance.ManualStatus.EARLY_LEAVE);
@@ -73,7 +75,7 @@ final class CalendarChecks {
             choose(MonthAttendance.ManualStatus.ABSENT);
             check(prefs.manualAttendance(today)==null&&value("calendar-in").equals("08:41:00"),"Clearing today's local status preserves its observed time");
             close();open(today.plusDays(1),HomeTheme.WARM);
-            check(view("calendar-status-toggles")==null,"Future days cannot be toggled");
+            check(view("manual-status:PRESENT")==null,"Future days cannot be marked present");
             boolean[] rejected={false};main(()->{
                 try{prefs.saveManualAttendance(today.plusDays(1),MonthAttendance.ManualStatus.PRESENT);}catch(IllegalArgumentException e){rejected[0]=true;}
             });

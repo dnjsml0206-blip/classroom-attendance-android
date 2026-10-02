@@ -13,7 +13,7 @@ final class ActivationRun {
     static boolean start(Activity activity){
         if(pending()){Toast.makeText(activity,label(),Toast.LENGTH_SHORT).show();return true;}
         Prefs p=new Prefs(activity);ZonedDateTime now=ZonedDateTime.now(Policy.ZONE);
-        phase=AttendanceAttemptPolicy.activationPhase(now,p.days(),p.excluded(),p.start(),p.end(),p.checkout(),p.checkedInToday(),p.checkedOutToday());
+        phase=AttendanceAttemptPolicy.activationPhase(now,p.days(),p.automationExcluded(),p.start(),p.end(),p.checkout(),p.checkedInToday(),p.checkedOutToday());
         if(phase==Policy.Phase.IDLE)return false;
         owner=activity;due=SystemClock.elapsedRealtime()+DELAY_MS;
         final String day=now.toLocalDate().toString();final Policy.Phase selected=phase;

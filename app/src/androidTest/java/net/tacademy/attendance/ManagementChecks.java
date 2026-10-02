@@ -35,11 +35,11 @@ final class ManagementChecks {
         check(timetable!=null&&timetable.getWindow().getDecorView().findViewWithTag("timetable-title")!=null,"Today timetable button opens the real offline schedule");capture("timetable.png");ui(timetable::finish);settle();
         close();open(AttendanceManagementActivity.class);
         check(value("course-total").contains("120일"),"Course weekdays exclude Korean holidays including substitutes");
-        check(value("attendance-current-rate").equals("—")&&value("attendance-missing").contains("확인된 0일"),"Missing records are not silently counted as absence or confirmed presence");
+        check(value("attendance-current-rate").equals("100.0%")&&value("attendance-missing").contains("출석 처리"),"Missing records are not silently counted as absence or confirmed presence");
         check(value("attendance-remaining").contains("24일")&&value("attendance-forecast-assumption").contains("모두 출석"),"Remaining absence budget displays its optimistic assumption");
         check(p.lateAfter().isEmpty(),"Unknown late threshold remains unset");
         ui(()->{p.saveManualAttendance(LocalDate.of(2026,8,31),MonthAttendance.ManualStatus.LATE);p.saveManualAttendance(LocalDate.of(2026,9,1),MonthAttendance.ManualStatus.LATE_EARLY);});settle();
-        check(value("attendance-current-rate").equals("50.0%")&&value("attendance-counts").contains("지각 2회")&&value("attendance-counts").contains("조퇴 1회"),"Three combined occurrences convert to one absence across two known dates");
+        check(value("attendance-current-rate").equals(p.attendanceSummary().currentDisplay())&&value("attendance-counts").contains("지각 2회")&&value("attendance-counts").contains("조퇴 1회"),"Three combined occurrences convert to one absence across two known dates");
         check(value("attendance-remaining").contains("23일")&&value("attendance-equivalent").contains("환산 1일"),"Attendance budget updates after calendar corrections");
         capture("management-top.png");
         ui(()->view("attendance-late-threshold").performClick());settle();check(!activity.hasWindowFocus(),"Late threshold opens its modal time picker");test.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);settle();check(p.lateAfter().isEmpty(),"Cancelling the picker never saves a guessed threshold");

@@ -41,7 +41,7 @@ final class ReplicaChecks {
         p.raw.edit().putBoolean("enabled",true).putBoolean("auto",true).putStringSet("ssids",Set.of(ssid))
             .putStringSet("days",Set.of("1","2","3","4","5","6","7")).putStringSet("excluded",Set.of())
             .putString("start","00:00").putString("end",checkout?"00:01":"23:50").putString("checkout",checkout?"00:02":"23:51")
-            .putInt("checkout_retry_minutes",automatic&&checkout?5:1).putBoolean("screen_off_after_attendance",screenOff).putBoolean("show_processing_screen",processing).commit();
+            .putInt("checkout_retry_minutes",automatic&&checkout?5:1).putBoolean("lockdown_after_attendance",false).putBoolean("screen_off_after_attendance",screenOff).putBoolean("show_processing_screen",processing).commit();
         if(scenario.equals("checkout-early")||scenario.startsWith("checkout-read"))p.raw.edit().putString("checkout","23:51").commit();
         if(scenario.equals("checkout-read-entry"))p.raw.edit().putString("chrome_pending",LocalDate.now(Policy.ZONE)+":ENTRY").putLong("chrome_pending_at",System.currentTimeMillis()-10000).commit();
         if(automatic&&checkout)p.raw.edit().putString("checkout",LocalTime.now(Policy.ZONE).minusMinutes(1).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))).commit();
