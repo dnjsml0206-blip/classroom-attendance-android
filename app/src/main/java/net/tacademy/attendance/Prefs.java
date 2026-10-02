@@ -65,17 +65,14 @@ public final class Prefs {
     }
     public Set<String> userExcluded() { return new HashSet<>(raw.getStringSet("excluded", Set.of())); }
     public Set<String> excluded() { Set<String> all=userExcluded();all.addAll(CourseCalendar.HOLIDAYS.keySet());all.addAll(CourseCalendar.BREAKS.keySet());return all; }
-    public String lateAfter() { return raw.getString("late_after", ""); }
+    public String lateAfter() { return raw.getBoolean("late_disabled",false)?"":raw.getString("late_after", "09:11"); }
     AttendanceMetrics.Summary attendanceSummary() {
         return AttendanceMetrics.summarize(LocalDate.now(Policy.ZONE),days(),excluded(),this::history,this::manualAttendance,lateAfter(),checkout());
     }
     MonthAttendance.State calendarState(LocalDate date,LocalDate today) {
         Policy.Record record=history(date);MonthAttendance.ManualStatus manual=manualAttendance(date);
         if(!date.isAfter(today)&&manual==null&&record!=null&&record.checkedOut()){
-            AttendanceMetrics.Day d=AttendanceMetrics.day(record,null,lateAfter(),checkoutFor(date));
-            if(d.late()&&d.early())return MonthAttendance.State.LATE_EARLY;
-            if(d.late())return MonthAttendance.State.LATE;
-            if(d.early())return MonthAttendance.State.EARLY_LEAVE;
+            return AttendanceMetrics.observedState(record,lateAfter(),checkoutFor(date));
         }
         return MonthAttendance.state(date,today,record,manual,days(),excluded());
     }
@@ -109,7 +106,7 @@ public final class Prefs {
     @android.annotation.SuppressLint("ApplySharedPref") // Report a failed toggle without showing a saved selection.
     public boolean saveManualAttendance(LocalDate day,MonthAttendance.ManualStatus status) {
         if(day==null||day.isAfter(LocalDate.now(Policy.ZONE)))throw new IllegalArgumentException("오늘과 지난 날짜만 직접 기록할 수 있습니다.");
-        SharedPreferences.Editor edit=raw.edit().remove("manual_times:"+day);
+        SharedPreferences.Editor edit=raw.edit().remove("manual_times:"+day).remove("manual_source:"+day);
         String key="manual_attendance:"+day;
         if(status==null)edit.remove(key);else edit.putString(key,status.name());
         return edit.commit();

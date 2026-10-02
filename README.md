@@ -2,10 +2,16 @@
 
 기존 **휴대폰 Chrome의 인증 상태**로 SK플래닛 출석 버튼을 처리하는 개인용 앱입니다.
 
-[제작자용 APK 다운로드 · v0.9.12](https://github.com/dnjsml0206-blip/classroom-attendance-android/releases/tag/v0.9.12)
+[제작자용 APK 다운로드 · v0.9.13](https://github.com/dnjsml0206-blip/classroom-attendance-android/releases/tag/v0.9.13)
 
 **실제 수강생 Chrome 인증과 강의실 Wi-Fi에서 확인이 필요한 초기 테스트 버전입니다.**
 설정의 **잠금 중 처리 방식**을 일반 예약에 적용합니다. 기본값은 Extend Unlock · 신뢰 상태이며, 화면 깨우기·시스템 인증 요청도 선택할 수 있습니다. 이전 알림 전용 설정은 Extend Unlock으로 적용됩니다. 실제 휴대폰이 화면 표시를 제한하거나 인증을 요구하면 사용자의 조작이 필요합니다.
+
+## v0.9.13 · 출결 판정과 오늘 화면 개선
+
+시간표 보기와 오리엔테이션 자료를 좌·우 버튼으로 분리했습니다. 지각은 기본 09:11부터 판정하며, 근거가 부족한 기록은 판정대기로 표시합니다. 제작자 업데이트는 사용자 확인에 따라 9/28 조퇴·9/30 지각을 한 번 반영하고 실제 시각은 보존합니다.
+
+[설치·변경 내용](docs/releases/v0.9.13.md) · [출결 보정 근거와 검증](docs/attendance-classification-2026-10-01.md)
 
 ## v0.9.12 · 전체 기간 단축수업 안내
 

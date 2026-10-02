@@ -20,7 +20,7 @@ final class ManagementChecks {
         for(String name:new String[]{"attendance","attendance_access","attendance_diagnostics"})saved.put(name,new HashMap<>(c.getSharedPreferences(name,0).getAll()));
         ui(()->{ChromeAttendanceService.cancelWork();AlarmScheduler.cancel(c);c.stopService(new Intent(c,MonitorService.class));
             p.raw.edit().clear().putBoolean("initialized",true).putInt("schedule_version",2).putBoolean("chrome_backend",true)
-                .putBoolean("enabled",false).putBoolean("auto",false).putStringSet("ssids",Set.of("__MANAGEMENT_NO_MATCH__"))
+                .putBoolean(PersonalAttendanceCorrection.MARKER,true).putBoolean("late_disabled",true).putBoolean("enabled",false).putBoolean("auto",false).putStringSet("ssids",Set.of("__MANAGEMENT_NO_MATCH__"))
                 .putStringSet("days",Set.of("1","2","3","4","5")).putStringSet("excluded",Set.of())
                 .putString("start","00:00").putString("end","23:50").putString("checkout","23:51").commit();
             TrafficGuard.prefs(c).edit().putString("day",LocalDate.now(Policy.ZONE).toString()).putInt("total",AccessPolicy.DAILY_LIMIT).commit();});

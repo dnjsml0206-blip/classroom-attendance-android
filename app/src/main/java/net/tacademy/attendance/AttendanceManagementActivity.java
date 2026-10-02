@@ -19,7 +19,7 @@ public final class AttendanceManagementActivity extends Activity {
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable refresh=this::render;
     private final SharedPreferences.OnSharedPreferenceChangeListener changes=(p,key)->{
-        if(key==null||key.startsWith("record:")||key.startsWith("manual_attendance:")||Set.of("days","excluded","late_after","checkout").contains(key)){
+        if(key==null||key.startsWith("record:")||key.startsWith("manual_attendance:")||Set.of("days","excluded","late_after","late_disabled","checkout").contains(key)){
             handler.removeCallbacks(refresh);handler.postDelayed(refresh,100);
         }
     };
@@ -41,6 +41,7 @@ public final class AttendanceManagementActivity extends Activity {
             theme==HomeTheme.NIGHT?0:WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS|WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
             WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS|WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
         render();
+        if(getIntent().getBooleanExtra("edit_late",false)){getIntent().removeExtra("edit_late");editLate();}
     }
     @Override protected void onResume(){super.onResume();prefs.raw.registerOnSharedPreferenceChangeListener(changes);render();}
     @Override protected void onPause(){prefs.raw.unregisterOnSharedPreferenceChangeListener(changes);handler.removeCallbacks(refresh);super.onPause();}
@@ -51,6 +52,11 @@ public final class AttendanceManagementActivity extends Activity {
         line(course,"2026.08.31 – 2027.02.26",18,theme.ink,"course-period");
         line(course,"총 "+s.total()+"일 · 수업 요일과 휴강일 반영",13,theme.muted,"course-total");
         line(course,"공휴일 · 과정명세서의 휴강일 제외",12,theme.muted,null);
+        if(prefs.lateAfter().isEmpty()){
+            LinearLayout warning=card("지각 판정 기준이 필요해요");
+            line(warning,"현재 집계에는 직접 선택한 지각만 포함됩니다. 입·퇴실 기록이 있어도 정상 출석으로 확정한 것이 아닙니다.",13,theme.accent,"attendance-classification-warning");
+            warning.addView(button("지각 기준 설정  ›","지각 기준 설정",this::editLate),new LinearLayout.LayoutParams(-1,dp(48)));
+        }
         LinearLayout current=card("현재 출결률 · 앱 기록 기준");
         line(current,AttendanceMetrics.percent(s.currentRate()),32,theme.accent,"attendance-current-rate");
         line(current,"확인된 "+s.known()+"일 기준 · 미확인/진행 중 "+s.missing()+"일",13,theme.muted,"attendance-missing");
@@ -69,16 +75,16 @@ public final class AttendanceManagementActivity extends Activity {
         line(budget,"지각·조퇴 "+(s.late()+s.early())+"회 → 결석 "+s.converted()+"일 + 잔여 "+s.remainder()+"회",13,theme.muted,null);
         if(s.missing()>0)line(budget,"미확인 "+s.missing()+"일이 모두 출석이라는 가정입니다. 지난 기록을 채우면 정확해져요.",12,0xFFC15C43,null);
         LinearLayout threshold=card("지각 기준");
-        Button late=button(prefs.lateAfter().isEmpty()?"기준 시각 설정  ›":prefs.lateAfter()+" 이후 입실은 지각  ›","지각 기준 시각 설정",this::editLate);
+        Button late=button(prefs.lateAfter().isEmpty()?"기준 시각 설정  ›":prefs.lateAfter()+"부터 입실은 지각  ›","지각 기준 시각 설정",this::editLate);
         late.setTag("attendance-late-threshold");threshold.addView(late,new LinearLayout.LayoutParams(-1,dp(48)));
         line(threshold,prefs.lateAfter().isEmpty()?"아직 기준이 없습니다. 지각은 달력에서 직접 표시해 주세요.":"사이트 입실 시각으로 분류해요. 달력에서 직접 선택한 상태가 우선합니다.",12,theme.muted,null);
-        if(!prefs.lateAfter().isEmpty())threshold.addView(button("자동 지각 분류 끄기","지각 기준 삭제",()->{prefs.raw.edit().remove("late_after").apply();render();}));
+        if(!prefs.lateAfter().isEmpty())threshold.addView(button("자동 지각 분류 끄기","지각 기준 삭제",()->{prefs.raw.edit().putBoolean("late_disabled",true).apply();render();}));
         scroll.post(()->scroll.scrollTo(0,position));
     }
     private void editLate(){
-        LocalTime time;try{time=LocalTime.parse(prefs.lateAfter());}catch(RuntimeException e){time=LocalTime.of(9,0);}
-        TimePickerDialog picker=new TimePickerDialog(this,(view,h,m)->{prefs.raw.edit().putString("late_after",LocalTime.of(h,m).toString()).apply();render();},time.getHour(),time.getMinute(),true);
-        picker.setTitle("이 시각을 넘겨 입실하면 지각");picker.show();
+        LocalTime time;try{time=LocalTime.parse(prefs.lateAfter());}catch(RuntimeException e){time=LocalTime.of(9,11);}
+        TimePickerDialog picker=new TimePickerDialog(this,(view,h,m)->{prefs.raw.edit().putString("late_after",LocalTime.of(h,m).toString()).putBoolean("late_disabled",false).apply();render();},time.getHour(),time.getMinute(),true);
+        picker.setTitle("이 시각부터 입실하면 지각");picker.show();
     }
     private void explain(){
         new AlertDialog.Builder(this).setTitle("출결률 계산 기준")

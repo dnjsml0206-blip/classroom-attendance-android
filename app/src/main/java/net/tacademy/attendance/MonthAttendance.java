@@ -6,7 +6,7 @@ import java.util.*;
 /** Observed times and explicit local annotations; missing records never imply absence. */
 final class MonthAttendance {
     enum State {
-        ATTENDED("출석"), EARLY_LEAVE("조퇴"), LATE("지각"), LATE_EARLY("지각·조퇴"), ABSENT("결석"), COMPLETE("완료"), ENTERED("입실"), UNKNOWN("미확인"), HOLIDAY("휴강"), PLANNED("예정"), NO_CLASS("비수업");
+        ATTENDED("출석"), EARLY_LEAVE("조퇴"), LATE("지각"), LATE_EARLY("지각·조퇴"), ABSENT("결석"), COMPLETE("판정대기"), ENTERED("입실"), UNKNOWN("미확인"), HOLIDAY("휴강"), PLANNED("예정"), NO_CLASS("비수업");
         final String label;
         State(String label) { this.label=label; }
     }

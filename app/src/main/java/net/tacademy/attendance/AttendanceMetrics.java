@@ -16,8 +16,16 @@ final class AttendanceMetrics {
         if(record==null||!record.checkedOut())return new Day(false,false,false,false);
         return new Day(true,false,isLate(record.in(),lateAfter),isEarly(record.out(),checkout));
     }
+    static MonthAttendance.State observedState(Policy.Record record,String lateAfter,String checkout){
+        Day day=day(record,null,lateAfter,checkout);
+        if(!day.known())return record!=null&&record.checkedIn()?MonthAttendance.State.ENTERED:MonthAttendance.State.UNKNOWN;
+        if(day.late()&&day.early())return MonthAttendance.State.LATE_EARLY;
+        if(day.late())return MonthAttendance.State.LATE;
+        if(day.early())return MonthAttendance.State.EARLY_LEAVE;
+        return lateAfter.isEmpty()?MonthAttendance.State.COMPLETE:MonthAttendance.State.ATTENDED;
+    }
     static boolean isLate(String in,String threshold){
-        try{return !threshold.isEmpty()&&LocalTime.parse(in).isAfter(LocalTime.parse(threshold));}catch(RuntimeException e){return false;}
+        try{return !threshold.isEmpty()&&!LocalTime.parse(in).isBefore(LocalTime.parse(threshold));}catch(RuntimeException e){return false;}
     }
     static boolean isEarly(String out,String checkout){
         // Compare against the permitted checkout minute, not the dispatch cushion.

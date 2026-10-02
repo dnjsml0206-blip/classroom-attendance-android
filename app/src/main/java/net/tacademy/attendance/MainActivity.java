@@ -47,6 +47,7 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         prefs = new Prefs(this);
+        if(!PersonalAttendanceCorrection.apply(prefs.raw,BuildConfig.CREATOR_TOOLS))toast("출결 보정을 저장하지 못했어요. 앱을 다시 열어 주세요.");
         Notices.channels(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -267,11 +268,20 @@ public final class MainActivity extends Activity {
         gap(management,8);
         Button manage=button("출결률 · 남은 결석 확인  ›",true,()->startActivity(new Intent(this,AttendanceManagementActivity.class)));
         manage.setTag("attendance-management");management.addView(manage,new LinearLayout.LayoutParams(-1,-2));
-        Button timetable=button("시간표 보기  ›",false,()->startActivity(new Intent(this,TimetableActivity.class)));
-        timetable.setTag("attendance-timetable");timetable.setTextSize(12);management.addView(timetable,new LinearLayout.LayoutParams(-1,dp(48)));
-        Button orientation=button("오리엔테이션 자료  ›",false,()->startActivity(new Intent(this,OrientationActivity.class)));
-        orientation.setTag("attendance-orientation");orientation.setTextSize(12);
-        management.addView(orientation,new LinearLayout.LayoutParams(-1,dp(48)));
+        gap(management,10);
+        LinearLayout materials=new LinearLayout(this);materials.setTag("attendance-materials-row");materials.setGravity(Gravity.CENTER_VERTICAL);
+        Button timetable=button("시간표 보기",false,()->startActivity(new Intent(this,TimetableActivity.class)));
+        timetable.setTag("attendance-timetable");
+        Button orientation=button("오리엔테이션 자료",false,()->startActivity(new Intent(this,OrientationActivity.class)));
+        orientation.setTag("attendance-orientation");
+        for(Button material:new Button[]{timetable,orientation}){
+            material.setMinHeight(0);material.setMinimumHeight(0);material.setMinWidth(0);material.setMinimumWidth(0);
+            material.setPadding(dp(8),dp(8),dp(8),dp(8));material.setMaxLines(2);material.setGravity(Gravity.CENTER);
+            material.setAutoSizeTextTypeUniformWithConfiguration(10,13,1,android.util.TypedValue.COMPLEX_UNIT_SP);
+        }
+        LinearLayout.LayoutParams leftMaterial=new LinearLayout.LayoutParams(0,dp(64),1);leftMaterial.rightMargin=dp(10);
+        materials.addView(timetable,leftMaterial);materials.addView(orientation,new LinearLayout.LayoutParams(0,dp(64),1));
+        management.addView(materials,new LinearLayout.LayoutParams(-1,-2));
         LinearLayout log = card("오늘 출석 기록");
         todayLog = text("", 13, homeTheme.muted, false); todayLog.setLineSpacing(dp(8), 1); log.addView(todayLog);
         updateHome();

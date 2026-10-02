@@ -24,7 +24,7 @@ final class TimetableChecks {
         click("timetable-day:2026-10-07");check(value("timetable-checkout").contains("15:50:02"),"October seventh uses the same short-day rule");
         click("timetable-day:2026-10-08");check(value("timetable-checkout").contains("17:50:05"),"Normal-day display returns to the configured checkout time");
         ui(()->p.raw.edit().putString("record:2026-10-06","08:50|15:50").commit());
-        check(p.calendarState(java.time.LocalDate.of(2026,10,6),java.time.LocalDate.of(2026,10,8))==MonthAttendance.State.COMPLETE,"Calendar does not mark normal shortened-day exit as early leave");
+        check(p.calendarState(java.time.LocalDate.of(2026,10,6),java.time.LocalDate.of(2026,10,8))==MonthAttendance.State.ATTENDED,"Calendar does not mark normal shortened-day exit as early leave");
         click("timetable-day:2026-10-01");ui(()->p.raw.edit().putStringSet("excluded",Set.of("2026-10-01")).commit());settle();
         check(value("timetable-subject").equals("추가로 등록한 휴강일"),"User holidays update the timetable without erasing the original lesson");ui(()->p.raw.edit().putStringSet("excluded",Set.of()).commit());settle();
         click("timetable-outline");check(view("timetable-module:LLM")!=null&&view("timetable-module:실전 프로젝트")!=null,"All-course list groups teaching days and project phases");capture("03-outline.png");

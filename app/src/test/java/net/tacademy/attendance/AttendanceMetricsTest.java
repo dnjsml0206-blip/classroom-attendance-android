@@ -39,7 +39,7 @@ public final class AttendanceMetricsTest {
     }
     @Test public void classificationUsesClassEndNotFiveSecondLaunchCushion(){
         assertFalse(AttendanceMetrics.isEarly("17:50:00","17:50"));assertTrue(AttendanceMetrics.isEarly("17:49:59","17:50"));
-        assertFalse(AttendanceMetrics.isLate("09:00:00","09:00"));assertTrue(AttendanceMetrics.isLate("09:00:01","09:00"));
+        assertFalse(AttendanceMetrics.isLate("09:10:59","09:11"));assertTrue(AttendanceMetrics.isLate("09:11:00","09:11"));
         assertFalse(AttendanceMetrics.isLate("09:30",""));
     }
     @Test public void eightyPercentThresholdUsesIntegerDaysAndCannotOfferMoreThanFutureDays(){
@@ -57,5 +57,14 @@ public final class AttendanceMetricsTest {
     @Test public void noClassesIsNotOneHundredPercent(){
         var s=AttendanceMetrics.summarize(CourseCalendar.START,Set.of(),Set.of(),d->null,d->null,"","17:50");
         assertEquals(0,s.total());assertEquals(0,s.remaining());assertTrue(Double.isNaN(s.projectedRate()));
+    }
+
+    @Test public void completedTimesAloneDoNotCertifyNormalAttendance(){
+        assertEquals(MonthAttendance.State.COMPLETE,AttendanceMetrics.observedState(new Policy.Record("09:10","18:00"),"","17:50"));
+        assertEquals("판정대기",MonthAttendance.State.COMPLETE.label);
+        assertEquals(MonthAttendance.State.LATE,AttendanceMetrics.observedState(new Policy.Record("09:10","18:00"),"09:00","17:50"));
+        assertEquals(MonthAttendance.State.EARLY_LEAVE,AttendanceMetrics.observedState(new Policy.Record("08:50","14:00"),"","17:50"));
+        assertEquals(MonthAttendance.State.ATTENDED,AttendanceMetrics.observedState(new Policy.Record("08:50","18:00"),"09:00","17:50"));
+        assertEquals(MonthAttendance.State.LATE_EARLY,AttendanceMetrics.observedState(new Policy.Record("09:10","14:00"),"09:00","17:50"));
     }
 }
