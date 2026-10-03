@@ -29,7 +29,9 @@ final class DiagnosticLog {
                 "confirmation_disappeared","confirmation_age_ms","confirmation_visible_ms","processing_page_visible",
                 "entry_start","entry_end","checkout_start","checkout_retry_minutes","configured_days","schedule_enabled","auto_click","next_alarm_at_ms",
                 "previous_entry_start","previous_entry_end","previous_checkout_start","previous_checkout_retry_minutes","previous_configured_days",
-                "early_leave_approved","network_trigger","network_event_at_ms","read_only","class_day","record_source","attendance_day","entry_time","checkout_time"})if(details.has(key))safe.put(key,details.get(key));
+                "early_leave_approved","network_trigger","network_event_at_ms","read_only","class_day","record_source","attendance_day","entry_time","checkout_time",
+                "screen_off_enabled","lockdown_enabled","lock_window_count","lock_system_roots","lock_menu_count","lock_label_count","lock_candidate_count",
+                "lock_node_count","lock_tree_incomplete","lock_read_failures","lock_root_source","lock_read_state"})if(details.has(key))safe.put(key,details.get(key));
             long now=System.currentTimeMillis();SharedPreferences p=prefs(c);
             String signature=LocalDate.now(Policy.ZONE)+":"+event+":"+phase+":"+reason+":"+safe;
             if(signature.equals(p.getString("last_signature","")))return;

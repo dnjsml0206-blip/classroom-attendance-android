@@ -33,22 +33,29 @@ final class AttendanceMetrics {
         try{return LocalTime.parse(out).isBefore(LocalTime.parse(checkout));}catch(RuntimeException e){return false;}
     }
     record Summary(int total,int elapsed,int known,int missing,int absent,int late,int early){
-        int converted(){return (late+early)/3;}
-        int remainder(){return (late+early)%3;}
-        int equivalent(){return absent+converted();}
-        int allowance(){return total/5;}
-        int required(){return total-allowance();}
-        int future(){return total-elapsed;}
-        int remaining(){return Math.min(future(),Math.max(0,allowance()-equivalent()));}
-        int exceeded(){return Math.max(0,equivalent()-allowance());}
-        int remainingEvents(){return extraEvents(0);}
-        private int extraEvents(int unconfirmedAbsences){int room=allowance()-equivalent()-unconfirmedAbsences;return room<0?0:Math.min(2*future(),3*room+2-remainder());}
-        double currentRate(){return elapsed==0?Double.NaN:100.0*Math.max(0,elapsed-equivalent())/elapsed;}
+        int absenceThirds(){return 3*absent+late+early;}
+        double converted(){return (late+early)/3.0;}
+        double equivalent(){return absenceThirds()/3.0;}
+        double allowance(){return total/5.0;}
+        double required(){return total*4/5.0;}
+        int future(){return Math.max(0,total-elapsed);}
+        // Fifteenths keep both one-third penalties and the exact 80% boundary integral.
+        int headroomFifteenths(){return 3*total-5*absenceThirds();}
+        int remaining(){return Math.min(future(),Math.max(0,headroomFifteenths())/15);}
+        double exceeded(){return Math.max(0,-headroomFifteenths())/15.0;}
+        int remainingEvents(){return Math.min(2*future(),Math.max(0,headroomFifteenths())/5);}
+        double currentRate(){return elapsed==0?Double.NaN:100.0*Math.max(0,3*elapsed-absenceThirds())/(3*elapsed);}
         String currentDisplay(){return percent(currentRate());}
         String projectedDisplay(){return percent(projectedRate());}
         String absenceBudget(){return String.valueOf(remaining());}
         String eventBudget(){return String.valueOf(remainingEvents());}
-        double projectedRate(){return total==0?Double.NaN:100.0*(total-equivalent())/total;}
+        String equivalentDisplay(){return thirds(absenceThirds());}
+        String convertedDisplay(){return thirds(late+early);}
+        String allowanceDisplay(){return days(allowance());}
+        String requiredDisplay(){return days(required());}
+        String exceededDisplay(){return days(exceeded());}
+        double projectedRate(){return total==0?Double.NaN:100.0*Math.max(0,3*total-absenceThirds())/(3*total);}
+
     }
     static Summary summarize(LocalDate today,Set<Integer> weekdays,Set<String> excluded,
             Function<LocalDate,Policy.Record> records,Function<LocalDate,MonthAttendance.ManualStatus> manual,String lateAfter,String checkout){
@@ -66,5 +73,7 @@ final class AttendanceMetrics {
         }
         return new Summary(total,elapsed,known,elapsed-known,absent,late,early);
     }
+    static String thirds(int value){int whole=value/3,remainder=value%3;return remainder==0?String.valueOf(whole):(whole==0?"":whole+" ")+(remainder==1?"⅓":"⅔");}
+    static String days(double value){return String.format(Locale.KOREAN,"%.2f",value).replaceAll("0+$","").replaceAll("\\.$","");}
     static String percent(double value){return Double.isNaN(value)?"—":String.format(Locale.KOREAN,"%.1f%%",value);}
 }

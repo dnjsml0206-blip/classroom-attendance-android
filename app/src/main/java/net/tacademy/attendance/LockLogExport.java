@@ -31,6 +31,8 @@ final class LockLogExport {
             NetworkAccess.State wifi=NetworkAccess.inspect(c);out.put("registered_wifi_connected",wifi.allowed()).put("wifi_check",wifi.reason()).put("wifi_check_code",wifi.code()).put("wifi_transport_present",wifi.wifiTransportPresent()).put("ssid_visible",wifi.ssidVisible());
             Prefs p=new Prefs(c);out.put("schedule_enabled",p.enabled()).put("auto_click",p.auto()).put("attendance_phase",p.phase(ZonedDateTime.now(Policy.ZONE)).name());
             out.put("lockdown_after_attendance",p.lockdownAfterAttendance()).put("lockdown_last_result",p.raw.getString("lockdown_last_result","NOT_TESTED")).put("screen_off_after_attendance",p.screenOffAfterAttendance()).put("show_processing_screen",p.showProcessingScreen());
+            out.put("lockdown_last_at_ms",p.raw.getLong("lockdown_last_at",0)).put("screen_off_last_result",p.raw.getString("screen_off_last_result","NOT_TESTED")).put("screen_off_last_at_ms",p.raw.getLong("screen_off_last_at",0));
+            out.put("lockdown_last_evidence",new JSONObject(p.raw.getString("lockdown_last_evidence","{}")));
             out.put("automation",AutomationSnapshot.read(c));
         }catch(Exception ignored){}return out;
     }

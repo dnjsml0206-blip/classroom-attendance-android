@@ -71,10 +71,10 @@ public final class AttendanceManagementActivity extends Activity {
         ProgressBar progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setMax(1000);progress.setProgress((int)Math.round(s.projectedRate()*10));
         progress.setContentDescription("최종 예상 출결률 "+s.projectedDisplay()+", 목표 80퍼센트");finalRate.addView(progress,new LinearLayout.LayoutParams(-1,dp(12)));
         LinearLayout budget=card("80%를 유지하려면");
-        line(budget,s.total()==0?"수업 요일을 설정해 주세요":s.exceeded()>0?"결석 환산 "+s.exceeded()+"일 초과":"결석 "+s.absenceBudget()+"일 또는\n지각·조퇴 "+s.eventBudget()+"회 가능",22,theme.accent,"attendance-remaining");
-        line(budget,"최소 출석 인정 "+s.required()+"일 / 전체 "+s.total()+"일",13,theme.muted,null);
-        line(budget,"결석 환산 "+s.equivalent()+"일 / 허용 "+s.allowance()+"일",14,theme.ink,"attendance-equivalent");
-        line(budget,"지각·조퇴 "+(s.late()+s.early())+"회 → 결석 "+s.converted()+"일 + 잔여 "+s.remainder()+"회",13,theme.muted,null);
+        line(budget,s.total()==0?"수업 요일을 설정해 주세요":s.exceeded()>0?"결석 환산 "+s.exceededDisplay()+"일 초과":"결석 "+s.absenceBudget()+"일 또는\n지각·조퇴 "+s.eventBudget()+"회 가능",22,theme.accent,"attendance-remaining");
+        line(budget,"최소 출석 인정 "+s.requiredDisplay()+"일 / 전체 "+s.total()+"일",13,theme.muted,null);
+        line(budget,"결석 환산 "+s.equivalentDisplay()+"일 / 허용 "+s.allowanceDisplay()+"일",14,theme.ink,"attendance-equivalent");
+        line(budget,"지각·조퇴 "+(s.late()+s.early())+"회 → 결석 "+s.convertedDisplay()+"일 · 매회 ⅓일 반영",13,theme.muted,null);
         line(budget,"각각의 최대치예요. 두 허용량을 더해서 사용할 수는 없어요.",12,theme.muted,null);
         LinearLayout vacation=card("휴가 관리");VacationLedger.Balance v=prefs.vacationBalance();
         line(vacation,"잔여 "+v.available()+"일",26,theme.accent,"vacation-remaining");
@@ -103,7 +103,7 @@ public final class AttendanceManagementActivity extends Activity {
     }
     private void explain(){
         new AlertDialog.Builder(this).setTitle("출결률 계산 기준")
-            .setMessage("현재 출결률 = (종료된 수업일 − 결석 환산일) ÷ 종료된 수업일입니다. 오늘 수업은 실제 수업 종료 시각부터 포함합니다. 일반 수업 18:00, 단축수업은 시간표의 16:00 또는 17:00 기준입니다. 자동 퇴실 시각과는 별개입니다.\n\n사용자 요청에 따라 기록이 없는 지난 수업일은 출석으로 계산합니다. 입·퇴실 시각을 만들지는 않습니다. 달력에서 수정한 상태가 우선합니다.\n\n지각과 조퇴는 합산 3회마다 결석 1일로 환산합니다. 같은 날 둘 다 선택하면 2회로 셉니다. 잔여 1~2회는 다음 환산에 이월합니다.\n\n80% 기준에서 이미 사용한 결석 환산일을 빼고 추가 허용량을 계산합니다. 결석 일수와 지각·조퇴 횟수는 각각의 최대치이며 동시에 더해서 사용할 수 없습니다. 최종 예상은 남은 수업을 모두 출석한 경우입니다.\n\n휴가는 매월 1일씩 누적하고 출석으로 인정합니다. 지급일 기준은 휴가 관리에서 바꿀 수 있습니다. 미래 예약도 잔여에서 제외하며, 휴가 취소 시 반환합니다. 휴가 등록은 앱 기록이며 기관 신청을 대신하지 않습니다.")
+            .setMessage("현재 출결률 = (종료된 수업일 − 결석 환산일) ÷ 종료된 수업일입니다. 오늘 수업은 실제 수업 종료 시각부터 포함합니다. 일반 수업 18:00, 단축수업은 시간표의 16:00 또는 17:00 기준입니다. 자동 퇴실 시각과는 별개입니다.\n\n사용자 요청에 따라 기록이 없는 지난 수업일은 출석으로 계산합니다. 입·퇴실 시각을 만들지는 않습니다. 달력에서 수정한 상태가 우선합니다.\n\n지각과 조퇴는 각각 1회당 결석 ⅓일로 즉시 반영합니다. 1회는 ⅓일, 2회는 ⅔일, 3회는 1일입니다. 같은 날 둘 다 선택하면 ⅔일을 차감합니다. 계산 중에는 소수점 이하를 버리지 않고 출결률 표시만 소수점 첫째 자리로 반올림합니다.\n\n80% 기준에서 이미 사용한 결석 환산일을 빼고 추가 허용량을 계산합니다. 결석 일수와 지각·조퇴 횟수는 각각의 최대치이며 동시에 더해서 사용할 수 없습니다. 최종 예상은 남은 수업을 모두 출석한 경우입니다.\n\n휴가는 매월 1일씩 누적하고 출석으로 인정합니다. 지급일 기준은 휴가 관리에서 바꿀 수 있습니다. 미래 예약도 잔여에서 제외하며, 휴가 취소 시 반환합니다. 휴가 등록은 앱 기록이며 기관 신청을 대신하지 않습니다.")
             .setPositiveButton("확인",null).show();
     }
     private void line(LinearLayout parent,String value,int size,int color,String tag){TextView t=text(value,size,color,size>=18);if(tag!=null)t.setTag(tag);parent.addView(t);}

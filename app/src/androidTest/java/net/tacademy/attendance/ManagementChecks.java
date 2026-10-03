@@ -38,6 +38,10 @@ final class ManagementChecks {
         check(value("attendance-current-rate").equals("100.0%")&&value("attendance-missing").contains("출석 처리"),"Missing records are not silently counted as absence or confirmed presence");
         check(value("attendance-remaining").contains("24일")&&value("attendance-forecast-assumption").contains("모두 출석"),"Remaining absence budget displays its optimistic assumption");
         check(p.lateAfter().isEmpty(),"Unknown late threshold remains unset");
+        ui(()->{p.saveManualAttendance(LocalDate.of(2026,8,31),MonthAttendance.ManualStatus.LATE);});settle();
+        check(!value("attendance-current-rate").equals("100.0%")&&value("attendance-equivalent").contains("⅓일"),"One late arrival immediately deducts one-third of an absence");
+        ui(()->{p.saveManualAttendance(LocalDate.of(2026,9,1),MonthAttendance.ManualStatus.EARLY_LEAVE);});settle();
+        check(value("attendance-equivalent").contains("⅔일")&&value("attendance-remaining").contains("23일"),"One late and one early leave display two-thirds and update the remaining budget");
         ui(()->{p.saveManualAttendance(LocalDate.of(2026,8,31),MonthAttendance.ManualStatus.LATE);p.saveManualAttendance(LocalDate.of(2026,9,1),MonthAttendance.ManualStatus.LATE_EARLY);});settle();
         check(value("attendance-current-rate").equals(p.attendanceSummary().currentDisplay())&&value("attendance-counts").contains("지각 2회")&&value("attendance-counts").contains("조퇴 1회"),"Three combined occurrences convert to one absence across two known dates");
         check(value("attendance-remaining").contains("23일")&&value("attendance-equivalent").contains("환산 1일"),"Attendance budget updates after calendar corrections");

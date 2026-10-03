@@ -80,6 +80,7 @@ public final class LockLabActivity extends Activity {
         add(results,"결과 전체 복사",false,()->{getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("출석 메이트 잠금 테스트",LockLab.allReports(this)));Toast.makeText(this,"이전 결과를 포함해 복사했습니다",Toast.LENGTH_SHORT).show();});
         add(results,"이전 테스트 함께 보기",false,()->{TextView reports=text(LockLab.allReports(this),13,INK,false);reports.setTextIsSelectable(true);reports.setPadding(dp(20),dp(12),dp(20),dp(12));ScrollView all=new ScrollView(this);all.addView(reports);new AlertDialog.Builder(this).setTitle("최근 테스트 · 최대 11회").setView(all).setPositiveButton("닫기",null).show();});
         add(content,"설정으로 돌아가기",false,this::finish);describe();update();
+        if(getIntent().getBooleanExtra("setup_practice",false))scroll.post(()->run.requestRectangleOnScreen(new android.graphics.Rect(0,0,run.getWidth(),Math.min(run.getHeight(),dp(400))),true));
     }
     private LockTestPolicy.Mode selected(){return LockTestPolicy.Mode.values()[methods.getSelectedItemPosition()];}
     private void describe(){

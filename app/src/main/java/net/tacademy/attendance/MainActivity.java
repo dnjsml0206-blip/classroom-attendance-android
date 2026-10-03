@@ -34,6 +34,7 @@ public final class MainActivity extends Activity {
     private TextView reservationState, entryReceipt, exitReceipt;
     private Button enterNow, leaveNow, readAttendance;
     private TextView attendanceOverview;
+    private TextView lockdownResult;
     private LocalDate homeDay;
     private String homeCheckout, homeEntryEnd;
     private Clock homeClock = Clock.system(Policy.ZONE);
@@ -41,7 +42,7 @@ public final class MainActivity extends Activity {
     private LocationManager locationManager;
     private LocationListener oneLocation;
     private final Runnable refresh = new Runnable() {
-        @Override public void run() { if (selected == 0) updateHome(); else if(setupStatus!=null)setupStatus.refresh(); handler.postDelayed(this, 2000); }
+        @Override public void run() { if (selected == 0) updateHome(); else {if(setupStatus!=null)setupStatus.refresh();if(lockdownResult!=null)lockdownResult.setText(lockdownStatus());} handler.postDelayed(this, 2000); }
     };
 
     @Override public void onCreate(Bundle state) {
@@ -63,6 +64,16 @@ public final class MainActivity extends Activity {
         setContentView(root);
         render(Math.max(0,Math.min(2,getIntent().getIntExtra("open_tab",0))));
     }
+    @Override protected void onActivityResult(int request,int result,Intent data){
+        super.onActivityResult(request,result,data);
+        if(request!=SetupGuideActivity.REQUEST)return;
+        if(result==Activity.RESULT_FIRST_USER){prefs.raw.edit().putBoolean("setup_finished",true).apply();render(0);return;}
+        if(result==Activity.RESULT_OK){
+            if(SetupGuidePolicy.readyToEnable(SetupGuideActivity.snapshot(this))){setAttendanceReservation(true);if(prefs.enabled()&&prefs.auto())prefs.raw.edit().putBoolean("setup_finished",true).apply();}
+            else {toast("필요한 설정을 다시 확인해 주세요");SetupGuideActivity.open(this);}
+        }
+    }
+
     @Override protected void onResume() {
         super.onResume(); ChromeAttendanceService.cancelSettingsMenu();
         ChromeAttendanceService.returnedToAttendanceApp();
@@ -145,7 +156,7 @@ public final class MainActivity extends Activity {
     }
 
     private void render(int tab) {
-        selected = tab; setupStatus=null; root.removeAllViews();
+        selected = tab; setupStatus=null; lockdownResult=null; root.removeAllViews();
         ZonedDateTime now = ZonedDateTime.now(homeClock).withZoneSameInstant(Policy.ZONE);
         homeDay = now.toLocalDate(); homeCheckout = prefs.checkoutFor(homeDay); homeEntryEnd = prefs.end();
         homeTheme = HomeTheme.at(now, homeEntryEnd, homeCheckout);
@@ -173,7 +184,9 @@ public final class MainActivity extends Activity {
             titleRow.addView(titles,new LinearLayout.LayoutParams(0,-2,1));
             LinearLayout.LayoutParams wifiParams=new LinearLayout.LayoutParams(dp(140),-2);wifiParams.leftMargin=dp(10);
             titleRow.addView(wifiBadge(),wifiParams);content.addView(titleRow);
-            gap(content, 18); home();
+            gap(content, 18);
+            if(!prefs.enabled()&&!prefs.raw.getBoolean("setup_finished",false)){Button guide=button(prefs.raw.getBoolean("setup_visited",false)?"자동출석 준비 · 빠른 설정 이어하기  ›":"처음이라면 · 빠른 설정 시작하기  ›",true,()->SetupGuideActivity.open(this));guide.setTag("setup-guide-home");content.addView(guide,new LinearLayout.LayoutParams(-1,-2));gap(content,14);}
+            home();
         } else {
             content.addView(text("T  /  ATTENDANCE MATE", 12, TEAL, true)); gap(content, 10);
             content.addView(text(tab == 1 ? "나에게 맞게 설정" : "한 번 연결하고\n편하게 출석하세요.", 28, INK, true)); gap(content, 8);
@@ -190,8 +203,8 @@ public final class MainActivity extends Activity {
             tabs.addView(item, p);
         }
         root.addView(tabs);
-        if(tab==1&&"automation".equals(getIntent().getStringExtra("focus_setting"))){
-            View focus=content.findViewWithTag("automation");if(focus!=null)scroll.post(()->{if(homeScroll==scroll){getIntent().removeExtra("focus_setting");scroll.smoothScrollTo(0,Math.max(0,focus.getTop()-dp(16)));}});
+        if(tab==1&&getIntent().hasExtra("focus_setting")){
+            View focus=content.findViewWithTag(getIntent().getStringExtra("focus_setting"));if(focus!=null)scroll.post(()->{if(homeScroll==scroll){getIntent().removeExtra("focus_setting");scroll.smoothScrollTo(0,Math.max(0,focus.getTop()-dp(16)));}});
         }
     }
 
@@ -384,7 +397,7 @@ public final class MainActivity extends Activity {
         readAttendance.setEnabled(!busy);
         AttendanceMetrics.Summary summary=prefs.attendanceSummary();
         setIfChanged(attendanceOverview,"현재 "+summary.currentDisplay()+" · 종료된 수업 "+summary.elapsed()+"일 기준"
-            +"\n"+(summary.exceeded()>0?"80% 기준 초과 "+summary.exceeded()+"일":"80% 기준 · 결석 "+summary.absenceBudget()+"일 또는 지각·조퇴 "+summary.eventBudget()+"회 가능")
+            +"\n"+(summary.exceeded()>0?"80% 기준 초과 "+summary.exceededDisplay()+"일":"80% 기준 · 결석 "+summary.absenceBudget()+"일 또는 지각·조퇴 "+summary.eventBudget()+"회 가능")
             +(summary.missing()>0?"\n미기록 "+summary.missing()+"일은 출석으로 계산":"")
             +"\n휴가 잔여 "+prefs.vacationBalance().available()+"일 · 예약 "+prefs.vacationBalance().reserved()+"일");
         showReceipt(entryReceipt,"입실",entry);showReceipt(exitReceipt,"퇴실",exit);
@@ -507,6 +520,7 @@ public final class MainActivity extends Activity {
             + "\n\nChrome 처리 중에는 화면이 켜지고 잠금이 해제되어 있어야 합니다. 직접 실행하거나 기록만 조회할 때는 Chrome을 보여주며, 이미 완료된 기록만 조회하면 화면을 끄지 않습니다."
             + "\n\n잠금 모드를 사용하면 전원 메뉴에서 ‘잠금 모드’만 확인해 한 번 누릅니다. 다음 사용 때 지문 대신 PIN·패턴·비밀번호가 필요하며, Wi-Fi 재연결만으로 풀리지 않습니다. PIN 해제 후 신뢰 조건에서 Extend Unlock이 다시 적용될 수 있습니다(최대 4시간)."
             + "\n\n잠금 항목을 찾지 못하면 일반 화면 끄기로 마무리하고 결과를 기록합니다. 휴대폰에서 잠금 모드 표시를 켜야 할 수 있습니다. 완료 후 화면 끄기는 Android 9 이상에서 지원합니다.");
+        box.setTag("setup-screen");
         Switch off=new Switch(this);off.setTag("attendance-screen-off");off.setText("입실·퇴실 완료 후 화면 끄기");off.setTextSize(16);off.setTextColor(INK);off.setMinHeight(dp(48));
         off.setChecked(prefs.screenOffAfterAttendance());off.setEnabled(Build.VERSION.SDK_INT>=28);box.addView(off);
         off.setOnCheckedChangeListener((v,yes)->prefs.raw.edit().putBoolean("screen_off_after_attendance",yes).apply());
@@ -517,12 +531,28 @@ public final class MainActivity extends Activity {
         action(box,"잠금 모드만 테스트",false,()->new AlertDialog.Builder(this).setTitle("잠금 모드를 시험할까요?")
             .setMessage("실제 출결 없이 전원 메뉴의 잠금 모드를 실행합니다. 다음에 휴대폰을 열 때 PIN·패턴·비밀번호가 필요합니다.")
             .setNegativeButton("취소",null).setPositiveButton("테스트",(d,w)->{if(!ChromeAttendanceService.testLockdown(this))toast("접근성 연결을 확인하고 진행 중인 작업을 마친 뒤 다시 눌러 주세요.");}).show());
-        String lockResult=prefs.raw.getString("lockdown_last_result","");
-        note(box,lockResult.isEmpty()?"잠금 모드: 아직 테스트하지 않았어요":lockResult.equals("LOCKDOWN_LOCK_OBSERVED")?"잠금 모드 클릭 후 인증 잠금 확인":"잠금 모드 미확인 · 일반 화면 끄기 사용 (진단 로그 확인)");
+        lockdownResult=text(lockdownStatus(),13,MUTED,false);lockdownResult.setTag("lockdown-result");lockdownResult.setPadding(0,dp(10),0,dp(10));box.addView(lockdownResult);
+        action(box,"잠금 항목이 안 보여요",false,()->new AlertDialog.Builder(this).setTitle("전원 메뉴에 잠금 모드 표시")
+            .setMessage("갤럭시는 잠금화면 및 AOD(또는 잠금화면) → 보안 잠금 상세설정 → 잠금 모드 표시를 확인하세요. PIN 입력이 필요할 수 있고, 기기별로 메뉴가 다릅니다.\n\n다시 앱으로 돌아와 ‘잠금 모드만 테스트’를 누르면 실제 출결 없이 확인할 수 있어요.")
+            .setNegativeButton("닫기",null).setPositiveButton("휴대폰 설정",(d,w)->{try{startActivity(new Intent(Settings.ACTION_SECURITY_SETTINGS));}catch(ActivityNotFoundException e){startActivity(new Intent(Settings.ACTION_SETTINGS));}}).show());
         Switch hide=new Switch(this);hide.setTag("attendance-processing-page");hide.setText("자동 처리 중 간단한 안내 화면 표시");hide.setTextSize(16);hide.setTextColor(INK);hide.setMinHeight(dp(48));
         hide.setChecked(prefs.showProcessingScreen());box.addView(hide);
         hide.setOnCheckedChangeListener((v,yes)->prefs.raw.edit().putBoolean("show_processing_screen",yes).apply());
         if(Build.VERSION.SDK_INT<28)note(box,"완료 후 화면 끄기는 Android 9 이상에서 지원합니다.");
+    }
+
+    private String lockdownStatus(){
+        String mode=LockdownPolicy.resultText(prefs.raw.getString("lockdown_last_result",""));
+        String screen=switch(prefs.raw.getString("screen_off_last_result","")){
+            case "SCREEN_OFF_OBSERVED","ALREADY_OFF" -> "꺼짐 확인";
+            case "SCREEN_OFF_UNCONFIRMED" -> "끄기 요청 후 꺼짐 미확인";
+            case "SYSTEM_ACTION_REJECTED" -> "휴대폰이 화면 끄기 요청을 거절함";
+            case "SCREEN_OFF_DISABLED" -> "설정이 꺼져 있어 실행하지 않음";
+            case "RECORD_LOOKUP_NO_LOCK" -> "기록 조회만 하여 실행하지 않음";
+            case "" -> "아직 확인 전";
+            default -> "실행 오류 · 진단 로그 확인";
+        };
+        return "잠금 모드 · "+mode+"\n화면 끄기 · "+screen;
     }
 
     private void creatorPanel(){
@@ -540,18 +570,24 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void setupGuideCard(){
+        var state=SetupGuideActivity.snapshot(this);LinearLayout guide=card("처음 설정 · 자동출석 준비");
+        guide.addView(text("필요한 설정만 자동으로 안내해요",19,INK,true));
+        note(guide,"확인 "+SetupGuidePolicy.completedCount(state)+" / 5단계 · 완료된 설정은 건너뛰어요");
+        Button start=button("빠른 설정 "+(prefs.raw.getBoolean("setup_visited",false)?"이어하기":"시작하기")+"  ›",true,()->SetupGuideActivity.open(this));start.setTag("setup-guide-open");gap(guide,10);guide.addView(start,new LinearLayout.LayoutParams(-1,-2));
+    }
     private void settings() {
+        setupGuideCard();
         reservationSettings();
         unlockSettings();
         screenSettings();
-        LinearLayout checks=settingsCard("설정 확인", "checks", () -> "각 항목을 누르면 해당 설정으로 이동합니다. 앱으로 돌아오면 상태를 다시 확인합니다."
-            + "\n\n‘완료’·‘켜짐’이면 확인된 상태입니다. ‘설정 필요’·‘연결 대기’ 항목을 눌러 필요한 설정을 마쳐 주세요.");setupStatus=new SetupStatusView(this,false);checks.addView(setupStatus);
         LinearLayout schedule = settingsCard("출석 시간", "schedule", () -> "모든 시간은 한국 시간입니다. 입실 시간과 퇴실 시간을 눌러 각각 변경할 수 있습니다."
             + "\n\n입실 시간대에 등록 Wi-Fi의 인터넷 연결이 확인되면 바로 입실 확인을 시작합니다."
             + "\n\n" + getString(R.string.checkout_delay_notice,Policy.CHECKOUT_DELAY_SECONDS) + " 단축수업일은 시간표별 시각에 2초 여유를 적용합니다."
             + "\n\n자동 접속은 입실·퇴실 각 최대 3회입니다. 오류나 결과 확인 시간 초과 시 자동 재접속을 멈춥니다. 모든 사이트 열기는 최소 3초 간격, 하루 최대 20회입니다."
             + "\n\n입실·퇴실 완료를 확인하면 해당 감시를 종료합니다. 퇴실 재시도 시간 안에서, 퇴실 미확인 상태로 강의실을 벗어나면 알립니다."
             + "\n\n오늘 화면은 " + HomeTheme.nightStarts(prefs.end(), prefs.checkoutToday()) + "부터 야간 테마로 전환합니다.");
+        schedule.setTag("setup-schedule");
         action(schedule, "입실 시간  ›\n" + prefs.start() + "–" + prefs.end(), false, () -> editSchedule(ScheduleSection.ENTRY));
         action(schedule, "기본 퇴실 시간  ›\n" + Policy.checkoutStartTime(prefs.checkout()) + " · 최대 " + prefs.retryMinutes() + "분 재시도", false, () -> editSchedule(ScheduleSection.CHECKOUT));
         action(schedule,"시간표별 출결 시간  ›",false,()->new AlertDialog.Builder(this).setTitle("시간표 자동 반영")
@@ -569,6 +605,7 @@ public final class MainActivity extends Activity {
         note(notifications,Notices.attendanceNotificationsAllowed(this) ? "완료 알림 허용됨" : "알림 차단됨 · 설정 필요");
         action(notifications,"앱 알림 설정",false,() -> PhoneSettings.open(this,PhoneSettings.Target.NOTIFICATIONS));
         LinearLayout wifi = settingsCard("출석에 사용할 Wi-Fi", "wifi", () -> "등록한 Wi-Fi에서 Chrome 출석을 처리합니다. 이름은 대소문자를 구분합니다.");
+        wifi.setTag("setup-wifi");
         for (String ssid : prefs.ssids()) {
             LinearLayout row = new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL);
             TextView name = text(ssid, 15, INK, true); name.setMaxLines(2);
@@ -583,6 +620,7 @@ public final class MainActivity extends Activity {
             Set<String> values = prefs.ssids(); values.add(current); prefs.ssids(values); render(1);
         });
         LinearLayout location = settingsCard("강의실 위치", "location", () -> "입실 시간에는 주변에서 Wi-Fi 미연결을 알리고, 퇴실 재시도 시간에는 미확인 상태로 강의실을 벗어나면 알립니다. GPS 오차가 큰 위치는 판단에 사용하지 않습니다.");
+        location.setTag("setup-location");
         location.addView(text(prefs.hasLocation() ? "반경 " + prefs.radius() + "m" : "기본 반경 30m · 위치 미등록", 19, INK, true));
         action(location, "현재 위치로 등록", true, this::currentLocation);
         action(location, "좌표와 반경 변경", false, () -> editLocation(null));
@@ -778,6 +816,7 @@ public final class MainActivity extends Activity {
     }
 
     private void connection() {
+        setupGuideCard();
         LinearLayout checks=card("설정 확인");setupStatus=new SetupStatusView(this,true);checks.addView(setupStatus);
         LinearLayout chrome = card("01  기존 Chrome 연결");
         chrome.addView(text(ChromeAttendanceService.available() ? "Chrome 접근성 연결됨" : "Chrome 접근성을 켜 주세요",18,INK,true));

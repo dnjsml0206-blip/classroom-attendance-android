@@ -11,6 +11,7 @@ import org.json.*;
 
 /** A temporary processing page; Chrome stays awake until confirmed attendance permits sleep. */
 final class AttendanceScreen {
+    static final int SCREEN_OFF_TIMEOUT_MS=6000;
     private final ChromeAttendanceService service;
     private final LockdownController lockdown;
     private final Handler handler=new Handler(Looper.getMainLooper());
@@ -24,8 +25,14 @@ final class AttendanceScreen {
     void testLockdown(){cancel();phase=Policy.Phase.IDLE;attempt="lockdown-test:"+java.util.UUID.randomUUID();lockdown.start(phase,attempt,this::screenOff,this::screenOff);}
     private JSONObject details(){JSONObject d=new JSONObject();try{d.put("attempt_id",attempt).put("processing_page_visible",processingPage!=null);
             KeyguardManager k=service.getSystemService(KeyguardManager.class);
-            d.put("screen_interactive",service.getSystemService(PowerManager.class).isInteractive()).put("keyguard_locked",k.isKeyguardLocked()).put("device_locked",k.isDeviceLocked()).put("device_secure",k.isDeviceSecure());}catch(JSONException ignored){}return d;}
-    private void event(DiagnosticLog.Event e,String reason){DiagnosticLog.add(service,e,phase,reason,details());}
+            Prefs p=new Prefs(service);
+            d.put("screen_interactive",service.getSystemService(PowerManager.class).isInteractive()).put("keyguard_locked",k.isKeyguardLocked()).put("device_locked",k.isDeviceLocked()).put("device_secure",k.isDeviceSecure())
+                .put("screen_off_enabled",p.screenOffAfterAttendance()).put("lockdown_enabled",p.lockdownAfterAttendance());}catch(JSONException ignored){}return d;}
+    private void event(DiagnosticLog.Event e,String reason){JSONObject d=details();
+        if((e==DiagnosticLog.Event.SCREEN_OFF_REQUEST||e==DiagnosticLog.Event.SCREEN_OFF_RESULT)&&lockRequestedAt>0)
+            try{d.put("elapsed_ms",SystemClock.elapsedRealtime()-lockRequestedAt);}catch(JSONException ignored){}
+        DiagnosticLog.add(service,e,phase,reason,d);
+        if(e==DiagnosticLog.Event.SCREEN_OFF_RESULT)new Prefs(service).raw.edit().putString("screen_off_last_result",reason).putLong("screen_off_last_at",System.currentTimeMillis()).apply();}
     void begin(boolean automatic,Policy.Phase phase,String attempt){
         cancel();this.phase=phase;this.attempt=attempt;chromeSeen=false;
         if(!automatic||!new Prefs(service).showProcessingScreen())return;
@@ -63,7 +70,8 @@ final class AttendanceScreen {
         event(DiagnosticLog.Event.SCREEN_PRESENTATION,reason);
     }
     void confirmed(boolean eligible){
-        if(!eligible||!new Prefs(service).screenOffAfterAttendance()){finish();return;}
+        if(!eligible){event(DiagnosticLog.Event.SCREEN_OFF_RESULT,"RECORD_LOOKUP_NO_LOCK");finish();return;}
+        if(!new Prefs(service).screenOffAfterAttendance()){event(DiagnosticLog.Event.SCREEN_OFF_RESULT,"SCREEN_OFF_DISABLED");finish();return;}
         if(new Prefs(service).lockdownAfterAttendance()){
             reveal("LOCKDOWN_POWER_MENU");lockdown.start(phase,attempt,this::screenOff,this::screenOff);return;
         }
@@ -72,22 +80,22 @@ final class AttendanceScreen {
     private void screenOff(){
         if(Build.VERSION.SDK_INT<28){event(DiagnosticLog.Event.SCREEN_OFF_RESULT,"UNSUPPORTED_ANDROID_VERSION");finish();return;}
         if(!service.getSystemService(PowerManager.class).isInteractive()){event(DiagnosticLog.Event.SCREEN_OFF_RESULT,"ALREADY_OFF");finish();return;}
-        event(DiagnosticLog.Event.SCREEN_OFF_REQUEST,"ATTENDANCE_CONFIRMED");
+        lockRequestedAt=SystemClock.elapsedRealtime();event(DiagnosticLog.Event.SCREEN_OFF_REQUEST,"ATTENDANCE_CONFIRMED");
         boolean accepted;
         try{accepted=service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN);}
         catch(RuntimeException e){event(DiagnosticLog.Event.SCREEN_OFF_RESULT,"LOCK_"+DiagnosticLog.failureCode(e));finish();return;}
         if(!accepted){event(DiagnosticLog.Event.SCREEN_OFF_RESULT,"SYSTEM_ACTION_REJECTED");finish();return;}
-        lockPending=true;lockRequestedAt=SystemClock.elapsedRealtime();handler.post(observeOff);
+        lockPending=true;handler.post(observeOff);
     }
     private final Runnable observeOff=new Runnable(){@Override public void run(){
         if(!lockPending)return;
         boolean off=!service.getSystemService(PowerManager.class).isInteractive();
-        if(off||SystemClock.elapsedRealtime()-lockRequestedAt>=2500){
+        if(off||SystemClock.elapsedRealtime()-lockRequestedAt>=SCREEN_OFF_TIMEOUT_MS){
             event(DiagnosticLog.Event.SCREEN_OFF_RESULT,off?"SCREEN_OFF_OBSERVED":"SCREEN_OFF_UNCONFIRMED");
             lockPending=false;finish();return;
         }
         handler.postDelayed(this,100);
     }};
     void finish(){if(!busy()){handler.removeCallbacksAndMessages(null);reveal("PROCESSING_PAGE_REMOVED");}}
-    void cancel(){lockdown.cancel();lockPending=false;handler.removeCallbacksAndMessages(null);reveal("PROCESSING_PAGE_CANCELLED");}
+    void cancel(){lockdown.cancel();lockPending=false;lockRequestedAt=0;handler.removeCallbacksAndMessages(null);reveal("PROCESSING_PAGE_CANCELLED");}
 }

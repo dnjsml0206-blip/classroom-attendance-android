@@ -32,14 +32,22 @@ final class LockdownChecks {
         long until=SystemClock.elapsedRealtime()+8000;while(!ChromeAttendanceService.available()&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(100);
         check(ChromeAttendanceService.available(),"Production accessibility service is connected");
         boolean[] started={false};ui(()->started[0]=ChromeAttendanceService.testLockdown(activity));check(started[0],"Real system power menu test starts without an attendance request");
-        until=SystemClock.elapsedRealtime()+11000;while(p.raw.getString("lockdown_last_result","").isEmpty()&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(100);
+        until=SystemClock.elapsedRealtime()+17000;while(Set.of("","LOCKDOWN_RUNNING").contains(p.raw.getString("lockdown_last_result",""))&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(100);
         String outcome=p.raw.getString("lockdown_last_result","");check(outcome.equals("LOCKDOWN_LOCK_OBSERVED"),"Native lockdown result: "+outcome);
-        until=SystemClock.elapsedRealtime()+3500;while(ChromeAttendanceService.busy()&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(100);
+        until=SystemClock.elapsedRealtime()+AttendanceScreen.SCREEN_OFF_TIMEOUT_MS+2000;
+        while((ChromeAttendanceService.busy()||p.raw.getString("screen_off_last_result","").isEmpty())&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(100);
         check(c.getSystemService(KeyguardManager.class).isDeviceLocked()&&!c.getSystemService(PowerManager.class).isInteractive(),"Actual system screen is off and device authentication is required");
         var events=DiagnosticLog.records(c);int requests=0,clicks=0,site=0;boolean stateLogged=false;
         for(int i=0;i<events.length();i++){var e=events.getJSONObject(i);if(e.optString("event_code").equals("LOCKDOWN_REQUEST"))requests++;if(e.optString("reason_code").equals("LOCKDOWN_CLICK_ACCEPTED"))clicks++;if(Set.of("CHROME_OPEN_REQUEST","BUTTON_REQUEST","CONFIRM_REQUEST").contains(e.optString("event_code")))site++;if(e.optString("reason_code").equals("LOCKDOWN_LOCK_OBSERVED"))stateLogged=e.getJSONObject("details").getBoolean("device_locked")&&e.getJSONObject("details").getBoolean("device_secure");}
         check(requests==1&&clicks==1&&site==0,"Power menu and lockdown are requested once; zero attendance page/button requests");
         check(stateLogged,"Diagnostic log preserves actual secure lock observations");
+        var evidence=new org.json.JSONObject(p.raw.getString("lockdown_last_evidence","{}"));
+        check(evidence.optInt("lock_menu_count")==1&&evidence.optInt("lock_candidate_count")==1&&evidence.optInt("lock_label_count")>0,
+            "Menu, lockdown label and exactly one click target are recorded separately");
+        check(evidence.optString("lock_root_source").equals("SYSTEM_WINDOWS")&&!evidence.optBoolean("lock_tree_incomplete",true),
+            "Native power-menu window is fully read independently of the active application root");
+        check(p.raw.getString("screen_off_last_result","").equals("SCREEN_OFF_OBSERVED")||p.raw.getString("screen_off_last_result","").equals("ALREADY_OFF"),
+            "Screen-off result is recorded separately from secure locking");
         check(!ChromeAttendanceService.busy()&&p.raw.getString("chrome_pending","").equals("lockdown-sentinel"),"Bounded locking finishes and preserves attendance pending markers");
         restore();result.putString("stream","PASS: "+count+" native lockdown checks.\n");test.finish(Activity.RESULT_OK,result);
     }catch(Throwable e){try{restore();}catch(Throwable ignored){}result.putString("stream","FAIL: "+e+"\n");test.finish(Activity.RESULT_CANCELED,result);}}

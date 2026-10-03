@@ -53,7 +53,7 @@ public final class AttendanceRevisionTest {
     @Test public void endedUnrecordedClassesCountAsPresentWithoutFabricatingRecords(){
         var result=summary(at("2026-09-02","18:00"));
         assertEquals(3,result.elapsed());assertEquals(0,result.known());assertEquals(3,result.missing());
-        assertEquals(0,result.equivalent());assertEquals(100.0,result.currentRate(),0.00001);
+        assertEquals(0,result.equivalent(),0.00001);assertEquals(100.0,result.currentRate(),0.00001);
         assertEquals(100.0,result.projectedRate(),0.00001);
         var partial=summary(at("2026-09-02","18:00"),Map.of(date("2026-09-02"),new Policy.Record("08:40","")),Map.of());
         assertEquals(100.0,partial.currentRate(),0.00001);assertEquals(3,partial.missing());
@@ -76,31 +76,31 @@ public final class AttendanceRevisionTest {
         var result=summary(at("2026-09-01","17:00"),Map.of(),Map.of(
             date("2026-08-31"),MonthAttendance.ManualStatus.LATE_EARLY,
             date("2026-09-01"),MonthAttendance.ManualStatus.LATE));
-        assertEquals(2,result.late());assertEquals(1,result.early());assertEquals(1,result.converted());
-        assertEquals(0,result.remainder());assertEquals(50.0,result.currentRate(),0.00001);
+        assertEquals(2,result.late());assertEquals(1,result.early());assertEquals(1,result.converted(),0.00001);
+        assertEquals(50.0,result.currentRate(),0.00001);
         assertEquals(23,result.remaining());
         for(int events=0;events<=6;events++){
             var count=budget(50,0,events/2,events-events/2);
-            assertEquals(events/3,count.converted());assertEquals(events%3,count.remainder());
+            assertEquals(events/3.0,count.converted(),0.00001);
         }
     }
 
-    @Test public void eightyPercentBudgetRetainsZeroOneOrTwoUnconvertedEvents(){
+    @Test public void eightyPercentBudgetChargesEveryEventImmediately(){
         for(int remainder=0;remainder<=2;remainder++){
             var result=budget(100,24,remainder,0);
-            assertEquals(24,result.allowance());assertEquals(96,result.required());
-            assertEquals(0,result.remaining());assertEquals(2-remainder,result.remainingEvents());
-            assertEquals(80.0,result.projectedRate(),0.00001);
+            assertEquals(24,result.allowance(),0.00001);assertEquals(96,result.required(),0.00001);
+            assertEquals(0,result.remaining());assertEquals(0,result.remainingEvents());
+            assertEquals(100.0*(120-24-remainder/3.0)/120,result.projectedRate(),0.00001);
         }
         var oneDayLeft=budget(100,23,1,1);
-        assertEquals(1,oneDayLeft.remaining());assertEquals(3,oneDayLeft.remainingEvents());
+        assertEquals(0,oneDayLeft.remaining());assertEquals(1,oneDayLeft.remainingEvents());
         var converted=budget(100,23,2,1);
-        assertEquals(0,converted.remaining());assertEquals(2,converted.remainingEvents());
+        assertEquals(0,converted.remaining());assertEquals(0,converted.remainingEvents());
     }
 
     @Test public void exceededBudgetNeverOffersAdditionalAbsencesOrEvents(){
         for(var result:List.of(budget(100,25,0,0),budget(100,24,1,2))){
-            assertEquals(1,result.exceeded());assertEquals(0,result.remaining());assertEquals(0,result.remainingEvents());
+            assertEquals(1,result.exceeded(),0.00001);assertEquals(0,result.remaining());assertEquals(0,result.remainingEvents());
             assertTrue(result.projectedRate()<80.0);
         }
     }
@@ -111,7 +111,7 @@ public final class AttendanceRevisionTest {
         var finished=budget(120,0,0,0);
         assertEquals(0,finished.remaining());assertEquals(0,finished.remainingEvents());
         var oddLength=new AttendanceMetrics.Summary(121,100,100,0,24,0,0);
-        assertEquals(24,oddLength.allowance());assertEquals(97,oddLength.required());
+        assertEquals(24.2,oddLength.allowance(),0.00001);assertEquals(96.8,oddLength.required(),0.00001);
         assertTrue(oddLength.projectedRate()>=80.0);
         assertTrue(new AttendanceMetrics.Summary(121,100,100,0,25,0,0).projectedRate()<80.0);
     }
@@ -121,7 +121,7 @@ public final class AttendanceRevisionTest {
             date("2026-09-02"),MonthAttendance.ManualStatus.ABSENT,
             date("2026-09-03"),MonthAttendance.ManualStatus.LATE_EARLY,
             date("2026-09-23"),MonthAttendance.ManualStatus.ABSENT));
-        assertEquals(2,result.elapsed());assertEquals(0,result.equivalent());
+        assertEquals(2,result.elapsed());assertEquals(0,result.equivalent(),0.00001);
         assertEquals(0,result.late());assertEquals(0,result.early());
     }
 
@@ -132,7 +132,7 @@ public final class AttendanceRevisionTest {
         assertEquals("09:30",record.in());assertEquals("14:00",record.out());
         var result=summary(at("2026-09-02","18:00"),Map.of(date("2026-09-02"),record),
             Map.of(date("2026-09-02"),MonthAttendance.ManualStatus.VACATION));
-        assertEquals(1,result.known());assertEquals(0,result.equivalent());assertEquals(100.0,result.currentRate(),0.00001);
+        assertEquals(1,result.known());assertEquals(0,result.equivalent(),0.00001);assertEquals(100.0,result.currentRate(),0.00001);
         assertEquals(new AttendanceMetrics.Day(true,false,false,false),AttendanceMetrics.day(null,MonthAttendance.ManualStatus.VACATION,"09:11","17:50"));
     }
 

@@ -10,7 +10,7 @@ public final class AttendanceMetricsTest {
     }
     @Test public void courseExcludesPublishedHolidaysOnce(){
         var s=summary(CourseCalendar.START,Map.of(),Map.of(),Set.of());
-        assertEquals(120,s.total());assertEquals(96,s.required());assertEquals(24,s.allowance());
+        assertEquals(120,s.total());assertEquals(96,s.required(),0.00001);assertEquals(24,s.allowance(),0.00001);
         assertTrue(CourseCalendar.classDay(LocalDate.of(2026,9,28),weekdays,Set.of()));
         assertFalse(CourseCalendar.classDay(LocalDate.of(2026,10,5),weekdays,Set.of()));
         assertFalse(CourseCalendar.classDay(LocalDate.of(2027,2,9),weekdays,Set.of()));
@@ -18,18 +18,18 @@ public final class AttendanceMetricsTest {
     }
     @Test public void unrecordedDatesAndPartialEntryAreUnknown(){
         var s=summary(LocalDate.of(2026,9,2),Map.of(CourseCalendar.START,new Policy.Record("08:40","")),Map.of(),Set.of());
-        assertEquals(0,s.known());assertEquals(3,s.missing());assertEquals(0,s.equivalent());assertEquals(100.0,s.currentRate(),0.001);
+        assertEquals(0,s.known());assertEquals(3,s.missing());assertEquals(0,s.equivalent(),0.00001);assertEquals(100.0,s.currentRate(),0.001);
     }
     @Test public void mixedLateAndEarlyAccumulateAcrossDates(){
         Map<LocalDate,Policy.Record> records=Map.of(CourseCalendar.START,new Policy.Record("09:01","17:50"),
             CourseCalendar.START.plusDays(1),new Policy.Record("08:50","15:00"),CourseCalendar.START.plusDays(2),new Policy.Record("09:01","17:50"));
         var s=summary(LocalDate.of(2026,9,2),records,Map.of(),Set.of());
-        assertEquals(2,s.late());assertEquals(1,s.early());assertEquals(1,s.converted());assertEquals(0,s.remainder());assertEquals(23,s.remaining());
+        assertEquals(2,s.late());assertEquals(1,s.early());assertEquals(1,s.converted(),0.00001);assertEquals(23,s.remaining());
         assertEquals(200.0/3,s.currentRate(),0.0001);assertEquals(11900.0/120,s.projectedRate(),0.0001);
     }
-    @Test public void twoOccurrencesCarryWithoutPrematureRounding(){
+    @Test public void twoOccurrencesImmediatelyDeductTwoThirds(){
         var s=summary(CourseCalendar.START,Map.of(CourseCalendar.START,new Policy.Record("09:01","15:00")),Map.of(),Set.of());
-        assertEquals(0,s.converted());assertEquals(2,s.remainder());assertEquals(24,s.remaining());
+        assertEquals(2.0/3,s.converted(),0.00001);assertEquals(23,s.remaining());assertEquals(100.0/3,s.currentRate(),0.00001);
     }
     @Test public void manualOverrideWinsWithoutInventingTimes(){
         var record=new Policy.Record("09:01","15:00");
@@ -44,15 +44,15 @@ public final class AttendanceMetricsTest {
     }
     @Test public void eightyPercentThresholdUsesIntegerDaysAndCannotOfferMoreThanFutureDays(){
         var s=new AttendanceMetrics.Summary(122,30,30,0,24,0,0);
-        assertEquals(0,s.remaining());assertEquals(0,s.exceeded());assertTrue(s.projectedRate()>=80);
-        var failed=new AttendanceMetrics.Summary(122,30,30,0,25,0,0);assertEquals(1,failed.exceeded());assertTrue(failed.projectedRate()<80);
+        assertEquals(0,s.remaining());assertEquals(0,s.exceeded(),0.00001);assertTrue(s.projectedRate()>=80);
+        var failed=new AttendanceMetrics.Summary(122,30,30,0,25,0,0);assertEquals(0.6,failed.exceeded(),0.00001);assertTrue(failed.projectedRate()<80);
         assertEquals(1,new AttendanceMetrics.Summary(122,121,121,0,0,0,0).remaining());
         assertEquals(0,new AttendanceMetrics.Summary(122,122,122,0,0,0,0).remaining());
     }
     @Test public void recordsOutsideCourseOrOnHolidayDoNotChangeDenominatorOrCounts(){
         var s=summary(CourseCalendar.END.plusDays(2),Map.of(LocalDate.of(2026,10,5),new Policy.Record("09:30","15:00")),
             Map.of(CourseCalendar.START.minusDays(1),MonthAttendance.ManualStatus.ABSENT),Set.of());
-        assertEquals(120,s.elapsed());assertEquals(120,s.missing());assertEquals(0,s.equivalent());
+        assertEquals(120,s.elapsed());assertEquals(120,s.missing());assertEquals(0,s.equivalent(),0.00001);
     }
     @Test public void noClassesIsNotOneHundredPercent(){
         var s=AttendanceMetrics.summarize(CourseCalendar.START,Set.of(),Set.of(),d->null,d->null,"","17:50");

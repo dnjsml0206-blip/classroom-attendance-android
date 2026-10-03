@@ -23,7 +23,7 @@ final class ClassificationChecks {
         check(p.manualAttendance(LocalDate.of(2026,9,28))==MonthAttendance.ManualStatus.EARLY_LEAVE&&p.manualAttendance(LocalDate.of(2026,9,30))==MonthAttendance.ManualStatus.LATE,"Opening the creator update applies both user-confirmed corrections");
         check(p.history(LocalDate.of(2026,9,28))==null&&p.history(LocalDate.of(2026,9,30))==null,"Missing entry and exit times are never invented");
         check(p.lateAfter().equals("09:11"),"User-confirmed late cutoff is installed as 09:11");
-        var summary=p.attendanceSummary();check(summary.early()==1&&summary.late()==1&&summary.known()==2&&summary.remainder()==2,"Confirmed late and early days appear in attendance totals");
+        var summary=p.attendanceSummary();check(summary.early()==1&&summary.late()==1&&summary.known()==2&&summary.absenceThirds()==2,"Confirmed late and early days appear in attendance totals");
         close();openCalendar("2026-09-28");check(value("calendar-selected-status").equals("조퇴")&&view("calendar-times").getVisibility()==View.GONE,"September 28 shows early leave without fabricated times");check(value("calendar-source").contains("사용자 확인"),"Calendar identifies the user's confirmation as the source");capture("01-early-leave.png");
         close();openCalendar("2026-09-30");check(value("calendar-selected-status").equals("지각"),"September 30 shows late attendance");capture("02-late.png");
         ui(()->p.saveManualAttendance(LocalDate.of(2026,9,28),MonthAttendance.ManualStatus.PRESENT));PersonalAttendanceCorrection.apply(p.raw,true);
