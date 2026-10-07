@@ -18,7 +18,7 @@ final class LockdownChecks {
         ui(()->{ChromeAttendanceService.cancelWork();AlarmScheduler.cancel(c);c.stopService(new Intent(c,MonitorService.class));p.raw.edit().clear().putBoolean("initialized",true).putInt("schedule_version",2).putBoolean("chrome_backend",true).putBoolean(PersonalAttendanceCorrection.MARKER,true).putBoolean("enabled",false).putBoolean("auto",false).putBoolean("guidance_notifications",false).putStringSet("days",Set.of("1","2","3","4","5")).putString("chrome_pending","lockdown-sentinel").commit();DiagnosticLog.prefs(c).edit().clear().commit();});
         check(c.getSystemService(KeyguardManager.class).isDeviceSecure(),"Dedicated emulator has a test PIN; no physical phone involved");
         activity=test.startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));settle();
-        ui(()->{try{var render=MainActivity.class.getDeclaredMethod("render",int.class);render.setAccessible(true);render.invoke(activity,1);}catch(Exception e){throw new RuntimeException(e);}});settle();
+        ui(()->{try{var render=MainActivity.class.getDeclaredMethod("render",int.class);render.setAccessible(true);render.invoke(activity,2);}catch(Exception e){throw new RuntimeException(e);}});settle();
         check(view("attendance-lockdown")!=null&&((Switch)view("attendance-lockdown")).isChecked(),"Approved post-attendance lockdown option is available and enabled");
         ui(()->view("attendance-lockdown").requestRectangleOnScreen(new android.graphics.Rect(0,0,view("attendance-lockdown").getWidth(),500),true));settle();capture("lockdown-settings.png");
         // Instrumentation restarts this process; explicitly rebind only in the guarded emulator test.

@@ -30,6 +30,21 @@ public final class SiteProtocol {
                 && uri.getUserInfo() == null && (uri.getPort() == -1 || uri.getPort() == 443);
         } catch (RuntimeException e) { return false; }
     }
+    /** Only the two supported entry pages; never broaden the automation site's boundary. */
+    public static String shortcutAddress(String pasted) {
+        if(pasted==null)return null;
+        String value=pasted.trim();
+        Matcher urls=Pattern.compile("https?://[^\\s<>\"\\[\\]]+",Pattern.CASE_INSENSITIVE).matcher(value);
+        if(urls.find()){value=urls.group();if(urls.find())return null;}
+        else if(value.regionMatches(true,0,"skplanet.atosoft.net/",0,20))value="https://"+value;
+        try{
+            String secure=secureNavigation(value);if(secure==null||!allowedNavigation(secure))return null;
+            URI uri=URI.create(secure);String path=uri.getPath();
+            String base="/Worknet/Present/Present.asp".equalsIgnoreCase(path)?PAGE:"/Worknet/Present/PAuthWay.asp".equalsIgnoreCase(path)?AUTH_PAGE:null;
+            if(base==null)return null;
+            return base+(uri.getRawQuery()==null?"":"?"+uri.getRawQuery());
+        }catch(RuntimeException e){return null;}
+    }
     public static boolean permissionFlag(String response) {
         String value = response == null ? "" : response.replace("\uFEFF", "").trim();
         if (value.equals("1")) return true;

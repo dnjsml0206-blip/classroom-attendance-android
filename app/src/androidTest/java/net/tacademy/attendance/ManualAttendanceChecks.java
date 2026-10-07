@@ -83,7 +83,7 @@ final class ManualAttendanceChecks {
         restore();result.putString("stream","PASS: "+count+" manual attendance and result-deadline checks. No real site access.\n");test.finish(Activity.RESULT_OK,result);
     }catch(Throwable e){try{restore();}catch(Throwable ignored){}result.putString("stream","FAIL: "+e+"\n");test.finish(Activity.RESULT_CANCELED,result);}}
     private int countEvent(String name){int result=0;var records=DiagnosticLog.records(c);for(int i=0;i<records.length();i++){var e=records.optJSONObject(i);if(e!=null&&name.equals(e.optString("event_code")))result++;}return result;}
-    private void renderSettings(){renderTab(1);}
+    private void renderSettings(){renderTab(2);}
     private void renderTab(int tab){try{var method=MainActivity.class.getDeclaredMethod("render",int.class);method.setAccessible(true);method.invoke(a,tab);}catch(Exception e){throw new AssertionError(e);}}
     private String tree(android.view.accessibility.AccessibilityNodeInfo n){if(n==null)return "";StringBuilder s=new StringBuilder().append(n.getText()).append(' ');for(int i=0;i<n.getChildCount();i++)s.append(tree(n.getChild(i)));return s.toString();}
     private void set(String key,Object value){try{Field f=ChromeAttendanceService.class.getDeclaredField(key);f.setAccessible(true);f.set(service,value);}catch(Exception e){throw new AssertionError(e);}}

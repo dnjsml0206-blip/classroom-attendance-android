@@ -8,7 +8,7 @@ import android.widget.*;
 /** A bounded, visible wake bridge. Credentials are handled exclusively by Android. */
 public final class ScheduledUnlockActivity extends Activity {
     private final Handler handler=new Handler(Looper.getMainLooper());
-    private String token="";private boolean requested,handedOff;private TextView message;
+    private String token="";private boolean requested,handedOff,trustWaitLogged;private TextView message;
     private final Runnable tick=new Runnable(){@Override public void run(){
         if(!ScheduledUnlock.live(ScheduledUnlockActivity.this,token)){ScheduledUnlock.stop(ScheduledUnlockActivity.this,token,"WAKE_CANCELLED_OR_EXPIRED",false);finish();return;}
         if(!NetworkAccess.inspect(ScheduledUnlockActivity.this).allowed()){stop("WIFI_LOST");return;}
@@ -19,6 +19,7 @@ public final class ScheduledUnlockActivity extends Activity {
         super.onCreate(state);token=getIntent().getStringExtra(ScheduledUnlock.TOKEN);
         if(token==null||!ScheduledUnlock.attach(this,token,state!=null)){finish();return;}
         requested=state!=null&&state.getBoolean("dismiss_requested",false);
+        trustWaitLogged=state!=null&&state.getBoolean("trust_wait_logged",false);
         if(Build.VERSION.SDK_INT>=27){setShowWhenLocked(true);setTurnScreenOn(true);}
         else getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED|WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -31,6 +32,11 @@ public final class ScheduledUnlockActivity extends Activity {
     }
     private void step(){
         KeyguardManager keyguard=getSystemService(KeyguardManager.class);
+        if(UnlockPolicy.waitingForTrust(ScheduledUnlock.mode(this),getSystemService(PowerManager.class).isInteractive(),keyguard.isDeviceLocked(),ScheduledUnlock.visibleAge(this))){
+            message.setText(R.string.unlock_trust_wait_status);
+            if(!trustWaitLogged){trustWaitLogged=true;DiagnosticLog.add(this,DiagnosticLog.Event.WAKE_TRUST_WAIT,ScheduledUnlock.phase(this),"TRUST_SETTLING",ScheduledUnlock.details(this));}
+            return;
+        }
         LockTestPolicy.Step next=UnlockPolicy.next(ScheduledUnlock.mode(this),getSystemService(PowerManager.class).isInteractive(),keyguard.isKeyguardLocked(),keyguard.isDeviceLocked());
         if(next==LockTestPolicy.Step.WAIT_SCREEN)return;
         if(next==LockTestPolicy.Step.NEED_AUTH){
@@ -51,7 +57,7 @@ public final class ScheduledUnlockActivity extends Activity {
             });}catch(RuntimeException e){stop("DISMISS_"+DiagnosticLog.failureCode(e));}
         }
     }
-    @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);state.putBoolean("dismiss_requested",requested);}
+    @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);state.putBoolean("dismiss_requested",requested);state.putBoolean("trust_wait_logged",trustWaitLogged);}
     private void stop(String reason){ScheduledUnlock.stop(this,token,reason,true);finish();}
     @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);if(isFinishing()&&!handedOff&&token!=null)ScheduledUnlock.stop(this,token,"ACTIVITY_CLOSED",false);super.onDestroy();}
 }

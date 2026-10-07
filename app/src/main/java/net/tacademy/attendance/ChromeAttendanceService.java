@@ -113,7 +113,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private static boolean launchChrome(Context context,String url,AccessPolicy.Kind kind,Policy.Phase phase){
         DiagnosticLog.add(context,DiagnosticLog.Event.CHROME_OPEN_REQUEST,phase,kind.name());
         try {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage("com.android.chrome")
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(new Prefs(context).chromeAddress(url))).setPackage("com.android.chrome")
                 .putExtra("com.android.browser.application_id", context.getPackageName())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(intent); DiagnosticLog.add(context,DiagnosticLog.Event.CHROME_OPEN_DISPATCHED,phase,kind.name()); return true;
@@ -144,7 +144,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
             try{details.put("wifi_check_code",network.code());}catch(org.json.JSONException ignored){}
             if(!network.allowed()){problem=network.reason();reason=network.code();}
         }
-        if(problem.isEmpty()&&!available()){problem="Chrome 접근성 연결이 필요해요. 연결 탭에서 확인해 주세요.";reason="ACCESSIBILITY_DISCONNECTED";}
+        if(problem.isEmpty()&&!available()){problem="Chrome 접근성 연결이 필요해요. 자동출석 탭에서 확인해 주세요.";reason="ACCESSIBILITY_DISCONNECTED";}
         if(problem.isEmpty()&&(LockLab.readOnlyActive(context)||ScheduledUnlock.active(context)||instance!=null&&(instance.working||instance.screen.busy()||instance.navigatingWifi||instance.settingsTarget!=null||!instance.lockProbe.isEmpty()))){problem="진행 중인 테스트나 화면 작업을 마친 뒤 다시 눌러 주세요.";reason="OTHER_UI_WORK";}
         if(!problem.isEmpty()){p.status("직접 출결 확인 필요",problem);DiagnosticLog.add(context,DiagnosticLog.Event.MANUAL_BLOCKED,phase,reason,details);Toast.makeText(context,problem,Toast.LENGTH_LONG).show();return;}
         DiagnosticLog.add(context,DiagnosticLog.Event.MANUAL_REQUEST,phase,readOnly?"READ_RECORD":earlyApproved?"EARLY_LEAVE_APPROVED":retryApproved?"USER_CONFIRMED_RETRY":"ONE_SHOT");
@@ -155,7 +155,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         Prefs prefs = new Prefs(context);
         if (instance == null) {
             DiagnosticLog.add(context,DiagnosticLog.Event.WAITING,prefs.phase(ZonedDateTime.now(Policy.ZONE)),"ACCESSIBILITY_UNAVAILABLE");
-            prefs.status("Chrome 접근성 연결 필요", "연결 탭에서 출석 메이트 접근성을 켜 주세요");
+            prefs.status("Chrome 접근성 연결 필요", "자동출석 탭에서 출석 메이트 접근성을 켜 주세요");
             Notices.chromeAction(context, true, "접근성을 켜면 기존 Chrome 인증으로 출석 버튼을 처리합니다");
             if (done != null) done.run(); return;
         }
@@ -294,7 +294,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if (phase == Policy.Phase.CHECKOUT && !record.checkedIn()) { stage("ENTRY_RECORD_MISSING");traceLock("오늘 입실 기록 없음 · 퇴실 클릭 보류"); return; }
         if (clicked) {stage(confirmationExpected&&!confirmationClicked?"CONFIRMATION_NOT_VISIBLE":"RECORD_NOT_UPDATED");return;}
         if (key.equals(prefs.raw.getString("chrome_pending", "")) && !(manualSession&&manualRetryApproved)) {
-            fail("이전 클릭 결과 확인 필요", "Chrome에서 실제 기록을 확인한 뒤 연결 탭에서 보류를 해제해 주세요","PENDING_CLICK"); return;
+            fail("이전 클릭 결과 확인 필요", "Chrome에서 실제 기록을 확인한 뒤 자동출석 탭에서 보류를 해제해 주세요","PENDING_CLICK"); return;
         }
         AccessibilityNodeInfo button = exactButton(nodes, phase == Policy.Phase.ENTRY ? "입실" : "퇴실");
         if (button == null || !button.isEnabled()) { stage("BUTTON_UNAVAILABLE");traceLock("출결 버튼 대기 · 클릭 가능한 "+(phase==Policy.Phase.ENTRY?"입실":"퇴실")+" 버튼을 읽지 못함"); return; }

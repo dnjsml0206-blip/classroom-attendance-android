@@ -25,9 +25,17 @@ final class ScheduledUnlock {
             &&mode(c).name().equals(s.getString("mode",""))&&!LockLab.readOnlyActive(c);
     }
     static boolean active(Context c){return live(c,token(c));}
+    static long visibleAge(Context c){
+        long entered=store(c).getLong("entered_elapsed",0);
+        return entered>0?Math.max(0,SystemClock.elapsedRealtime()-entered):-1;
+    }
     static JSONObject details(Context c){
         JSONObject d=new JSONObject();try{d.put("attempt_id",token(c));long entered=store(c).getLong("entered_elapsed",0);
             if(entered>0)d.put("delay_ms",Math.max(0,entered-store(c).getLong("started_elapsed",entered)));
+            android.app.KeyguardManager keyguard=c.getSystemService(android.app.KeyguardManager.class);
+            d.put("elapsed_ms",visibleAge(c)).put("screen_interactive",c.getSystemService(PowerManager.class).isInteractive())
+                .put("keyguard_locked",keyguard.isKeyguardLocked()).put("device_locked",keyguard.isDeviceLocked())
+                .put("device_secure",keyguard.isDeviceSecure());
         }catch(JSONException ignored){}return d;
     }
     static void request(Context context,Policy.Phase phase){

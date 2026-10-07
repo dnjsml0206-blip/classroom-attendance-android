@@ -8,7 +8,7 @@ import java.util.*;
 final class TrialReadiness {
     static List<String> problems(Context c,LockTestPolicy.Mode mode,boolean actual,long at,boolean scheduled){
         List<String> issues=new ArrayList<>();Prefs p=new Prefs(c);
-        if(mode!=LockTestPolicy.Mode.NETWORK&&!ChromeAttendanceService.available())issues.add("Chrome 접근성 연결이 필요합니다. 연결 탭에서 켜 주세요.");
+        if(mode!=LockTestPolicy.Mode.NETWORK&&!ChromeAttendanceService.available())issues.add("Chrome 접근성 연결이 필요합니다. 자동출석 탭에서 켜 주세요.");
         if(scheduled&&!AlarmScheduler.allowed(c))issues.add("알람 및 리마인더를 허용해 주세요.");
         if(scheduled&&!ScheduleController.backgroundLocationAllowed(c))issues.add("예약 중 Wi-Fi 이름 확인을 위해 위치를 항상 허용해 주세요.");
         if(actual&&mode!=LockTestPolicy.Mode.NETWORK){

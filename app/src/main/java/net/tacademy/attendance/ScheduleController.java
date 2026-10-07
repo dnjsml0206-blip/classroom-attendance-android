@@ -34,7 +34,7 @@ public final class ScheduleController {
         }
         catch (RuntimeException e) {
             DiagnosticLog.add(context,DiagnosticLog.Event.MONITOR_START_FAILED,prefs.phase(ZonedDateTime.now(Policy.ZONE)),DiagnosticLog.failureCode(e));
-            prefs.status("예약 실행 권한 확인 필요", "연결 탭에서 위치 항상 허용과 알람 권한을 확인해 주세요");
+            prefs.status("예약 실행 권한 확인 필요", "자동출석 탭에서 위치 항상 허용과 알람 권한을 확인해 주세요");
             if (prefs.phase(ZonedDateTime.now(Policy.ZONE)) != Policy.Phase.ENTRY)
                 Notices.checkoutAttention(context, true, "자동 실행 권한을 확인한 뒤 앱에서 다시 확인해 주세요");
             else Notices.alert(context, "입실 감시를 시작하지 못했습니다", "앱을 열어 위치 항상 허용과 알람 권한을 확인해 주세요");

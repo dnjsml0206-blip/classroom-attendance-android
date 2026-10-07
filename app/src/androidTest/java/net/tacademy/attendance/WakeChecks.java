@@ -25,7 +25,7 @@ final class WakeChecks {
             SharedPreferences prefs=c.getSharedPreferences(name,0);saved.put(name,new HashMap<>(prefs.getAll()));prefs.edit().clear().commit();
         }
         Prefs p=new Prefs(c);configure(false);
-        main=(MainActivity)test.startActivitySync(new Intent(c,MainActivity.class).putExtra("open_tab",1).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        main=(MainActivity)test.startActivitySync(new Intent(c,MainActivity.class).putExtra("open_tab",2).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         check(ScheduledUnlock.mode(c)==UnlockPolicy.Mode.TRUST,"Updating starts with the automatic trusted-unlock default");
         View mode=main.getWindow().getDecorView().findViewWithTag("TRUST");
         check(mode instanceof RadioButton,"Normal lock settings are available in this build");

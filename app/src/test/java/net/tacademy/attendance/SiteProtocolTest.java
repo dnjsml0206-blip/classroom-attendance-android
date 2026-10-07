@@ -26,4 +26,15 @@ public final class SiteProtocolTest {
             "https://user:password@skplanet.atosoft.net/", "https://skplanet.atosoft.net:444/",
             "file:///sdcard/test.html"}) assertFalse(bad, SiteProtocol.allowedNavigation(bad));
     }
+    @Test public void shortcutAcceptsChromeShareTextAndUpgradesHttp(){
+        assertEquals(SiteProtocol.PAGE,SiteProtocol.shortcutAddress("SK플래닛 출결관리 - http://skplanet.atosoft.net/Worknet/Present/Present.asp"));
+        assertEquals(SiteProtocol.PAGE,SiteProtocol.shortcutAddress("skplanet.atosoft.net/Worknet/Present/Present.asp"));
+        assertEquals(SiteProtocol.AUTH_PAGE,SiteProtocol.shortcutAddress(SiteProtocol.AUTH_PAGE));
+    }
+    @Test public void shortcutPreservesQueryButDropsFragment(){
+        assertEquals(SiteProtocol.PAGE+"?course=1",SiteProtocol.shortcutAddress(SiteProtocol.PAGE+"?course=1#top"));
+    }
+    @Test public void shortcutRejectsOtherSitesAndActionEndpoints(){
+        for(String url:new String[]{null,"","https://example.com/","https://skplanet.atosoft.net.evil.example/Worknet/Present/Present.asp","https://user@skplanet.atosoft.net/Worknet/Present/Present.asp","https://skplanet.atosoft.net:444/Worknet/Present/Present.asp",SiteProtocol.BASE+"save.asp",SiteProtocol.PAGE+" "+SiteProtocol.AUTH_PAGE})assertNull(url,SiteProtocol.shortcutAddress(url));
+    }
 }

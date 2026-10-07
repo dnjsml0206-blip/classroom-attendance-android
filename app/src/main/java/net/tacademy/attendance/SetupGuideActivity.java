@@ -168,6 +168,7 @@ public final class SetupGuideActivity extends Activity {
     }
     private void connection(SetupGuidePolicy.Snapshot s){
         LinearLayout chrome=card("평소 Chrome에서 출결 화면 확인",s.chromeConfirmed()?"직접 확인함":"직접 확인 필요",s.chromeConfirmed());
+        add(chrome,"기존 출석 주소 붙여넣기",false,()->startActivity(new Intent(this,MainActivity.class).putExtra("open_tab",1).putExtra("focus_setting","attendance-address")),"setup-shortcut-address");
         note(chrome,"본인 이름과 오늘 출결 화면이 보이는지 확인한 뒤 앱으로 돌아오세요.");
         add(chrome,"Chrome 출결 화면 열기",true,()->{if(!busy())ChromeAttendanceService.openChrome(this,SiteProtocol.PAGE);},"setup-chrome-open");
         check(chrome,"내 이름과 출결 화면을 확인했어요",CHROME,true);
@@ -211,7 +212,7 @@ public final class SetupGuideActivity extends Activity {
         add(box,"메뉴를 못 찾겠어요",false,()->help("Extend Unlock 찾기","갤럭시: 설정 → 잠금화면 및 AOD(또는 잠금화면) → Extend Unlock. 다른 Android: 보안 및 개인 정보 보호 → 보안 설정 더보기 → Extend Unlock. 설정 검색에서 ‘Extend Unlock’ 또는 ‘Smart Lock’을 찾아보세요. 제조사·Android 버전별로 메뉴가 다를 수 있어요."),null);
         LinearLayout lock=card("이 두 가지는 기억해 주세요","사용 전 확인",false);
         note(lock,"신뢰 상태는 최대 4시간 유지돼요. PIN 재인증이 필요하면 자동출석을 이어갈 수 없어요.");
-        note(lock,prefs.screenOffAfterAttendance()&&prefs.lockdownAfterAttendance()?"완료 후 잠금 모드가 켜져 있어요. 출결 완료 뒤에는 PIN 등으로 한 번 해제해야 하며 Wi-Fi 재연결만으로 풀리지 않아요.":"완료 후 화면·잠금 방식은 설정에서 변경할 수 있어요.");
+        note(lock,prefs.screenOffAfterAttendance()&&prefs.lockdownAfterAttendance()?"완료 후 잠금 모드가 켜져 있어요. 출결 완료 뒤에는 PIN 등으로 한 번 해제해야 하며 Wi-Fi 재연결만으로 풀리지 않아요.":"완료 후 화면·잠금 방식은 자동출석 탭에서 변경할 수 있어요.");
         add(lock,"완료 후 잠금 방식 확인",false,()->setting("setup-screen"),null);
         if(CreatorTools.testsVisible(this)){LinearLayout trial=card("실제 출결 없는 연습","선택 사항",false);note(trial,"15초 뒤 Chrome 내부 시험 버튼을 누르게 해요. 예약 후 화면을 끄고 기다리세요. 성공해도 실제 서버 인증까지 확인한 것은 아니에요.");add(trial,"잠금·자동 클릭 연습 열기",false,()->startActivity(new Intent(this,LockLabActivity.class).putExtra("setup_practice",true)),"setup-practice");}
     }
@@ -234,7 +235,7 @@ public final class SetupGuideActivity extends Activity {
     }
     private boolean busy(){if(ChromeAttendanceService.busy()||ChromeAttendanceService.otherUiBusy()||ScheduledUnlock.active(this)||ActivationRun.pending()){Toast.makeText(this,"진행 중인 출결·화면 작업이 끝난 뒤 다시 눌러 주세요",Toast.LENGTH_LONG).show();return true;}return false;}
     private void open(PhoneSettings.Target target){if(!busy())PhoneSettings.open(this,target);}
-    private void setting(String tag){if(!busy())startActivity(new Intent(this,MainActivity.class).putExtra("open_tab",1).putExtra("focus_setting",tag));}
+    private void setting(String tag){if(!busy())startActivity(new Intent(this,MainActivity.class).putExtra("open_tab",2).putExtra("focus_setting",tag));}
     private void requestLocation(){
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED){open(PhoneSettings.Target.LOCATION_PERMISSION);return;}
         if(prefs.raw.getBoolean("setup_location_requested",false)&&!shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)){open(PhoneSettings.Target.LOCATION_PERMISSION);return;}

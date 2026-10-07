@@ -13,4 +13,5 @@
     <string name="checkout_delay_notice">퇴실은 조기 처리를 피하도록 설정 시각보다 %1$d초 뒤에 시작합니다. 재시도 종료 시각은 유지합니다.</string>
     <string name="unlock_selected">선택됨 · %1$s</string>
     <string name="unlock_initial_status">화면과 잠금 상태를 확인하고 있습니다.\n%1$s</string>
+    <string name="unlock_trust_wait_status">Wi-Fi 연결 확인 · 신뢰 상태 적용을 잠시 기다리고 있어요</string>
 </resources>

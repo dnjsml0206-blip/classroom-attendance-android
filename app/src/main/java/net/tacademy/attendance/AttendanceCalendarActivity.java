@@ -43,7 +43,7 @@ public final class AttendanceCalendarActivity extends Activity {
         });
         LinearLayout toolbar=new LinearLayout(this);toolbar.setGravity(Gravity.CENTER_VERTICAL);toolbar.setPadding(dp(8),dp(6),dp(12),dp(6));
         toolbar.addView(button("‹","출결 달력 닫기",this::finish),new LinearLayout.LayoutParams(dp(48),dp(48)));
-        TextView title=text("월간 출결",22,theme.ink,true);toolbar.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        TextView title=text("출결·시간표",22,theme.ink,true);toolbar.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         toolbar.addView(button("이번 달","이번 달과 오늘 선택",()->{selected=LocalDate.now(Policy.ZONE);month=YearMonth.from(selected);render();}),new LinearLayout.LayoutParams(dp(78),dp(48)));
         root.addView(toolbar);
         scroll=new ScrollView(this);scroll.setFillViewport(true);
@@ -119,6 +119,15 @@ public final class AttendanceCalendarActivity extends Activity {
         LinearLayout detail=card();detail.setTag("calendar-detail");
         TextView date=text(selected.format(DateTimeFormatter.ofPattern("M월 d일 EEEE",Locale.KOREAN)),18,theme.ink,true);date.setTag("calendar-selected-date");detail.addView(date);
         TextView stateLabel=text(state==MonthAttendance.State.ENTERED?"입실 확인 · 퇴실 미확인":state.label,13,color(state),true);stateLabel.setTag("calendar-selected-status");detail.addView(stateLabel);gap(detail,12);
+        LinearLayout lessonPanel=new LinearLayout(this);lessonPanel.setOrientation(LinearLayout.VERTICAL);lessonPanel.setTag("calendar-lesson");lessonPanel.setPadding(dp(12),dp(10),dp(12),dp(10));lessonPanel.setBackground(shape(theme.soft,theme.soft,0,14));
+        CourseTimetable.Lesson lesson=CourseTimetable.on(selected);
+        boolean hasClass=lesson!=null&&CourseCalendar.classDay(selected,prefs.days(),prefs.excluded());
+        lessonPanel.addView(text("수업 시간표",11,theme.muted,true));
+        lessonPanel.addView(text(hasClass?lesson.title():"수업 없는 날",17,theme.ink,true));
+        if(hasClass)lessonPanel.addView(text(lesson.hours()+"시간 수업 · "+CourseSchedule.classEnd(selected)+" 종료"+(CourseSchedule.shortened(selected)?"\n자동 퇴실 "+CourseSchedule.dispatch(selected,prefs.checkout())+"부터":""),12,theme.accent,false));
+        LocalDate lessonDate=selected;
+        lessonPanel.addView(button("전체 시간표 · 원본 보기 ›","선택한 날짜의 전체 시간표 보기",()->startActivity(new Intent(this,TimetableActivity.class).putExtra("initial_date",lessonDate.toString()))),new LinearLayout.LayoutParams(-1,dp(44)));
+        detail.addView(lessonPanel);gap(detail,12);
         LinearLayout times=new LinearLayout(this);times.setTag("calendar-times");times.setVisibility(record!=null&&record.checkedIn()?View.VISIBLE:View.GONE);
         times.addView(time("입실",record==null?"":record.in(),"calendar-in"),new LinearLayout.LayoutParams(0,-2,1));
         times.addView(time("퇴실",record==null?"":record.out(),"calendar-out"),new LinearLayout.LayoutParams(0,-2,1));detail.addView(times);

@@ -26,6 +26,13 @@ public final class Prefs {
         if (!Policy.validSchedule(start(), end(), checkout(), retryMinutes()))
             raw.edit().putString("start", "08:30").putString("end", "09:30").putString("checkout", "17:50").putInt("checkout_retry_minutes", 10).apply();
     }
+    public String shortcutAddress(){String url=SiteProtocol.shortcutAddress(raw.getString("chrome_shortcut_url",SiteProtocol.PAGE));return url==null?SiteProtocol.PAGE:url;}
+    public String chromeAddress(String requested){
+        String saved=shortcutAddress();
+        if(SiteProtocol.PAGE.equals(requested)&&saved.startsWith(SiteProtocol.PAGE))return saved;
+        if(SiteProtocol.AUTH_PAGE.equals(requested)&&saved.startsWith(SiteProtocol.AUTH_PAGE))return saved;
+        return requested;
+    }
     public Set<String> ssids() { return new TreeSet<>(raw.getStringSet("ssids", Set.of())); }
     public void ssids(Set<String> values) { raw.edit().putStringSet("ssids", new HashSet<>(values)).apply(); }
     public boolean enabled() { return raw.getBoolean("enabled", false); }

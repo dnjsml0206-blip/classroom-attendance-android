@@ -19,6 +19,7 @@ public final class MonitorService extends Service implements LocationListener {
     private String networkTrigger = "LOCAL_CHECK", lastWifiCode = "";
     private long networkEventAt, networkEventElapsed;
     private int networkRechecks;
+    private BroadcastReceiver userPresentReceiver;
     private final Runnable networkCheck = new Runnable() {
         @Override public void run() {
             evaluate(networkTrigger);
@@ -59,9 +60,9 @@ public final class MonitorService extends Service implements LocationListener {
         } catch (RuntimeException e) {
             DiagnosticLog.add(this,DiagnosticLog.Event.MONITOR_START_FAILED,phase,DiagnosticLog.failureCode(e));
             if (phase == Policy.Phase.IDLE) { stopSelf(); return START_NOT_STICKY; }
-            prefs.status("위치 권한 확인 필요", "연결 탭에서 위치 항상 허용을 설정해 주세요");
+            prefs.status("위치 권한 확인 필요", "자동출석 탭에서 위치 항상 허용을 설정해 주세요");
             if (phase != Policy.Phase.ENTRY) Notices.checkoutAttention(this, true, "위치 항상 허용과 Wi-Fi 연결을 확인해 주세요");
-            else Notices.alert(this, "입실 감시 권한을 확인해 주세요", "연결 탭에서 위치 항상 허용을 설정해 주세요");
+            else Notices.alert(this, "입실 감시 권한을 확인해 주세요", "자동출석 탭에서 위치 항상 허용을 설정해 주세요");
             stopSelf(); return START_NOT_STICKY;
         }
         if (!prefs.monitoringNeeded(ZonedDateTime.now(Policy.ZONE))) { finishMonitoring(); return START_NOT_STICKY; }
@@ -79,6 +80,20 @@ public final class MonitorService extends Service implements LocationListener {
                 // Wi-Fi can validate before Android selects it as Chrome's default route.
                 connectivity.registerDefaultNetworkCallback(defaultCallback);
             } catch (RuntimeException e) { networkWatchFailed("DEFAULT", e); }
+            userPresentReceiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent intent){
+                if(!stopping&&Intent.ACTION_USER_PRESENT.equals(intent.getAction())){
+                    DiagnosticLog.add(MonitorService.this,DiagnosticLog.Event.USER_PRESENT_RECEIVED,
+                        new Prefs(MonitorService.this).phase(ZonedDateTime.now(Policy.ZONE)),"SYSTEM_USER_PRESENT");
+                    evaluate("USER_PRESENT");
+                }
+            }};
+            try{
+                IntentFilter filter=new IntentFilter(Intent.ACTION_USER_PRESENT);
+                // USER_PRESENT is protected by Android and is sent by SystemUI, whose UID is not the system UID.
+                if(Build.VERSION.SDK_INT>=33)registerReceiver(userPresentReceiver,filter,Context.RECEIVER_EXPORTED);
+                else registerReceiver(userPresentReceiver,filter);
+            }catch(RuntimeException e){userPresentReceiver=null;
+                DiagnosticLog.add(this,DiagnosticLog.Event.READINESS_WATCH_FAILED,phase,DiagnosticLog.failureCode(e));}
             DiagnosticLog.add(this,DiagnosticLog.Event.MONITOR_STARTED,phase,"SCHEDULE_WINDOW");
             prefs.log(phase == Policy.Phase.ENTRY ? "입실 시간 감시 시작" : "퇴실 시간 확인 시작");
             AlarmScheduler.arm(this, false);
@@ -120,11 +135,14 @@ public final class MonitorService extends Service implements LocationListener {
         boolean departureWatch = prefs.departureWatching(now);
         updateLocationRequests(prefs.hasLocation() && (phase == Policy.Phase.ENTRY || departureWatch));
         NetworkAccess.State wifi = NetworkAccess.inspect(this);
+        KeyguardManager keyguard=getSystemService(KeyguardManager.class);
+        boolean expedite=UnlockPolicy.expedite("ALLOWED".equals(lastWifiCode),wifi.allowed(),"USER_PRESENT".equals(trigger),
+            getSystemService(PowerManager.class).isInteractive(),keyguard.isKeyguardLocked(),keyguard.isDeviceLocked());
         if (!wifi.code().equals(lastWifiCode)) {
             org.json.JSONObject details = new org.json.JSONObject();
             try {
                 details.put("network_trigger", trigger).put("wifi_check_code", wifi.code());
-                if (!"LOCAL_CHECK".equals(trigger)) details.put("network_event_at_ms", networkEventAt)
+                if (trigger.startsWith("WIFI_")||trigger.startsWith("DEFAULT_")) details.put("network_event_at_ms", networkEventAt)
                     .put("elapsed_ms", Math.max(0, SystemClock.elapsedRealtime() - networkEventElapsed));
             } catch (org.json.JSONException ignored) {}
             DiagnosticLog.add(this, DiagnosticLog.Event.NETWORK_STATE_CHANGED, phase, wifi.code(), details);
@@ -155,7 +173,9 @@ public final class MonitorService extends Service implements LocationListener {
         String line = (phase == Policy.Phase.ENTRY ? "입실" : "퇴실") + " 확인 · " +
             (wifi.allowed() ? wifi.ssid() : "Wi-Fi 연결 대기");
         getSystemService(NotificationManager.class).notify(Notices.MONITOR, Notices.monitor(this, line));
-        AttendanceEngine.request(this, false, () -> handler.post(() -> {
+        if(expedite)DiagnosticLog.add(this,DiagnosticLog.Event.READINESS_RESUMED,phase,
+            "USER_PRESENT".equals(trigger)?"AUTHENTICATION_READY":"WIFI_BECAME_READY");
+        AttendanceEngine.request(this, expedite, () -> handler.post(() -> {
             if (stopping) return;
             if (!new Prefs(this).monitoringNeeded(ZonedDateTime.now(Policy.ZONE))) finishMonitoring();
             else if (phase == Policy.Phase.CHECKOUT && !ChromeAttendanceService.busy())
@@ -210,6 +230,7 @@ public final class MonitorService extends Service implements LocationListener {
     @Override public void onStatusChanged(String provider, int status, Bundle extras) {}
     @Override public void onDestroy() {
         stopping = true; running = false; ChromeAttendanceService.cancelScheduledWork(); handler.removeCallbacksAndMessages(null);
+        if(userPresentReceiver!=null){try{unregisterReceiver(userPresentReceiver);}catch(IllegalArgumentException ignored){}userPresentReceiver=null;}
         if (locations != null) { try { locations.removeUpdates(this); } catch (SecurityException ignored) {} }
         if (connectivity != null) {
             for (ConnectivityManager.NetworkCallback watcher : new ConnectivityManager.NetworkCallback[]{callback, defaultCallback})

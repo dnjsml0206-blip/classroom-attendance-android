@@ -23,7 +23,7 @@ final class PhoneSettings {
             case NOTIFICATIONS, TEST_NOTIFICATIONS -> new Intent(c,NotificationSettingsActivity.class);
             case WIFI -> new Intent(Settings.ACTION_WIFI_SETTINGS);
             case EXTEND -> new Intent(Build.MANUFACTURER.equalsIgnoreCase("samsung")?Settings.ACTION_SETTINGS:Settings.ACTION_SECURITY_SETTINGS);
-            case SCHEDULE, AUTO_CLICK -> new Intent(c,MainActivity.class).putExtra("open_tab",1).putExtra("focus_setting","automation");
+            case SCHEDULE, AUTO_CLICK -> new Intent(c,MainActivity.class).putExtra("open_tab",2).putExtra("focus_setting","automation");
         };
     }
     private static Intent accessibility(Context c){

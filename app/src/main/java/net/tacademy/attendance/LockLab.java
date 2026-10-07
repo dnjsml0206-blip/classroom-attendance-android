@@ -46,7 +46,7 @@ public final class LockLab {
         if(!CreatorTools.testsVisible(c))throw new IllegalStateException("제작자용 앱에서 임시 테스트 메뉴를 켜 주세요.");
         expire(c);
         List<String> issues=localClick?new ArrayList<>():TrialReadiness.problems(c,mode,actual,due,scheduled);
-        if(localClick&&!ChromeAttendanceService.available())issues.add("Chrome 접근성 연결이 필요합니다. 연결 탭에서 켜 주세요.");
+        if(localClick&&!ChromeAttendanceService.available())issues.add("Chrome 접근성 연결이 필요합니다. 자동출석 탭에서 켜 주세요.");
         if(!issues.isEmpty())throw new IllegalStateException(String.join("\n",issues));
         if(ScheduledUnlock.active(c))throw new IllegalStateException("예약 출석의 잠금 해제가 진행 중입니다. 완료 후 테스트해 주세요.");
         if(ChromeAttendanceService.busy())throw new IllegalStateException("출결 처리 중입니다. 완료 후 테스트해 주세요.");
@@ -111,7 +111,7 @@ public final class LockLab {
         if(prefs(c).getBoolean("fired",false))return;
         prefs(c).edit().putBoolean("fired",true).putLong("fired_at_ms",System.currentTimeMillis()).putLong("fired_elapsed_ms",SystemClock.elapsedRealtime()).putString("execution_environment",LockLogExport.environment(c).toString()).commit();event(c,token,"실행 당시: "+snapshot(c));
         if(mode(c)==LockTestPolicy.Mode.NETWORK){stage(c,token,"화면을 깨우지 않고 기기 연결 진단");return;}
-        if(!ChromeAttendanceService.available()){finish(c,token,"Chrome 접근성 연결 끊김 · 연결 탭에서 다시 켜 주세요");return;}
+        if(!ChromeAttendanceService.available()){finish(c,token,"Chrome 접근성 연결 끊김 · 자동출석 탭에서 다시 켜 주세요");return;}
         stage(c,token,"테스트 화면 실행 요청 · 실제 표시 여부는 별도 확인");
         notice(c,"잠금 테스트 진행","화면이 열리지 않으면 알림을 눌러 비교하세요. 수동 진입은 따로 기록합니다.",true);
         try{ChromeAttendanceService.launchLockTest(c,new Intent(c,LockTrialActivity.class).putExtra(TOKEN,token).putExtra(SOURCE,source).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}

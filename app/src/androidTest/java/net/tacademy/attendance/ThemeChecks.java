@@ -102,7 +102,7 @@ public final class ThemeChecks {
                 && (activity.getWindow().getInsetsController().getSystemBarsAppearance() & WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)!=0,
                 "Settings restores its light palette and system-bar icons");
             capture("settings.png");
-            runOnMainSync(() -> clickText("연결")); settle(); capture("connection.png");
+            runOnMainSync(() -> clickText("자동출석")); settle(); capture("connection.png");
             runOnMainSync(() -> clickText("오늘")); settle();
             check(theme()==HomeTheme.NIGHT && findText(activity.getWindow().getDecorView(),"오늘 출결")!=null,"Returning to Today restores the night palette");
             restore(); result.putString("stream","PASS: "+checks+" Today theme checks. Screenshots use synthetic emulator records; no attendance action performed.\n");

@@ -65,4 +65,11 @@ public class LockdownSelectionTest {
         for(String reason:List.of("LOCKDOWN_ITEM_NOT_FOUND","LOCKDOWN_CLICK_REJECTED","LOCKDOWN_LOCK_UNCONFIRMED"))
             assertNotEquals(LockdownPolicy.resultText("LOCKDOWN_LOCK_OBSERVED"),LockdownPolicy.resultText(reason));
     }
+    @Test public void samsungFiveActionPhotoLayoutSelectsOnlyLockdown(){
+        var nodes=menu();nodes.add(node("긴급전화","",true,0,"emergency"));
+        nodes.add(node("","",true,0,"lock"));nodes.add(node("잠금 모드","",false,4,"label"));
+        nodes.add(node("의료정보","",true,0,"medical"));nodes.add(node("측면 버튼 설정","",true,0,"settings"));
+        assertEquals(4,select(nodes).target());assertEquals(1,select(nodes).candidates());
+        nodes.remove(5);assertEquals(-1,select(nodes).target());
+    }
 }
