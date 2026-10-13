@@ -11,7 +11,7 @@ final class ExtendUnlockSettings extends LinearLayout {
         android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable(); bg.setColor(0xFFFFFFFF); bg.setCornerRadius(pad); setBackground(bg); LinearLayout.LayoutParams outer=new LinearLayout.LayoutParams(-1,-2); outer.bottomMargin=pad; setLayoutParams(outer); setPadding(pad,pad,pad,pad); setTag("extend-unlock-optional");
         Prefs p=new Prefs(a);
         LinearLayout heading=new LinearLayout(a); heading.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title=new TextView(a);title.setText("Extend Unlock · 선택 설정");title.setTextSize(16);title.setTextColor(0xFF183631);title.setTypeface(null,1);
+        TextView title=new TextView(a);title.setText("Extend Unlock · 선택 설정");title.setTextSize(16);title.setTextColor(0xFF183631);title.setTypeface(null,android.graphics.Typeface.BOLD);
         heading.addView(title,new LayoutParams(0,-2,1));
         Button help=new Button(a);help.setText("?");help.setContentDescription("Extend Unlock 설명 보기");heading.addView(help,new LayoutParams(pad*3,pad*3));addView(heading);
         help.setOnClickListener(v->new AlertDialog.Builder(a).setTitle("Extend Unlock이란?")
