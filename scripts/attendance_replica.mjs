@@ -22,6 +22,7 @@ async function respond(e,sid){
    const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
    body=html.replaceAll('__TODAY__',snapshot.case==='wrong-date'?'2000-01-01':day);
    if(snapshot.case==='already-in-ready')body='<meta name="viewport" content="width=device-width"><h2>수강생 출결관리</h2><p>출결일 : '+day+'</p><input type="button" value="입실시간 : 08:45:00"><input type="button" value="퇴실">';
+   if(snapshot.case==='passive-complete')body='<meta name="viewport" content="width=device-width"><h2>수강생 출결관리</h2><p>출결일 : '+day+'</p><input type="button" value="입실시간 : 08:45:00"><input type="button" value="퇴실시간 : 17:50:05">';
    if(snapshot.case==='checkout-unknown-alert')body=body.replaceAll('location.reload();','alert("재현 시험: 원인을 알 수 없는 안내");location.reload();');
    if(snapshot.case==='checkout-reappeared')body=body.replace('var strCodeO  =', 'confirm("정말로 퇴실 하시겠습니까?"); var strCodeO  =');
    if(snapshot.case==='auth')body=body.replace("CstrCode:'replica-student'","CstrCode:null");
@@ -71,6 +72,8 @@ ws.onmessage=({data})=>{const m=JSON.parse(data);if(m.id){let p=pending.get(m.id
  if(m.method==='Page.javascriptDialogClosed')record({dialogClosed:true,accepted:m.params.result});
 };
 function fatal(e){errors.push(String(e));console.error(e);}
+const browserArgs=await cmd('Browser.getBrowserCommandLine');
+if(!browserArgs.arguments.some(a=>a.startsWith('--host-resolver-rules=') && a.includes('MAP * ~NOTFOUND')))throw new Error('External DNS blocking is required for replica');
 await cmd('Target.setAutoAttach',{autoAttach:true,waitForDebuggerOnStart:true,flatten:true});
 await pause(500);
 const server=http.createServer(async(req,res)=>{try{

@@ -7,6 +7,7 @@ final class UnlockPolicy {
         WAKE("화면 깨우기"), TRUST("Extend Unlock · 신뢰 상태"), AUTH("시스템 인증 요청");
         final String label; Mode(String label){this.label=label;}
     }
+    static Mode automaticMode(boolean extend) { return extend?Mode.TRUST:Mode.WAKE; }
     static Mode mode(String value){try{return Mode.valueOf(value);}catch(RuntimeException e){return Mode.TRUST;}}
     static boolean canAttempt(String today,String previous){return today.compareTo(previous)>0;}
     static boolean live(String expected,String actual,boolean active,int boot,int savedBoot,long now,long started){

@@ -173,4 +173,15 @@ public final class SetupGuidePolicyTest {
         assertFalse(SetupGuidePolicy.canLaunchQuick(SetupGuidePolicy.QuickAction.EXTEND,true,false,true));
         assertFalse(SetupGuidePolicy.canLaunchQuick(SetupGuidePolicy.QuickAction.CHROME,true,false,true));
     }
+
+    @Test public void optionalExtendDoesNotBlockReadyOrQuickSetup() {
+        var s=new SetupGuidePolicy.Snapshot(true,true,true,true,true,true,true,true,true,false,false,false,false,false);
+        assertTrue(SetupGuidePolicy.readyToEnable(s));
+        assertEquals(SetupGuidePolicy.QuickAction.RESERVATION,SetupGuidePolicy.nextQuick(s,false));
+    }
+    @Test public void selectingExtendStillRequiresSecureLockAndConfirmation() {
+        var s=new SetupGuidePolicy.Snapshot(true,true,true,true,true,true,true,true,true,false,false,false,false,true);
+        assertFalse(SetupGuidePolicy.readyToEnable(s));
+        assertEquals(SetupGuidePolicy.QuickAction.SECURE_LOCK,SetupGuidePolicy.nextQuick(s,false));
+    }
 }

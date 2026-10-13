@@ -16,6 +16,7 @@ public final class Prefs {
         if (!raw.getBoolean("chrome_backend", false))
             raw.edit().putBoolean("chrome_backend", true).remove("auth").remove("pending").apply();
     }
+    boolean useExtendUnlock() { return raw.getBoolean("use_extend_unlock", raw.getBoolean("setup_extend_confirmed", false) || "TRUST".equals(raw.getString("scheduled_lock_mode",""))); }
     private void migrateSchedule() {
         if (raw.getInt("schedule_version", 0) >= 2) return;
         SharedPreferences.Editor edit = raw.edit().putInt("schedule_version", 2);
@@ -40,7 +41,11 @@ public final class Prefs {
     public boolean guidanceNotifications() { return raw.getBoolean("guidance_notifications",true); }
     public boolean screenOffAfterAttendance() { return raw.getBoolean("screen_off_after_attendance",true); }
     public boolean lockdownAfterAttendance() { return raw.getBoolean("lockdown_after_attendance",true); }
+    /** Enabling automatic attendance also enables its presentation and completion options. */
+    void enableAutomaticClick() { raw.edit().putBoolean("auto",true).putBoolean("show_processing_screen",true)
+        .putBoolean("screen_off_after_attendance",true).putBoolean("lockdown_after_attendance",true).apply(); }
     public boolean showProcessingScreen() { return raw.getBoolean("show_processing_screen",true); }
+    public boolean passiveRecords() { return PassiveRecordPolicy.enabled(enabled(),auto()); }
     public boolean auto() { return raw.getBoolean("auto", false); }
     public String start() { return raw.getString("start", "08:30"); }
     public String end() { return raw.getString("end", "09:30"); }

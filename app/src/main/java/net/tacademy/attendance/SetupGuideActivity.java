@@ -30,7 +30,7 @@ public final class SetupGuideActivity extends Activity {
         return new SetupGuidePolicy.Snapshot(p.raw.getBoolean(CHROME,false),!p.ssids().isEmpty(),!p.days().isEmpty()&&Policy.validSchedule(p.start(),p.end(),p.checkout(),p.retryMinutes()),
             ChromeAttendanceService.available(),fine,ScheduleController.backgroundLocationAllowed(c),Build.VERSION.SDK_INT<28||c.getSystemService(LocationManager.class).isLocationEnabled(),
             AlarmScheduler.allowed(c),Notices.attendanceNotificationsAllowed(c),c.getSystemService(KeyguardManager.class).isDeviceSecure(),
-            p.raw.getBoolean(EXTEND,false)&&ScheduledUnlock.mode(c)==UnlockPolicy.Mode.TRUST,p.enabled(),p.auto());
+            p.raw.getBoolean(EXTEND,false)&&ScheduledUnlock.mode(c)==UnlockPolicy.Mode.TRUST,p.enabled(),p.auto(),p.useExtendUnlock());
     }
     static void open(Activity a){a.startActivityForResult(new Intent(a,SetupGuideActivity.class),REQUEST);}
     @Override public void onCreate(Bundle saved){
@@ -61,7 +61,7 @@ public final class SetupGuideActivity extends Activity {
         for(int i=0;i<5;i++){final int index=i;Button b=button((complete[i]?"✓ ":"")+(i+1),i==step,()->go(index),"setup-step-"+i);b.setContentDescription((i+1)+"단계 "+NAMES[i]+(complete[i]?" 확인됨":" 미확인"));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(44),1);lp.setMargins(dp(3),0,dp(3),0);steps.addView(b,lp);}root.addView(steps);
         scroll=new ScrollView(this);body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(22),dp(12),dp(22),dp(20));scroll.addView(body);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         TextView title=text((step+1)+". "+NAMES[step],26,INK,true);title.setTag("setup-title");body.addView(title);space(body,8);
-        String[] leads={"평소 쓰던 Chrome 인증을 그대로 연결해요.","앱이 Chrome의 입실·퇴실 버튼을 누를 수 있게 해요.","설정 화면에서 선택하고 돌아오면 자동으로 확인해요.","화면이 꺼져 있어도 신뢰 상태에서 자동 처리를 이어가요.","마지막으로 확인하고 출석 예약을 켜세요."};body.addView(text(leads[step],14,MUTED,false));space(body,16);
+        String[] leads={"평소 쓰던 Chrome 인증을 그대로 연결해요.","앱이 Chrome의 입실·퇴실 버튼을 누를 수 있게 해요.","설정 화면에서 선택하고 돌아오면 자동으로 확인해요.","Extend Unlock 사용 여부를 선택하세요. 사용하지 않아도 예약할 수 있어요.","마지막으로 확인하고 출석 예약을 켜세요."};body.addView(text(leads[step],14,MUTED,false));space(body,16);
         switch(step){case 0->connection(state);case 1->access(state);case 2->permissions(state);case 3->trust(state);default->finishSetup(state);}
         LinearLayout bottom=new LinearLayout(this);bottom.setPadding(dp(18),dp(10),dp(18),dp(10));bottom.setBackgroundColor(0xFFFFFFFF);
         Button prev=button(step==0?"나중에":"이전",false,()->{if(step==0)finish();else go(step-1);},"setup-prev");bottom.addView(prev,new LinearLayout.LayoutParams(0,dp(52),1));
@@ -75,10 +75,11 @@ public final class SetupGuideActivity extends Activity {
         scroll=new ScrollView(this);body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(22),dp(12),dp(22),dp(20));scroll.addView(body);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         TextView title=text(quickStarted?quickTitle(action):"한 번 시작하면\n필요한 설정만 이어서",26,INK,true);title.setTag("setup-title");body.addView(title);space(body,10);
         TextView progress=text("확인 "+SetupGuidePolicy.completedCount(state)+" / 5단계 · 완료된 설정은 건너뛰어요",13,TEAL,true);progress.setTag("setup-progress");body.addView(progress);space(body,16);
+        body.addView(new ExtendUnlockSettings(this,()->render(false)));
         if(!quickStarted){
             LinearLayout intro=card("설정 화면을 찾아다닐 필요 없어요","기존 설정 그대로 유지",true);
             note(intro,"시작하면 필요한 권한 화면만 순서대로 열어요. 허용 후 돌아오면 다음 설정으로 이어집니다.");
-            note(intro,"휴대폰 권한은 직접 허용해야 해요. Chrome 인증과 Extend Unlock은 마지막에 직접 확인하며, 예약은 최종 확인 전까지 켜지지 않아요.");
+            note(intro,"휴대폰 권한은 직접 허용해야 해요. Chrome 인증과 선택한 Extend Unlock은 마지막에 직접 확인하며, 예약은 최종 확인 전까지 켜지지 않아요.");
             note(intro,"등록 Wi-Fi: "+(prefs.ssids().isEmpty()?"등록 필요":String.join(" · ",prefs.ssids()))+"\n입실 "+prefs.start()+"–"+prefs.end()+" · 기본 퇴실 "+Policy.checkoutStartTime(prefs.checkout()));
         }else{
             LinearLayout current=card(quickTitle(action),quickPending==action?"확인 중 · 미허용이면 다시 눌러 주세요":action==SetupGuidePolicy.QuickAction.CHROME||action==SetupGuidePolicy.QuickAction.EXTEND?"직접 확인 필요":"지금 필요한 설정",false);
@@ -201,6 +202,8 @@ public final class SetupGuideActivity extends Activity {
         if(!battery)check(power,"휴대폰에서 배터리 제한을 확인했어요","setup_battery_confirmed",true);
     }
     private void trust(SetupGuidePolicy.Snapshot s){
+        body.addView(new ExtendUnlockSettings(this,()->render(false)));
+        if(!prefs.useExtendUnlock())return;
         LinearLayout box=card("Extend Unlock · 예전 Smart Lock",s.extendConfirmed()?"직접 확인함":"직접 설정 필요",s.extendConfirmed());
         note(box,"1  PIN·패턴·비밀번호 잠금을 설정하세요.\n2  Extend Unlock에서 강의실을 ‘신뢰할 수 있는 장소’로 등록하세요.\n3  PIN 등으로 한 번 해제한 뒤 신뢰 장소에서 시험하세요.");
         note(box,"신뢰하는 Bluetooth 기기를 사용할 수도 있어요. Wi-Fi 등록과 신뢰 장소 등록은 별개예요.");
@@ -230,7 +233,7 @@ public final class SetupGuideActivity extends Activity {
         var s=snapshot(this);if(!SetupGuidePolicy.readyToEnable(s)){go(SetupGuidePolicy.nextStep(s));return;}
         if(s.enabled()&&s.autoClick()){setResult(Activity.RESULT_FIRST_USER);finish();return;}
         new AlertDialog.Builder(this).setTitle("자동출석 예약을 켤까요?")
-            .setMessage("출석 예약과 Chrome 자동 클릭을 함께 켭니다. 현재 출석 시간과 Wi-Fi 조건이 맞으면 5초 뒤 실제 입실·퇴실 처리를 시도할 수 있어요.")
+            .setMessage("출석 예약·자동 클릭·처리 안내 화면·완료 후 화면 끄기·잠금 모드를 함께 켭니다. 잠금 모드 후에는 PIN 등으로 한 번 해제해야 해요. 현재 출석 시간과 Wi-Fi 조건이 맞으면 5초 뒤 실제 입실·퇴실 처리를 시도할 수 있어요.")
             .setNegativeButton("아직",null).setPositiveButton("예약 켜기",(d,w)->{if(!SetupGuidePolicy.readyToEnable(snapshot(this))){go(SetupGuidePolicy.nextStep(snapshot(this)));return;}if(busy())return;setResult(Activity.RESULT_OK);finish();}).show();
     }
     private boolean busy(){if(ChromeAttendanceService.busy()||ChromeAttendanceService.otherUiBusy()||ScheduledUnlock.active(this)||ActivationRun.pending()){Toast.makeText(this,"진행 중인 출결·화면 작업이 끝난 뒤 다시 눌러 주세요",Toast.LENGTH_LONG).show();return true;}return false;}

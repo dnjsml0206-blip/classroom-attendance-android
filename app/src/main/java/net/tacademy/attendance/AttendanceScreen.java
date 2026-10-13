@@ -38,18 +38,10 @@ final class AttendanceScreen {
         if(!automatic||!new Prefs(service).showProcessingScreen())return;
         KeyguardManager keyguard=service.getSystemService(KeyguardManager.class);
         if(keyguard.isKeyguardLocked()||keyguard.isDeviceLocked()||!service.getSystemService(PowerManager.class).isInteractive())return;
-        LinearLayout view=new LinearLayout(service);view.setOrientation(LinearLayout.VERTICAL);view.setGravity(Gravity.CENTER);
-        view.setBackgroundColor(Color.rgb(248,247,244));view.setPadding(dp(32),dp(24),dp(32),dp(24));
-        // Only the explicit reveal button dismisses this page; a touch never passes through to Chrome.
-        view.setClickable(true);
-        ProgressBar progress=new ProgressBar(service);view.addView(progress,new LinearLayout.LayoutParams(dp(32),dp(32)));
-        TextView title=new TextView(service);title.setText("출결 처리 중");title.setTextSize(22);title.setTextColor(Color.rgb(51,58,66));
-        title.setGravity(Gravity.CENTER);title.setPadding(0,dp(24),0,dp(12));view.addView(title);
-        TextView hint=new TextView(service);hint.setText(new Prefs(service).screenOffAfterAttendance()?"완료되면 화면이 꺼져요":"잠시만 기다려 주세요");
-        hint.setTextSize(15);hint.setTextColor(Color.rgb(111,118,125));hint.setGravity(Gravity.CENTER);view.addView(hint);
-        Button reveal=new Button(service);reveal.setText("Chrome 화면 보기");reveal.setAllCaps(false);
-        LinearLayout.LayoutParams button=new LinearLayout.LayoutParams(-2,-2);button.topMargin=dp(32);view.addView(reveal,button);
-        reveal.setOnClickListener(v->reveal("USER_REVEALED"));
+        ProcessingPage view=new ProcessingPage(service,phase,"출결 처리 중",
+            new Prefs(service).screenOffAfterAttendance()?"완료되면 화면을 끄고 알려드릴게요":"완료 시각이 확인되면 알림으로 알려드릴게요",
+            "Chrome 화면 보기",()->reveal("USER_REVEALED"));
+        // Touches are consumed by this page; only its explicit button reveals Chrome.
         WindowManager.LayoutParams p=new WindowManager.LayoutParams(-1,-1,WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,PixelFormat.OPAQUE);
         p.gravity=Gravity.TOP|Gravity.START;p.setTitle("출석 메이트 · 출결 처리 중");

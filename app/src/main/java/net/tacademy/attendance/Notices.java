@@ -35,13 +35,20 @@ public final class Notices {
     }
     /** A confirmed entry and exit each keep their own notification, independently of monitoring. */
     public static void attendanceCompleted(Context context, String day, Policy.Phase phase, Policy.Record record) {
+        attendanceResult(context,day,phase,record,false);
+    }
+    static void attendanceObserved(Context context,String day,Policy.Phase phase,Policy.Record record){
+        attendanceResult(context,day,phase,record,true);
+    }
+    private static void attendanceResult(Context context,String day,Policy.Phase phase,Policy.Record record,boolean observed){
         if (phase == Policy.Phase.IDLE || !record.checkedIn() ||
                 (phase == Policy.Phase.CHECKOUT && !record.checkedOut())) return;
         java.time.LocalDate date = java.time.LocalDate.parse(day);
         if (record.checkedOut()) clearDeparture(context,day);
         String title = phase == Policy.Phase.ENTRY ? "입실 완료" : AttendanceMetrics.isEarly(record.out(),new Prefs(context).checkoutFor(date)) ? "조퇴 완료" : "퇴실 완료";
         String time = phase == Policy.Phase.ENTRY ? record.in() : record.out();
-        String detail = date + " · Chrome 사이트 기록 " + time;
+        if(observed)title=phase==Policy.Phase.ENTRY?"입실 기록 저장됨":"퇴실 기록 저장됨";
+        String detail = date + (observed?" · Chrome 화면에서 확인한 시각 ":" · Chrome 사이트 기록 ") + time;
         int id = phase == Policy.Phase.ENTRY ? ENTRY_RESULT : CHECKOUT_RESULT;
         channels(context);
         Notification notification = new Notification.Builder(context, "result").setSmallIcon(R.drawable.ic_notification)

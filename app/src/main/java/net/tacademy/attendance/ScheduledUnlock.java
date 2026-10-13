@@ -13,7 +13,7 @@ final class ScheduledUnlock {
     static final String TOKEN="scheduled_unlock_token";
     private static final Handler MAIN=new Handler(Looper.getMainLooper());
     static SharedPreferences store(Context c){return c.getSharedPreferences("scheduled_unlock",Context.MODE_PRIVATE);}
-    static UnlockPolicy.Mode mode(Context c){return UnlockPolicy.mode(new Prefs(c).raw.getString("scheduled_lock_mode","TRUST"));}
+    static UnlockPolicy.Mode mode(Context c){return UnlockPolicy.automaticMode(new Prefs(c).useExtendUnlock());}
     private static int boot(Context c){return Settings.Global.getInt(c.getContentResolver(),Settings.Global.BOOT_COUNT,-1);}
     static String token(Context c){return store(c).getString("token","");}
     static Policy.Phase phase(Context c){try{return Policy.Phase.valueOf(store(c).getString("phase","IDLE"));}catch(RuntimeException e){return Policy.Phase.IDLE;}}
@@ -40,6 +40,7 @@ final class ScheduledUnlock {
     }
     static void request(Context context,Policy.Phase phase){
         Context c=context.getApplicationContext();Prefs p=new Prefs(c);
+        if(p.passiveRecords())return;
         if(active(c))return;
         if(store(c).getBoolean("active",false))stop(c,token(c),"WAKE_EXPIRED",false);
         if(!p.auto()||phase==Policy.Phase.IDLE)return;

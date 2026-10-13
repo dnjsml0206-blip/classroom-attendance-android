@@ -8,13 +8,21 @@ final class SetupGuidePolicy {
     record Snapshot(boolean chromeConfirmed, boolean wifiRegistered, boolean scheduleValid,
                     boolean accessibility, boolean preciseLocation, boolean backgroundLocation,
                     boolean locationOn, boolean alarms, boolean notifications, boolean secureLock,
-                    boolean extendConfirmed, boolean enabled, boolean autoClick) {}
+                    boolean extendConfirmed, boolean enabled, boolean autoClick, boolean extendRequired) {
+        Snapshot(boolean chromeConfirmed, boolean wifiRegistered, boolean scheduleValid,
+                 boolean accessibility, boolean preciseLocation, boolean backgroundLocation,
+                 boolean locationOn, boolean alarms, boolean notifications, boolean secureLock,
+                 boolean extendConfirmed, boolean enabled, boolean autoClick) {
+            this(chromeConfirmed,wifiRegistered,scheduleValid,accessibility,preciseLocation,
+                backgroundLocation,locationOn,alarms,notifications,secureLock,extendConfirmed,enabled,autoClick,true);
+        }
+    }
 
     static boolean[] completed(Snapshot s) {
         boolean first = s.chromeConfirmed() && s.wifiRegistered() && s.scheduleValid();
         boolean permissions = s.preciseLocation() && s.backgroundLocation() && s.locationOn()
             && s.alarms() && s.notifications();
-        boolean trust = s.secureLock() && s.extendConfirmed();
+        boolean trust = !s.extendRequired() || (s.secureLock() && s.extendConfirmed());
         boolean ready = first && s.accessibility() && permissions && trust;
         return new boolean[]{first, s.accessibility(), permissions, trust,
             ready && s.enabled() && s.autoClick()};
@@ -50,9 +58,9 @@ final class SetupGuidePolicy {
         if (!s.accessibility()) return QuickAction.ACCESSIBILITY;
         if (!s.alarms()) return QuickAction.ALARMS;
         if (!s.notifications()) return QuickAction.NOTIFICATIONS;
-        if (!s.secureLock()) return QuickAction.SECURE_LOCK;
-        if (!trustMode) return QuickAction.TRUST_MODE;
-        if (!s.extendConfirmed()) return QuickAction.EXTEND;
+        if (s.extendRequired() && !s.secureLock()) return QuickAction.SECURE_LOCK;
+        if (s.extendRequired() && !trustMode) return QuickAction.TRUST_MODE;
+        if (s.extendRequired() && !s.extendConfirmed()) return QuickAction.EXTEND;
         if (!s.chromeConfirmed()) return QuickAction.CHROME;
         return QuickAction.RESERVATION;
     }

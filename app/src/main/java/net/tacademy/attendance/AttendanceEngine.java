@@ -15,6 +15,7 @@ public final class AttendanceEngine {
             MAIN.post(() -> request(context, force, finished)); return;
         }
         Prefs prefs = new Prefs(context);
+        if(prefs.passiveRecords()){if(finished!=null)finished.run();return;}
         if(ActivationRun.pending()||ScheduledUnlock.active(context)){if(finished!=null)finished.run();return;}
         ZonedDateTime now = ZonedDateTime.now(Policy.ZONE);
         Policy.Phase phase = prefs.phase(now);

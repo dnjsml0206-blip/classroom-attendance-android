@@ -18,6 +18,14 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final AttendanceScreen screen = new AttendanceScreen(this);
     private Runnable finished;
+    private SharedPreferences observationPrefs;
+    private boolean passiveQueued;
+    private final Runnable passiveRead=()->{passiveQueued=false;observePassiveRecord();};
+    private final SharedPreferences.OnSharedPreferenceChangeListener observationSettings=(store,name)->{
+        if(!"enabled".equals(name)&&!"auto".equals(name))return;
+        if(new Prefs(this).passiveRecords()&&this.working&&!this.manualSession){screen.cancel();finishWork();}
+        events(this.working||otherUiBusy());
+    };
     private String lockProbe="", lockAttendanceToken="";
     private final Set<String> lockTrace=new HashSet<>();
     private long lockProbeUntil;
@@ -90,16 +98,23 @@ public final class ChromeAttendanceService extends AccessibilityService {
     public static boolean busy() { return instance != null && (instance.working||instance.screen.busy()); }
     static boolean otherUiBusy() { return instance != null && (instance.screen.busy() || instance.navigatingWifi || instance.settingsTarget != null || !instance.lockProbe.isEmpty()); }
     @Override protected void onServiceConnected() {
-        instance = this; events(false);
+        instance = this;
+        observationPrefs=new Prefs(this).raw;
+        observationPrefs.registerOnSharedPreferenceChangeListener(observationSettings);
+        events(false);
         Prefs p=new Prefs(this);DiagnosticLog.add(this,DiagnosticLog.Event.ACCESSIBILITY_CONNECTED,p.phase(ZonedDateTime.now(Policy.ZONE)),"SERVICE_CONNECTED");
         if(p.auto()&&p.monitoringNeeded(ZonedDateTime.now(Policy.ZONE)))handler.post(()->AttendanceEngine.request(this,true,null));
     }
     private void events(boolean enabled) {
         AccessibilityServiceInfo info = getServiceInfo();
         if (info != null) {
-            info.eventTypes = enabled ? AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED | AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+            boolean passive=new Prefs(this).passiveRecords();
+            info.eventTypes = enabled || passive ? AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED | AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
                 | AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED | AccessibilityEvent.TYPE_VIEW_SCROLLED | AccessibilityEvent.TYPE_WINDOWS_CHANGED : 0;
+            info.packageNames=enabled?new String[]{"com.android.chrome","com.android.settings","com.android.permissioncontroller","com.google.android.permissioncontroller"}:new String[]{"com.android.chrome"};
             setServiceInfo(info);
+            if(!enabled&&passive)queuePassiveRead();
+            else{handler.removeCallbacks(passiveRead);passiveQueued=false;}
         }
     }
     public static boolean openChrome(Context context, String url) {
@@ -153,6 +168,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     private static void begin(Context context,Runnable done,Policy.Phase target,boolean manual,boolean readOnly,boolean retryApproved,boolean earlyApproved) {
         if (LockLab.readOnlyActive(context)) { DiagnosticLog.add(context,DiagnosticLog.Event.WAITING,new Prefs(context).phase(ZonedDateTime.now(Policy.ZONE)),"READ_ONLY_TRIAL_ACTIVE");if (done != null) done.run(); return; }
         Prefs prefs = new Prefs(context);
+        if(!manual&&prefs.passiveRecords()){if(done!=null)done.run();return;}
         if (instance == null) {
             DiagnosticLog.add(context,DiagnosticLog.Event.WAITING,prefs.phase(ZonedDateTime.now(Policy.ZONE)),"ACCESSIBILITY_UNAVAILABLE");
             prefs.status("Chrome 접근성 연결 필요", "자동출석 탭에서 출석 메이트 접근성을 켜 주세요");
@@ -202,12 +218,62 @@ public final class ChromeAttendanceService extends AccessibilityService {
         service.handler.postDelayed(service.tick, 1200);
     }
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
+        if(!working&&"com.android.chrome".equals(string(event.getPackageName())))queuePassiveRead();
         if(settingsTarget!=null){return;} // The bounded settings poll owns only explicitly requested menu navigation.
         if (navigatingWifi && "com.android.settings".equals(string(event.getPackageName()))) { navigateWifi(); return; }
         if (working && "com.android.chrome".equals(string(event.getPackageName()))) {
             lastChromeEventAt=SystemClock.elapsedRealtime();
             if(!eventReadQueued){eventReadQueued=true;handler.postDelayed(eventInspect,80);}
         }
+    }
+    private void queuePassiveRead(){
+        if(passiveQueued||working||otherUiBusy()||!new Prefs(this).passiveRecords())return;
+        passiveQueued=true;handler.postDelayed(passiveRead,250);
+    }
+    private void observePassiveRecord(){
+        Prefs p=new Prefs(this);
+        if(!p.passiveRecords()||working||otherUiBusy()||ScheduledUnlock.active(this)||ActivationRun.pending()||LockLab.readOnlyActive(this))return;
+        KeyguardManager lock=getSystemService(KeyguardManager.class);
+        if(!getSystemService(PowerManager.class).isInteractive()||lock.isKeyguardLocked()||lock.isDeviceLocked())return;
+        try {
+            if(Build.VERSION.SDK_INT>=33)clearCache();
+            AccessibilityNodeInfo root=getRootInActiveWindow();
+            if(root==null||!"com.android.chrome".equals(string(root.getPackageName())))return;
+            if(Build.VERSION.SDK_INT<33&&!root.refresh())return;
+            List<AccessibilityNodeInfo> nodes=new ArrayList<>();collect(root,nodes,0);
+            String address="";boolean web=false;
+            for(AccessibilityNodeInfo node:nodes)if(node.isVisibleToUser()){
+                if("com.android.chrome:id/url_bar".equals(node.getViewIdResourceName())){
+                    if(node.isFocused())return; // Do not parse omnibox edits or suggested pages.
+                    address=string(node.getText());
+                }
+                if("android.webkit.WebView".equals(string(node.getClassName())))web=true;
+            }
+            if(!web||!ChromePage.attendanceAddress(address))return;
+            LocalDate date=LocalDate.now(Policy.ZONE);Policy.Record old=p.history(date);
+            Policy.Record observed=PassiveRecordPolicy.read(address,allText(nodes),date,old);
+            if(observed==null)return;
+            String today=date.toString();p.record(today,observed);
+            p.raw.edit().putString("record_source:"+today,"PASSIVE_CHROME_OBSERVATION").apply();
+            boolean entry=old==null||!old.checkedIn();
+            boolean checkout=observed.checkedOut()&&(old==null||!old.checkedOut());
+            if(entry)passiveSaved(p,today,Policy.Phase.ENTRY,observed);
+            if(checkout)passiveSaved(p,today,Policy.Phase.CHECKOUT,observed);
+        }catch(RuntimeException ignored){
+            // Unavailable accessibility content is not evidence of attendance. Wait for another event.
+        }
+    }
+    private void passiveSaved(Prefs p,String today,Policy.Phase phase,Policy.Record record){
+        String label=phase==Policy.Phase.ENTRY?"입실":"퇴실",time=phase==Policy.Phase.ENTRY?record.in():record.out();
+        p.log(label+" 기록 저장 "+time+" · Chrome에서 확인");
+        p.attendanceHint(today,phase,"");
+        if((today+":"+phase).equals(p.raw.getString("chrome_pending","")))p.raw.edit().remove("chrome_pending").remove("chrome_pending_at").apply();
+        p.status(label+" 기록 저장됨 · "+time,"사용자가 연 Chrome 출결 화면에서 확인했어요");
+        org.json.JSONObject details=new org.json.JSONObject();
+        try{details.put("record_source","PASSIVE_CHROME_OBSERVATION").put("read_only",true)
+            .put("click_attempted",false).put("attendance_day",today).put("entry_time",record.in()).put("checkout_time",record.out());}catch(org.json.JSONException ignored){}
+        DiagnosticLog.add(this,DiagnosticLog.Event.RECORD_CONFIRMED,phase,"PASSIVE_SITE_TIME_OBSERVED",details);
+        Notices.attendanceObserved(this,today,phase,record);
     }
     private void inspect() {
         if(!working)return;
@@ -805,6 +871,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     }
     @Override public void onInterrupt() { if(working)diagnostic("ACCESSIBILITY_INTERRUPTED",true);screen.cancel();endSettingsMenu(false); endLockProbe("접근성 연결 중단"); finishWork(); }
     @Override public void onDestroy() {
+        if(observationPrefs!=null)observationPrefs.unregisterOnSharedPreferenceChangeListener(observationSettings);
         if(working)diagnostic("ACCESSIBILITY_SERVICE_DESTROYED",true);screen.cancel();
         endSettingsMenu(false); endLockProbe("접근성 연결 종료"); finishWork(); navigatingWifi = false; handler.removeCallbacksAndMessages(null); instance = null; super.onDestroy();
     }

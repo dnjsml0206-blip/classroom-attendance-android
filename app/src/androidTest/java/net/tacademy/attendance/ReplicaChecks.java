@@ -34,6 +34,9 @@ final class ReplicaChecks {
         }finally{automation.dropShellPermissionIdentity();}
         await(()->ChromeAttendanceService.available(),8000,"Accessibility connected");
         main=test.startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
+        if(scenario.equals("passive")){
+            runPassive();save();restore();result.putString("stream","PASS: "+count+" passive Chrome checks; local responses only.\n");test.finish(Activity.RESULT_OK,result);return;
+        }
         String ssid=NetworkAccess.inspect(c).ssid();check(!ssid.isEmpty(),"Observed emulator Wi-Fi name");
         boolean checkout=scenario.startsWith("checkout");
         boolean screenOff="true".equals(args.getString("screen")),processing="true".equals(args.getString("processing")),automatic="true".equals(args.getString("automatic"));
@@ -59,9 +62,9 @@ final class ReplicaChecks {
             await(()->processingText("출결 처리 중")!=null,3000,"The processing page displays its title");
             Bitmap image=test.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES).takeScreenshot();
             check(image!=null,"Processing page screenshot is available");
-            int light=0,total=0;
-            for(int y=image.getHeight()/4;y<image.getHeight()*3/4;y+=20)for(int x=image.getWidth()/4;x<image.getWidth()*3/4;x+=20){int color=image.getPixel(x,y);total++;if(android.graphics.Color.red(color)>235&&android.graphics.Color.green(color)>235&&android.graphics.Color.blue(color)>235)light++;}
-            check(light>total*0.75,"A light processing page is visible while Chrome works");
+            int background=checkout?HomeTheme.NIGHT.background:HomeTheme.WARM.background,matching=0,total=0;
+            for(int y=image.getHeight()/8;y<image.getHeight()*7/8;y+=20)for(int x=image.getWidth()/8;x<image.getWidth()*7/8;x+=20){int color=image.getPixel(x,y);total++;if(color==background)matching++;}
+            check(matching>total*.4,"The themed processing page is visible while Chrome works");
             File pictures=new File(c.getExternalFilesDir(null),"replica");pictures.mkdirs();try(var f=new FileOutputStream(new File(pictures,scenario+"-processing.png"))){image.compress(Bitmap.CompressFormat.PNG,100,f);}image.recycle();
             if(reveal){
                 var target=processingText("Chrome 화면 보기");check(target!=null,"Processing page offers Chrome reveal");
@@ -199,6 +202,34 @@ final class ReplicaChecks {
         }
         save();restore();result.putString("stream","PASS: "+count+" replica checks ("+scenario+"). Production service, local responses only.\n");test.finish(Activity.RESULT_OK,result);
     }catch(Throwable e){try{save();restore();}catch(Throwable ignored){}result.putString("stream","FAIL: "+scenario+": "+e+"\n");test.finish(Activity.RESULT_CANCELED,result);}}
+    private void runPassive()throws Exception{
+        Prefs p=new Prefs(c);LocalDate day=LocalDate.now(Policy.ZONE);
+        ui(()->{p.raw.edit().putBoolean("enabled",false).putBoolean("auto",true).putStringSet("days",Set.of()).commit();ScheduleController.reconcile(c);});
+        showPassive("already-in-ready");
+        await(()->p.history(day)!=null&&p.history(day).checkedIn(),10000,"Reservation OFF observes entry without opening app or pressing lookup");
+        check(p.history(day).in().equals("08:45:00")&&!ChromeAttendanceService.busy(),"Saved site time without an automation session");
+        String log=p.todayLog();int records=countEvent("RECORD_CONFIRMED");
+        showPassive("already-in-ready");SystemClock.sleep(1800);
+        check(p.todayLog().equals(log)&&records==countEvent("RECORD_CONFIRMED"),"Repeated visible record produces no duplicate log or completion event");
+        ui(()->{p.raw.edit().putBoolean("enabled",true).putBoolean("auto",false).commit();ScheduleController.reconcile(c);});
+        check(!p.raw.contains("next_alarm"),"Automatic-click OFF cancels attendance alarms");
+        showPassive("passive-complete");
+        await(()->p.history(day).checkedOut(),10000,"Automatic-click OFF observes checkout while reservation remains enabled");
+        check(p.history(day).out().equals("17:50:05"),"Checkout uses site time");
+        showPassive("already-in-ready");SystemClock.sleep(1800);
+        check(p.history(day).checkedOut(),"Partial page does not erase recorded checkout");
+        ui(()->{p.raw.edit().putBoolean("auto",true).remove("record:"+day).remove("record_day").remove("in").remove("out").commit();});
+        showPassive("passive-complete");SystemClock.sleep(1800);
+        check(p.history(day)==null,"Passive observer stops when full automatic mode is ON");
+        ui(()->p.enabled(false));
+        await(()->p.history(day)!=null&&p.history(day).checkedOut(),10000,"Turning OFF takes effect without reconnecting accessibility");
+        for(String event:new String[]{"CHROME_OPEN_REQUEST","BUTTON_REQUEST","CONFIRM_REQUEST","SCREEN_OFF_REQUEST","WAKE_REQUESTED","LOCKDOWN_REQUEST"})check(countEvent(event)==0,"No autonomous "+event);
+        JSONObject state=control("/state");check(state.getInt("entries")==0&&state.getInt("exits")==0&&state.getBoolean("armed"),"No attendance submission; all browser loads stayed inside fixture");
+    }
+    private void showPassive(String fixture)throws Exception{
+        check(control("/reset?case="+fixture).optBoolean("armed"),"Local fixture remains armed");
+        ui(()->c.startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(SiteProtocol.PAGE+"?passive="+SystemClock.elapsedRealtime())).setPackage("com.android.chrome").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)));
+    }
     private boolean hasStage(String stage){JSONArray a=DiagnosticLog.records(c);for(int i=0;i<a.length();i++){JSONObject d=a.optJSONObject(i).optJSONObject("details");if(d!=null&&stage.equals(d.optString("stage")))return true;}return false;}
     private boolean hasReason(String reason){JSONArray a=DiagnosticLog.records(c);for(int i=0;i<a.length();i++)if(reason.equals(a.optJSONObject(i).optString("reason_code")))return true;return false;}
     private android.view.accessibility.AccessibilityNodeInfo processingText(String text){

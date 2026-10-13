@@ -24,7 +24,7 @@ public final class AlarmScheduler {
         Prefs prefs = new Prefs(context);
         long previous=prefs.raw.getLong("next_alarm",0);
         cancel(context);
-        if (!prefs.enabled()) return false;
+        if (prefs.passiveRecords()) return false;
         if(!allowed(context)){DiagnosticLog.add(context,DiagnosticLog.Event.ALARM_FAILED,prefs.phase(ZonedDateTime.now(Policy.ZONE)),"EXACT_ALARM_DENIED");return false;}
         ZonedDateTime now = ZonedDateTime.now(Policy.ZONE);
         ZonedDateTime next = Policy.nextWake(now, prefs.days(), prefs.automationExcluded(), prefs.start(), prefs.end(),

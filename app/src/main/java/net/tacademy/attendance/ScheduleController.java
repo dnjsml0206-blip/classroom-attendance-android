@@ -19,7 +19,7 @@ public final class ScheduleController {
         AlarmScheduler.arm(context, false);
         if(ActivationRun.pending()&&prefs.enabled())return;
         if (!prefs.enabled() || prefs.checkedOutToday()) Notices.clearDeparture(context,java.time.LocalDate.now(Policy.ZONE).toString());
-        if (!prefs.monitoringNeeded(ZonedDateTime.now(Policy.ZONE))) {
+        if (prefs.passiveRecords() || !prefs.monitoringNeeded(ZonedDateTime.now(Policy.ZONE))) {
             ScheduledUnlock.cancel(context,"RESERVATION_IDLE");
             ChromeAttendanceService.cancelScheduledWork();
             context.stopService(new Intent(context, MonitorService.class));
