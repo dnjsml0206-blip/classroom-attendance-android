@@ -24,6 +24,9 @@ final class SetupStatusView extends LinearLayout {
         if(extras){TextView hint=label("항목을 누르면 해당 설정으로 이동합니다. 돌아오면 다시 확인합니다.",12);hint.setTextColor(0xFF687D77);addView(hint);}
         initial=read();
         for(Row item:initial){
+            if(item.target==PhoneSettings.Target.ACCESSIBILITY)section("01  Chrome 직접 출석 · 기록","Chrome에서 직접 누르고 앱에 기록해요.",false);
+            if(item.target==PhoneSettings.Target.LOCATION_PERMISSION)section("02  직접 잠금해제 후 자동 처리","① 설정에 아래 항목을 더해 주세요.",true);
+            if(item.target==PhoneSettings.Target.AUTO_CLICK)section("03  Extended Unlock · 자동 클릭","자동 클릭은 ②·③ 공통 · Extended Unlock은 선택",true);
             LinearLayout row=new LinearLayout(activity);row.setGravity(android.view.Gravity.CENTER_VERTICAL);row.setMinimumHeight(dp(49));row.setPadding(0,dp(6),0,dp(6));
             TextView title=label(item.label,14);row.addView(title,new LinearLayout.LayoutParams(0,-2,1));
             TextView state=label("",12);state.setGravity(android.view.Gravity.END);states.add(state);row.addView(state,new LinearLayout.LayoutParams(dp(125),-2));
@@ -33,6 +36,11 @@ final class SetupStatusView extends LinearLayout {
         }
         refresh();
     }
+    private void section(String title,String hint,boolean divider){
+        if(divider){android.view.View line=new android.view.View(activity);line.setBackgroundColor(0xFFE1E6E4);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(1));lp.setMargins(0,dp(14),0,dp(14));addView(line,lp);}
+        TextView heading=label(title,14);heading.setTypeface(null,Typeface.BOLD);addView(heading);
+        TextView description=label(hint,11);description.setTextColor(0xFF687D77);addView(description);
+    }
     private TextView label(String s,int size){TextView t=new TextView(activity);t.setText(s);t.setTextSize(size);t.setTextColor(0xFF183631);t.setPadding(0,dp(3),0,dp(3));return t;}
     private int dp(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
     private List<Row> read(){
@@ -41,10 +49,10 @@ final class SetupStatusView extends LinearLayout {
         boolean locationOn=Build.VERSION.SDK_INT<28||activity.getSystemService(LocationManager.class).isLocationEnabled();
         boolean access=ChromeAttendanceService.available();List<Row> rows=new ArrayList<>();
         rows.add(new Row(PhoneSettings.Target.ACCESSIBILITY,"Chrome 접근성",true,access,access?"완료":ChromeAttendanceService.configured(activity)?"연결 대기":"설정 필요"));
+        boolean notifications=Notices.attendanceNotificationsAllowed(activity);rows.add(new Row(PhoneSettings.Target.NOTIFICATIONS,"출결 완료 알림",true,notifications,notifications?"완료":"설정 필요"));
         rows.add(new Row(PhoneSettings.Target.LOCATION_PERMISSION,"위치 항상 허용",true,location,location?"완료":!fine?"정확한 위치 필요":"항상 허용 필요"));
         rows.add(new Row(PhoneSettings.Target.LOCATION_SERVICE,"휴대폰 위치",true,locationOn,locationOn?"켜짐":"꺼짐"));
         boolean alarms=AlarmScheduler.allowed(activity);rows.add(new Row(PhoneSettings.Target.ALARMS,"정확한 알람",true,alarms,alarms?"완료":"설정 필요"));
-        boolean notifications=Notices.attendanceNotificationsAllowed(activity);rows.add(new Row(PhoneSettings.Target.NOTIFICATIONS,"출결 완료 알림",true,notifications,notifications?"완료":"설정 필요"));
         rows.add(new Row(PhoneSettings.Target.SCHEDULE,"출석 예약",true,p.enabled(),p.enabled()?"켜짐":"꺼짐"));
         if(extras){
             boolean departureAlerts=p.guidanceNotifications()&&Notices.attentionNotificationsAllowed(activity);rows.add(new Row(PhoneSettings.Target.TEST_NOTIFICATIONS,"퇴실 이탈 알림",false,departureAlerts,departureAlerts?"허용됨":!p.guidanceNotifications()?"앱에서 꺼짐":"알림 허용 필요"));
@@ -60,6 +68,6 @@ final class SetupStatusView extends LinearLayout {
             TextView state=states.get(i);state.setText(activity.getString(R.string.setup_state,r.ready?"✓":r.required?"!":"·",r.state));state.setTextColor(r.ready?0xFF007C78:r.required?0xFF9A5800:0xFF687D77);
             state.setContentDescription(r.label+": "+r.state);((android.view.View)state.getParent()).setContentDescription(r.label+": "+r.state+" 설정 열기");
         }
-        summary.setText(activity.getString(R.string.setup_summary,ready,required));summary.setTextColor(ready==required?0xFF007C78:0xFF9A5800);
+        summary.setText("자동 처리 준비 "+ready+" / "+required+" · 직접 출석은 ①만");summary.setTextColor(ready==required?0xFF007C78:0xFF9A5800);
     }
 }

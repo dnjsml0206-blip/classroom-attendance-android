@@ -169,7 +169,7 @@ public final class SetupGuideActivity extends Activity {
     }
     private void connection(SetupGuidePolicy.Snapshot s){
         LinearLayout chrome=card("평소 Chrome에서 출결 화면 확인",s.chromeConfirmed()?"직접 확인함":"직접 확인 필요",s.chromeConfirmed());
-        add(chrome,"기존 출석 주소 붙여넣기",false,()->startActivity(new Intent(this,MainActivity.class).putExtra("open_tab",1).putExtra("focus_setting","attendance-address")),"setup-shortcut-address");
+        add(chrome,"기존 출석 주소 붙여넣기",false,()->startActivity(new Intent(this,MainActivity.class).putExtra("open_tab",3).putExtra("focus_setting","attendance-address")),"setup-shortcut-address");
         note(chrome,"본인 이름과 오늘 출결 화면이 보이는지 확인한 뒤 앱으로 돌아오세요.");
         add(chrome,"Chrome 출결 화면 열기",true,()->{if(!busy())ChromeAttendanceService.openChrome(this,SiteProtocol.PAGE);},"setup-chrome-open");
         check(chrome,"내 이름과 출결 화면을 확인했어요",CHROME,true);
@@ -238,7 +238,7 @@ public final class SetupGuideActivity extends Activity {
     }
     private boolean busy(){if(ChromeAttendanceService.busy()||ChromeAttendanceService.otherUiBusy()||ScheduledUnlock.active(this)||ActivationRun.pending()){Toast.makeText(this,"진행 중인 출결·화면 작업이 끝난 뒤 다시 눌러 주세요",Toast.LENGTH_LONG).show();return true;}return false;}
     private void open(PhoneSettings.Target target){if(!busy())PhoneSettings.open(this,target);}
-    private void setting(String tag){if(!busy())startActivity(new Intent(this,MainActivity.class).putExtra("open_tab",2).putExtra("focus_setting",tag));}
+    private void setting(String tag){if(!busy())startActivity(new Intent(this,MainActivity.class).putExtra("open_tab",tag.equals("setup-schedule")||tag.equals("setup-days")||tag.equals("automation")?1:2).putExtra("focus_setting",tag));}
     private void requestLocation(){
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED){open(PhoneSettings.Target.LOCATION_PERMISSION);return;}
         if(prefs.raw.getBoolean("setup_location_requested",false)&&!shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)){open(PhoneSettings.Target.LOCATION_PERMISSION);return;}

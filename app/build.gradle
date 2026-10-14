@@ -8,8 +8,8 @@ android {
         applicationId 'net.tacademy.attendance'
         minSdk 26
         targetSdk 36
-        versionCode 39
-        versionName '0.9.24'
+        versionCode 40
+        versionName '0.9.25'
         buildConfigField 'boolean', 'CREATOR_TOOLS', creatorTools.toString()
         manifestPlaceholders = [creatorToolsEnabled: creatorTools.toString()]
         testInstrumentationRunner 'net.tacademy.attendance.DeviceChecks'
