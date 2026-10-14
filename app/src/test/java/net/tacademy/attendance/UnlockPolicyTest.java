@@ -13,6 +13,17 @@ public final class UnlockPolicyTest {
         assertEquals(LockTestPolicy.Step.NEED_AUTH,UnlockPolicy.next(UnlockPolicy.Mode.WAKE,true,true,true));
         assertEquals(LockTestPolicy.Step.OPEN_CHROME,UnlockPolicy.next(UnlockPolicy.Mode.WAKE,true,false,false));
     }
+    @Test public void october14ArrivalDismissesAuthenticatedKeyguardWithoutExtendOptIn(){
+        assertTrue(UnlockPolicy.expedite(false,true,false,false,true,false));
+        assertEquals(LockTestPolicy.Step.WAIT_SCREEN,UnlockPolicy.next(UnlockPolicy.Mode.WAKE,false,true,false));
+        assertEquals(LockTestPolicy.Step.REQUEST_DISMISS,UnlockPolicy.next(UnlockPolicy.Mode.WAKE,true,true,false));
+        assertEquals(LockTestPolicy.Step.OPEN_CHROME,UnlockPolicy.next(UnlockPolicy.Mode.WAKE,true,false,false));
+    }
+    @Test public void normalWakeRejectsCredentialLockAndDoesNotChangeLabWake(){
+        for(boolean keyguard:new boolean[]{false,true})
+            assertEquals(LockTestPolicy.Step.NEED_AUTH,UnlockPolicy.next(UnlockPolicy.Mode.WAKE,true,keyguard,true));
+        assertEquals(LockTestPolicy.Step.NEED_AUTH,LockTestPolicy.next(LockTestPolicy.Mode.WAKE,true,true,false));
+    }
     @Test public void trustedStateStillRequiresSystemDismissal(){
         assertEquals(LockTestPolicy.Step.REQUEST_DISMISS,UnlockPolicy.next(UnlockPolicy.Mode.TRUST,true,true,false));
         assertEquals(LockTestPolicy.Step.NEED_AUTH,UnlockPolicy.next(UnlockPolicy.Mode.TRUST,true,true,true));

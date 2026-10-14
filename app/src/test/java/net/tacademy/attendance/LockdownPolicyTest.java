@@ -6,6 +6,24 @@ import java.util.List;
 import static org.junit.Assert.*;
 
 public class LockdownPolicyTest {
+    @Test public void observedLockDoesNotRequireAnAppClick(){
+        assertTrue(LockdownPolicy.authenticatedLock(true,true,true));
+        assertFalse(LockdownPolicy.authenticatedLock(true,true,false));
+        assertFalse(LockdownPolicy.authenticatedLock(false,true,true));
+        assertFalse(LockdownPolicy.authenticatedLock(true,false,true));
+    }
+    @Test public void onlyKnownSystemLockIconWithSemanticActionCanBeFallback(){
+        String id="com.android.systemui:id/lock_icon";
+        assertTrue(LockdownPolicy.lockIcon("com.android.systemui",id,true,true,true));
+        assertTrue(LockdownPolicy.lockIcon("com.android.systemui",id+"_view",true,true,true));
+        assertFalse(LockdownPolicy.lockIcon("com.android.chrome",id,true,true,true));
+        assertFalse(LockdownPolicy.lockIcon("com.android.systemui",null,true,true,true));
+        assertFalse(LockdownPolicy.lockIcon("com.android.systemui",id,true,true,false));
+        assertFalse(LockdownPolicy.lockIcon("com.android.systemui",id,false,true,true));
+        assertFalse(LockdownPolicy.lockIcon("com.android.systemui",id,true,false,true));
+        assertFalse(LockdownPolicy.lockIcon("com.android.systemui","com.android.systemui:id/unlock_button",true,true,true));
+    }
+
     @Test public void acceptsOnlyExactSystemPackages() {
         assertTrue(LockdownPolicy.systemPackage("com.android.systemui"));
         assertTrue(LockdownPolicy.systemPackage("android"));

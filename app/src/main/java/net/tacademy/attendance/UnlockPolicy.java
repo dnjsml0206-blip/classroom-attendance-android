@@ -22,6 +22,10 @@ final class UnlockPolicy {
         return wifiAllowed && (!wasWifiAllowed || (userPresent && interactive && !keyguard && !locked));
     }
     static LockTestPolicy.Step next(Mode mode,boolean interactive,boolean keyguard,boolean locked){
+        // A visible keyguard can still be authenticated. Let Android dismiss it;
+        // no credential bypass and no change to creator-only screen wake trials.
+        if(mode==Mode.WAKE && interactive && keyguard && !locked)
+            return LockTestPolicy.Step.REQUEST_DISMISS;
         return LockTestPolicy.next(mode==Mode.WAKE?LockTestPolicy.Mode.WAKE:mode==Mode.TRUST?LockTestPolicy.Mode.EXTEND:LockTestPolicy.Mode.AUTH,interactive,keyguard,locked);
     }
 }

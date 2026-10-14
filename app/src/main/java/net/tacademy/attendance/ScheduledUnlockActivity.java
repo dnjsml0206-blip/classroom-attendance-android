@@ -45,10 +45,17 @@ public final class ScheduledUnlockActivity extends Activity {
             handedOff=true;AttendanceEngine.request(this,true,null);finish();return;
         }
         if(next==LockTestPolicy.Step.REQUEST_DISMISS&&!requested){
-            requested=true;page.setMessage("Android의 잠금 해제를 기다립니다.\n인증 화면이 나타나면 PIN·지문으로 직접 인증해 주세요.");
-            DiagnosticLog.add(this,DiagnosticLog.Event.WAKE_DISMISS_REQUEST,ScheduledUnlock.phase(this),"SYSTEM_REQUEST",ScheduledUnlock.details(this));
+            requested=true;page.setMessage(keyguard.isDeviceLocked()
+                ?"Android의 인증을 기다립니다.\nPIN·지문으로 직접 인증해 주세요."
+                :"인증이 유지되어 있어요.\n잠금화면을 닫고 바로 출결을 진행합니다.");
+            DiagnosticLog.add(this,DiagnosticLog.Event.WAKE_DISMISS_REQUEST,ScheduledUnlock.phase(this),keyguard.isDeviceLocked()?"SYSTEM_REQUEST":"AUTHENTICATED_KEYGUARD_DISMISS",ScheduledUnlock.details(this));
             try{keyguard.requestDismissKeyguard(this,new KeyguardManager.KeyguardDismissCallback(){
-                @Override public void onDismissSucceeded(){if(ScheduledUnlock.live(ScheduledUnlockActivity.this,token))DiagnosticLog.add(ScheduledUnlockActivity.this,DiagnosticLog.Event.WAKE_DISMISS_RESULT,ScheduledUnlock.phase(ScheduledUnlockActivity.this),"SYSTEM_DISMISSED",ScheduledUnlock.details(ScheduledUnlockActivity.this));}
+                @Override public void onDismissSucceeded(){
+                    if(isFinishing()||handedOff||!ScheduledUnlock.live(ScheduledUnlockActivity.this,token))return;
+                    DiagnosticLog.add(ScheduledUnlockActivity.this,DiagnosticLog.Event.WAKE_DISMISS_RESULT,ScheduledUnlock.phase(ScheduledUnlockActivity.this),"SYSTEM_DISMISSED",ScheduledUnlock.details(ScheduledUnlockActivity.this));
+                    // Recheck Wi-Fi, phase and actual lock state immediately.
+                    handler.removeCallbacks(tick);handler.post(tick);
+                }
                 @Override public void onDismissCancelled(){stop("AUTH_CANCELLED");}
                 @Override public void onDismissError(){stop("DISMISS_ERROR");}
             });}catch(RuntimeException e){stop("DISMISS_"+DiagnosticLog.failureCode(e));}

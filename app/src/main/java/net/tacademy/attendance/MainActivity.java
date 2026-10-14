@@ -27,7 +27,7 @@ public final class MainActivity extends Activity {
     private boolean pendingStart, pendingLocation, creatorExpanded;
     private LinearLayout creatorBody;
     private Button creatorToggle;
-    private AlertDialog creatorPasswordDialog;
+    private AlertDialog creatorPasswordDialog, firstUseDialog;
     private SetupStatusView setupStatus;
     private TextView passiveStatus;
     private TextView status, detail, inTime, outTime, todayLog, todayWifi, todayWifiHint, todayWifiIcon;
@@ -67,6 +67,7 @@ public final class MainActivity extends Activity {
         });
         setContentView(root);
         render(Math.max(0,Math.min(2,getIntent().getIntExtra("open_tab",0))));
+        if(prefs.raw.getBoolean("first_use_guide_pending",false))showUsageGuide();
     }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
@@ -89,6 +90,7 @@ public final class MainActivity extends Activity {
     @Override protected void onPause() { handler.removeCallbacks(refresh); closeCreatorPanel(); if(creatorPasswordDialog!=null)creatorPasswordDialog.dismiss(); super.onPause(); }
     @Override protected void onDestroy() {
         ActivationRun.cancel(this);
+        if(firstUseDialog!=null)firstUseDialog.dismiss();
         handler.removeCallbacksAndMessages(null);
         if (locationManager != null && oneLocation != null) locationManager.removeUpdates(oneLocation);
         super.onDestroy();
@@ -193,7 +195,7 @@ public final class MainActivity extends Activity {
             LinearLayout.LayoutParams calendarParams=new LinearLayout.LayoutParams(dp(78),dp(52));calendarParams.setMargins(dp(6),0,dp(8),0);titleRow.addView(calendarLink,calendarParams);
             titleRow.addView(wifiBadge(),new LinearLayout.LayoutParams(dp(118),-2));content.addView(titleRow);
             gap(content, 18);
-            if(!prefs.enabled()&&!prefs.raw.getBoolean("setup_finished",false)){Button guide=button(prefs.raw.getBoolean("setup_visited",false)?"자동출석 준비 · 빠른 설정 이어하기  ›":"처음이라면 · 빠른 설정 시작하기  ›",true,()->SetupGuideActivity.open(this));guide.setTag("setup-guide-home");content.addView(guide,new LinearLayout.LayoutParams(-1,-2));gap(content,14);}
+            if(!prefs.enabled()&&!prefs.raw.getBoolean("setup_finished",false)){Button guide=button(prefs.raw.getBoolean("setup_visited",false)?"자동출석 준비 · 빠른 설정 이어하기  ›":"자동출석을 원하면 · 빠른 설정 시작하기  ›",true,()->SetupGuideActivity.open(this));guide.setTag("setup-guide-home");content.addView(guide,new LinearLayout.LayoutParams(-1,-2));gap(content,14);}
             home();
         } else {
             content.addView(text("T  /  ATTENDANCE MATE", 12, TEAL, true)); gap(content, 10);
@@ -500,24 +502,13 @@ public final class MainActivity extends Activity {
         }
         automation.addView(choices);
         note(automation,ActivationRun.pending()?ActivationRun.label():prefs.enabled() ? "예약 켜짐 · 출석 시간에만 작동" : "예약 꺼짐 · Chrome 출결 기록만 자동 저장");
-        Switch auto = new Switch(this); auto.setText(R.string.automatic_chrome_click); auto.setTextSize(16); auto.setTextColor(INK); auto.setMinHeight(dp(48));
-        auto.setChecked(prefs.auto()); automation.addView(auto);
         TextView passiveNote=text(passiveRecordMessage(),13,MUTED,false);passiveNote.setTag("passive-record-status");automation.addView(passiveNote);
-        auto.setOnCheckedChangeListener((v, checked) -> {
-            if (checked && !ChromeAttendanceService.available()) { auto.setChecked(false); toast("자동출석 탭에서 Chrome 접근성을 먼저 켜 주세요"); return; }
-            if(!checked)ActivationRun.cancel();
-            if(checked)prefs.enableAutomaticClick();else prefs.raw.edit().putBoolean("auto",false).apply(); prefs.log(checked ? "Chrome 자동 클릭 켜짐" : "Chrome 기록 수집 모드");passiveNote.setText(passiveRecordMessage());
-            ScheduleController.reconcile(this);if(checked)render(selected);
-        });
         action(automation, "Chrome에서 지금 확인", false, () -> startActivity(new Intent(this, ChromeLaunchActivity.class)));
     }
 
     private String passiveRecordMessage(){
         if(!prefs.passiveRecords())return "자동출결을 끄면 직접 처리한 Chrome 출결 기록만 자동 저장해요.";
         return ChromeAttendanceService.available()?"기록 수집 중 · Chrome에서 완료 시각이 표시될 때까지 기다려 주세요. 자동 조작은 하지 않아요.":"기록 자동 저장에는 Chrome 접근성 연결이 필요해요. 예약·위치·Extend Unlock 설정은 필요 없어요.";
-    }
-    private void unlockSettings(){
-        content.addView(new ExtendUnlockSettings(this,()->{}));
     }
 
     private void screenSettings(){
@@ -602,7 +593,6 @@ public final class MainActivity extends Activity {
     }
     private void automationSettings() {
         reservationSettings();
-        unlockSettings();
         LinearLayout schedule = settingsCard("출석 시간", "schedule", () -> "모든 시간은 한국 시간입니다. 입실 시간과 퇴실 시간을 눌러 각각 변경할 수 있습니다."
             + "\n\n입실 시간대에 등록 Wi-Fi의 인터넷 연결이 확인되면 바로 입실 확인을 시작합니다."
             + "\n\n" + getString(R.string.checkout_delay_notice,Policy.CHECKOUT_DELAY_SECONDS) + " 단축수업일은 시간표별 시각에 2초 여유를 적용합니다."
@@ -666,7 +656,29 @@ public final class MainActivity extends Activity {
             dialog.dismiss();render(selected);if(which==AlertDialog.BUTTON_POSITIVE)ChromeAttendanceService.openChrome(this,url);else toast("출석 주소를 저장했어요");
         });});dialog.show();
     }
+    private void showUsageGuide() {
+        LinearLayout body=form();
+        body.addView(text("자동출석은 선택이에요",18,TEAL,true));
+        note(body,"편한 방법으로 출석 메이트를 사용하세요.");
+        gap(body,16);body.addView(text("① Extended Unlock으로 자동출석",16,INK,true));
+        note(body,"예약 시간·출석 Wi-Fi에서 신뢰 상태로 잠금 해제가 가능하면 앱이 출석해요. PIN 재인증이 필요하면 직접 풀어 주세요.");
+        gap(body,14);body.addView(text("② 직접 잠금해제 후 자동출석",16,INK,true));
+        note(body,"Extended Unlock 없이도, 예약 시간·출석 Wi-Fi에서 직접 잠금을 풀면 앱이 출석해요.");
+        gap(body,14);body.addView(text("③ 평소처럼 Chrome에서 직접 출석",16,INK,true));
+        note(body,"자동출석 설정 없이 기존 바로가기로 입실·퇴실하세요. 앱에도 기록을 저장하려면 Chrome 접근성만 연결해 주세요.");
+        ScrollView scroll=new ScrollView(this);scroll.addView(body);
+        firstUseDialog=new AlertDialog.Builder(this).setTitle("출석 방법, 세 가지만 알아두세요")
+            .setView(scroll).setPositiveButton("알겠어요",(d,w)->prefs.raw.edit().putBoolean("first_use_guide_pending",false).apply())
+            .setNeutralButton("자동출석 설정",(d,w)->{prefs.raw.edit().putBoolean("first_use_guide_pending",false).apply();render(2);})
+            .create();
+        firstUseDialog.setCanceledOnTouchOutside(false);
+        firstUseDialog.setOnCancelListener(d->prefs.raw.edit().putBoolean("first_use_guide_pending",false).apply());
+        firstUseDialog.show();
+    }
+
     private void settings() {
+        LinearLayout usage=card("사용 안내");
+        action(usage,"세 가지 출석 방법 보기",false,this::showUsageGuide);
         attendanceAddressSettings();
         LinearLayout notifications = settingsCard("알림", "notifications", () -> "완료를 확인할 때마다 입실과 퇴실 알림을 따로 남깁니다. 앱을 열거나 감시가 끝나도 유지되며 직접 지울 수 있습니다."
             + "\n\n휴대폰에서 알림이 차단된 경우 앱 알림과 ‘입실·퇴실 결과’ 알림을 허용해 주세요. ‘앱 알림 설정’에서 안내 알림과 현재 허용 상태를 확인할 수 있습니다.");
@@ -859,6 +871,8 @@ public final class MainActivity extends Activity {
                 new LinearLayout.LayoutParams(dp(72),dp(48))); list.addView(row);
         }
     }
+
+    void refreshAutomaticSettings(){ if(!isFinishing()&&!isDestroyed())render(selected); }
 
     private void connection() {
         setupGuideCard();

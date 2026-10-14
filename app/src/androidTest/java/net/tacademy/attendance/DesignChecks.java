@@ -31,7 +31,7 @@ final class DesignChecks {
         clock("2026-10-13T17:30:00+09:00");tab(0);capture("02-today-night.png");
         tab(1);capture("03-settings.png");
         tab(2);capture("04-automatic.png");
-        ui(()->{ScrollView scroll=(ScrollView)field("homeScroll");View card=a.getWindow().getDecorView().findViewWithTag("extend-unlock-optional");scroll.scrollTo(0,card.getTop()-24);});capture("08-extend-optional.png");
+        ui(()->{ScrollView scroll=(ScrollView)field("homeScroll");View card=a.getWindow().getDecorView().findViewWithTag("setup-readiness");scroll.scrollTo(0,card.getBottom()-scroll.getHeight()+24);});capture("08-integrated-click-settings.png");
         ui(()->{ScrollView scroll=(ScrollView)field("homeScroll");scroll.fullScroll(View.FOCUS_DOWN);});capture("05-processing-settings.png");
         ui(()->a.setContentView(new ProcessingPage(a,Policy.Phase.ENTRY,"출결 처리 중","완료되면 화면을 끄고 알려드릴게요","Chrome 화면 보기",()->{})));capture("06-entry-processing.png");
         ui(()->a.setContentView(new ProcessingPage(a,Policy.Phase.CHECKOUT,"출결 처리 중","완료되면 화면을 끄고 알려드릴게요","Chrome 화면 보기",()->{})));capture("07-checkout-processing.png");

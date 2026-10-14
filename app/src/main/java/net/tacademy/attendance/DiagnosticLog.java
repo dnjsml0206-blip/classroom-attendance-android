@@ -22,7 +22,7 @@ final class DiagnosticLog {
         try{
             JSONObject safe=new JSONObject();
             for(String key:new String[]{"attempt_id","scheduled_at_ms","delay_ms","window_state","diagnostic_version","diagnosis","stage","focused_owner",
-                "screen_interactive","keyguard_locked","device_locked","device_secure","chrome_window_present","window_count","read_state","read_error","read_operation",
+                "scheduled_lock_mode","screen_interactive","keyguard_locked","device_locked","device_secure","chrome_window_present","window_count","read_state","read_error","read_operation",
                 "address_state","page_signal","button_state","node_count","visible_node_count","web_node_count","tree_limit_reached","wifi_check_code",
                 "click_attempted","click_accepted","confirmation_attempted","pending_click","elapsed_ms","poll_count","chrome_event_age_ms",
                 "last_site_signal","last_site_address","last_site_age_ms","page_visible_ms","dialog_kind","confirm_button_state","confirm_target",
@@ -31,7 +31,7 @@ final class DiagnosticLog {
                 "previous_entry_start","previous_entry_end","previous_checkout_start","previous_checkout_retry_minutes","previous_configured_days",
                 "early_leave_approved","network_trigger","network_event_at_ms","read_only","class_day","record_source","attendance_day","entry_time","checkout_time",
                 "screen_off_enabled","lockdown_enabled","lock_window_count","lock_system_roots","lock_menu_count","lock_label_count","lock_candidate_count",
-                "lock_node_count","lock_tree_incomplete","lock_read_failures","lock_root_source","lock_read_state"})if(details.has(key))safe.put(key,details.get(key));
+                "lock_method","lock_icon_action_attempted","lock_node_count","lock_tree_incomplete","lock_read_failures","lock_root_source","lock_read_state"})if(details.has(key))safe.put(key,details.get(key));
             long now=System.currentTimeMillis();SharedPreferences p=prefs(c);
             String signature=LocalDate.now(Policy.ZONE)+":"+event+":"+phase+":"+reason+":"+safe;
             if(signature.equals(p.getString("last_signature","")))return;

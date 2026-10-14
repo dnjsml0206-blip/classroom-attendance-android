@@ -12,6 +12,16 @@ final class LockdownPolicy {
 
     private LockdownPolicy() {}
 
+    static boolean authenticatedLock(boolean secure,boolean keyguard,boolean locked) {
+        return secure && keyguard && locked;
+    }
+    /** Only a platform lock icon exposing a long-click action is a fallback target.
+     * Never guess a drag direction or select a similarly named app/notification. */
+    static boolean lockIcon(String owner,String id,boolean visible,boolean enabled,boolean longClick) {
+        return id!=null && "com.android.systemui".equals(owner) && visible && enabled && longClick
+            && Set.of("com.android.systemui:id/lock_icon","com.android.systemui:id/lock_icon_view").contains(id);
+    }
+
     static boolean systemPackage(String packageName) {
         return "com.android.systemui".equals(packageName) || "android".equals(packageName);
     }
@@ -101,6 +111,11 @@ final class LockdownPolicy {
         return switch(reason){
             case "LOCKDOWN_RUNNING" -> "전원 메뉴의 잠금 버튼 확인 중…";
             case "LOCKDOWN_LOCK_OBSERVED" -> "잠금 버튼 클릭 후 인증 잠금 확인";
+            case "AUTHENTICATED_LOCK_OBSERVED" -> "이미 인증 잠금 확인 · 추가 잠금 시도 생략";
+            case "LOCK_ICON_LOCK_OBSERVED" -> "자물쇠 동작 후 인증 잠금 확인";
+            case "LOCK_ICON_UNAVAILABLE" -> "지원되는 자물쇠 잠금 동작을 찾지 못했어요";
+            case "LOCK_ICON_UNCONFIRMED" -> "자물쇠 동작 후 인증 잠금을 확인하지 못했어요";
+            case "LOCK_ICON_REJECTED" -> "휴대폰이 자물쇠 잠금 동작을 거절했어요";
             case "LOCKDOWN_ITEM_NOT_FOUND" -> "전원 메뉴에서 잠금 항목을 읽지 못했어요 · 잠금 모드 표시 설정 확인";
             case "LOCKDOWN_TARGET_UNSAFE" -> "잠금 글자는 보이지만 단독으로 누를 버튼을 확인하지 못했어요";
             case "LOCKDOWN_TARGET_AMBIGUOUS" -> "잠금 후보가 여러 개라 누르지 않았어요";

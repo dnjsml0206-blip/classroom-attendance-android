@@ -28,7 +28,8 @@ final class SetupStatusView extends LinearLayout {
             TextView title=label(item.label,14);row.addView(title,new LinearLayout.LayoutParams(0,-2,1));
             TextView state=label("",12);state.setGravity(android.view.Gravity.END);states.add(state);row.addView(state,new LinearLayout.LayoutParams(dp(125),-2));
             row.setBackgroundResource(android.R.drawable.list_selector_background);row.setFocusable(true);row.setClickable(true);
-            row.setOnClickListener(v->PhoneSettings.open(activity,item.target));row.setContentDescription(item.label+" 설정 열기");addView(row);
+            row.setTag("setup-row-"+item.target.name());
+            row.setOnClickListener(v->{if(item.target==PhoneSettings.Target.AUTO_CLICK)ChromeClickSettings.show(activity,this::refresh);else PhoneSettings.open(activity,item.target);});row.setContentDescription(item.label+" 설정 열기");addView(row);
         }
         refresh();
     }
@@ -45,12 +46,12 @@ final class SetupStatusView extends LinearLayout {
         boolean alarms=AlarmScheduler.allowed(activity);rows.add(new Row(PhoneSettings.Target.ALARMS,"정확한 알람",true,alarms,alarms?"완료":"설정 필요"));
         boolean notifications=Notices.attendanceNotificationsAllowed(activity);rows.add(new Row(PhoneSettings.Target.NOTIFICATIONS,"출결 완료 알림",true,notifications,notifications?"완료":"설정 필요"));
         rows.add(new Row(PhoneSettings.Target.SCHEDULE,"출석 예약",true,p.enabled(),p.enabled()?"켜짐":"꺼짐"));
-        rows.add(new Row(PhoneSettings.Target.AUTO_CLICK,"Chrome 자동 클릭",true,p.auto(),p.auto()?"켜짐":"꺼짐"));
         if(extras){
             boolean departureAlerts=p.guidanceNotifications()&&Notices.attentionNotificationsAllowed(activity);rows.add(new Row(PhoneSettings.Target.TEST_NOTIFICATIONS,"퇴실 이탈 알림",false,departureAlerts,departureAlerts?"허용됨":!p.guidanceNotifications()?"앱에서 꺼짐":"알림 허용 필요"));
             NetworkAccess.State wifi=NetworkAccess.inspect(activity);rows.add(new Row(PhoneSettings.Target.WIFI,"현재 출석 Wi-Fi",false,wifi.allowed(),wifi.allowed()?"연결됨":wifi.wifiTransportPresent()?"등록·권한 확인":"연결 필요"));
             boolean battery=activity.getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(activity.getPackageName());rows.add(new Row(PhoneSettings.Target.BATTERY,"배터리 최적화 제외",false,battery,battery?"제외됨":"최적화 적용"));
         }
+        rows.add(new Row(PhoneSettings.Target.AUTO_CLICK,"Chrome 자동 클릭(Extended Unlock)",true,p.auto(),p.auto()?(p.useExtendUnlock()?"신뢰 상태 사용":"직접 잠금해제"):"꺼짐"));
         return rows;
     }
     void refresh(){

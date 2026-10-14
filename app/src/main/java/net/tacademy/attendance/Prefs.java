@@ -10,6 +10,7 @@ public final class Prefs {
         raw = context.getSharedPreferences("attendance", Context.MODE_PRIVATE);
         if (!raw.contains("initialized")) raw.edit()
             .putBoolean("initialized", true)
+            .putBoolean("first_use_guide_pending", true)
             .putStringSet("ssids", new HashSet<>(Set.of("TACADEMY_5G")))
             .putStringSet("days", new HashSet<>(Set.of("1","2","3","4","5"))).apply();
         migrateSchedule();
