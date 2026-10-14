@@ -8,12 +8,14 @@ import android.view.accessibility.*;
 import java.util.*;
 import org.json.*;
 
-/** Bounded power-menu attempt, then an exposed lock-icon action only if still unlocked. */
+/** Identified lock-icon long press first; one power-menu fallback. Android lock state is authoritative. */
 final class LockdownController {
     private final AccessibilityService service;
     private final Handler handler=new Handler(Looper.getMainLooper());
-    private boolean active,clicked,menuOpened,iconFallback,iconClicked;
-    private long lockObservedAt;
+    private boolean active,clicked,menuOpened,iconStage,iconClicked;
+    private long lockObservedAt,methodStarted;
+    private boolean preparingIcon,wakeRequested;
+    private PowerManager.WakeLock iconWake;
     private int addedFlags,traceCount;
     private long started,stableAt,clickedAt;
     private Policy.Phase phase=Policy.Phase.IDLE;
@@ -24,22 +26,52 @@ final class LockdownController {
     boolean active(){return active;}
     void start(Policy.Phase phase,String attempt,Runnable complete,Runnable fallback){
         cancel();this.phase=phase;this.attempt=attempt;this.complete=complete;this.fallback=fallback;
-        active=true;clicked=false;menuOpened=false;iconFallback=false;iconClicked=false;lockObservedAt=0;stableAt=0;stableTarget="";traceCount=0;lastTrace="";
+        active=true;clicked=false;menuOpened=false;iconStage=true;iconClicked=false;preparingIcon=false;wakeRequested=false;lockObservedAt=0;stableAt=0;stableTarget="";traceCount=0;lastTrace="";
         lastRead="POWER_MENU_NOT_READABLE";evidence=new JSONObject();started=SystemClock.elapsedRealtime();
         remember("LOCKDOWN_RUNNING");
         if(locked()){finish("AUTHENTICATED_LOCK_OBSERVED",false);return;}
-        event(DiagnosticLog.Event.LOCKDOWN_REQUEST,"POWER_MENU_REQUEST");
-        if(!service.getSystemService(KeyguardManager.class).isDeviceSecure()){fail("NO_SECURE_SCREEN_LOCK");return;}
-        if(!service.getSystemService(PowerManager.class).isInteractive()){fail("SCREEN_ALREADY_OFF");return;}
+        event(DiagnosticLog.Event.LOCKDOWN_REQUEST,"LOCK_ICON_PRIMARY");
+        if(!service.getSystemService(KeyguardManager.class).isDeviceSecure()){finish("NO_SECURE_SCREEN_LOCK",true);return;}
         try{
             AccessibilityServiceInfo info=service.getServiceInfo();
             if(info!=null){int desired=AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS|AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS|AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
                 addedFlags=desired&~info.flags;info.flags|=desired;service.setServiceInfo(info);}
-            menuOpened=service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_POWER_DIALOG);
-        }catch(RuntimeException e){fail("POWER_MENU_"+DiagnosticLog.failureCode(e));return;}
-        if(!menuOpened){fail("POWER_MENU_REJECTED");return;}
+            methodStarted=SystemClock.elapsedRealtime();
+            if(!service.getSystemService(KeyguardManager.class).isKeyguardLocked()){
+                preparingIcon=true;
+                event(DiagnosticLog.Event.LOCKDOWN_STEP,"LOCKSCREEN_PREPARE");
+                // Show the actual system lock screen, never a simulated lock overlay.
+                if(Build.VERSION.SDK_INT<28||!service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)){
+                    powerFallback("LOCKSCREEN_PREPARE_REJECTED");return;
+                }
+            }
+        }catch(RuntimeException e){powerFallback("LOCKSCREEN_PREPARE_"+DiagnosticLog.failureCode(e));return;}
         handler.postDelayed(poll,LockdownPolicy.POLL_MS);
     }
+    private void powerFallback(String reason){
+        if(!active)return;
+        if(locked()){finish("AUTHENTICATED_LOCK_OBSERVED",false);return;}
+        if(!iconStage){finish(reason,true);return;}
+        event(DiagnosticLog.Event.LOCKDOWN_STEP,"LOCK_ICON_FAILED_"+reason);
+        iconStage=false;releaseIconWake();handler.removeCallbacks(poll);
+        methodStarted=SystemClock.elapsedRealtime();stableAt=0;stableTarget="";
+        if(!service.getSystemService(PowerManager.class).isInteractive()){finish("SCREEN_ALREADY_OFF",true);return;}
+        event(DiagnosticLog.Event.LOCKDOWN_STEP,"POWER_MENU_FALLBACK");
+        try{menuOpened=service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_POWER_DIALOG);}
+        catch(RuntimeException e){finish("POWER_MENU_"+DiagnosticLog.failureCode(e),true);return;}
+        if(!menuOpened){finish("POWER_MENU_REJECTED",true);return;}
+        handler.postDelayed(poll,LockdownPolicy.POLL_MS);
+    }
+    @SuppressWarnings("deprecation") private void wakeIconScreen(){
+        if(wakeRequested)return;wakeRequested=true;
+        // Only this bounded post-attendance operation may wake to expose a trusted
+        // keyguard icon. Never scheduled as a background retry or used to dismiss it.
+        iconWake=service.getSystemService(PowerManager.class).newWakeLock(
+            PowerManager.SCREEN_DIM_WAKE_LOCK|PowerManager.ACQUIRE_CAUSES_WAKEUP,"attendance:lock-icon");
+        iconWake.acquire(1500);
+        event(DiagnosticLog.Event.LOCKDOWN_STEP,"LOCK_ICON_SCREEN_WAKE");
+    }
+    private void releaseIconWake(){if(iconWake!=null){if(iconWake.isHeld())iconWake.release();iconWake=null;}}
     private final Runnable poll=new Runnable(){public void run(){
         if(!active)return;
         try{
@@ -50,18 +82,30 @@ final class LockdownController {
                 if(lockObservedAt==0)lockObservedAt=now;
                 if(now-lockObservedAt>=400){
                     dismissMenu();
-                    finish(iconClicked?"LOCK_ICON_LOCK_OBSERVED":clicked?"LOCKDOWN_LOCK_OBSERVED":"AUTHENTICATED_LOCK_OBSERVED",false);return;
+                    finish(clicked?"LOCKDOWN_LOCK_OBSERVED":iconClicked?"LOCK_ICON_LOCK_OBSERVED":"AUTHENTICATED_LOCK_OBSERVED",false);return;
                 }
                 handler.postDelayed(this,LockdownPolicy.POLL_MS);return;
             }
             lockObservedAt=0;
-            if(iconFallback){
+            if(iconStage){
+                if(preparingIcon||!service.getSystemService(PowerManager.class).isInteractive()){
+                    if(now-methodStarted>=2500){powerFallback("LOCKSCREEN_NOT_READY");return;}
+                    if(keyguard.isKeyguardLocked()){
+                        if(!service.getSystemService(PowerManager.class).isInteractive())wakeIconScreen();
+                        else preparingIcon=false;
+                    }
+                    handler.postDelayed(this,LockdownPolicy.POLL_MS);return;
+                }
                 if(!iconClicked){
                     int action=tryLockIcon();
-                    if(action<0){finish(action==-2?"LOCK_ICON_REJECTED":"LOCK_ICON_UNAVAILABLE",true);return;}
+                    if(action==-1){
+                        if(now-methodStarted<2500){handler.postDelayed(this,LockdownPolicy.POLL_MS);return;}
+                        powerFallback("LOCK_ICON_UNAVAILABLE");return;
+                    }
+                    if(action<0){powerFallback("LOCK_ICON_REJECTED");return;}
                     if(action==0){finish("AUTHENTICATED_LOCK_OBSERVED",false);return;}
-                    iconClicked=true;clickedAt=now;
-                }else if(now-clickedAt>=LockdownPolicy.LOCK_TIMEOUT_MS){finish("LOCK_ICON_UNCONFIRMED",true);return;}
+                    clickedAt=now;
+                }else if(now-clickedAt>=LockdownPolicy.LOCK_TIMEOUT_MS){powerFallback("LOCK_ICON_UNCONFIRMED");return;}
                 handler.postDelayed(this,LockdownPolicy.POLL_MS);return;
             }
             if(clicked){
@@ -74,7 +118,7 @@ final class LockdownController {
                     if(!trace.equals(lastTrace)&&traceCount<6){lastTrace=trace;traceCount++;event(DiagnosticLog.Event.LOCKDOWN_STEP,frame.state);}
                     if(frame.target!=null){
                         if(!frame.key.equals(stableTarget)){stableTarget=frame.key;stableAt=observedAt;}
-                        if(observedAt-stableAt>=LockdownPolicy.SETTLE_MS&&observedAt-started<LockdownPolicy.MENU_TIMEOUT_MS){
+                        if(observedAt-stableAt>=LockdownPolicy.SETTLE_MS&&observedAt-methodStarted<LockdownPolicy.MENU_TIMEOUT_MS){
                             clicked=true;clickedAt=observedAt;event(DiagnosticLog.Event.LOCKDOWN_STEP,"LOCKDOWN_CLICK_PLANNED");
                             boolean accepted=frame.target.performAction(AccessibilityNodeInfo.ACTION_CLICK);
                             event(DiagnosticLog.Event.LOCKDOWN_STEP,accepted?"LOCKDOWN_CLICK_ACCEPTED":"LOCKDOWN_CLICK_REJECTED");
@@ -82,7 +126,7 @@ final class LockdownController {
                         }
                     }else{stableTarget="";stableAt=0;}
                 }
-                if(!clicked&&SystemClock.elapsedRealtime()-started>=LockdownPolicy.MENU_TIMEOUT_MS){fail(lastRead.equals("LOCKDOWN_TARGET_READY")?"LOCKDOWN_TARGET_UNSTABLE":lastRead);return;}
+                if(!clicked&&SystemClock.elapsedRealtime()-methodStarted>=LockdownPolicy.MENU_TIMEOUT_MS){fail(lastRead.equals("LOCKDOWN_TARGET_READY")?"LOCKDOWN_TARGET_UNSTABLE":lastRead);return;}
             }
         }catch(RuntimeException e){fail("LOCKDOWN_"+DiagnosticLog.failureCode(e));return;}
         handler.postDelayed(this,LockdownPolicy.POLL_MS);
@@ -173,17 +217,11 @@ final class LockdownController {
     }
     private void fail(String reason){
         if(locked()){dismissMenu();finish("AUTHENTICATED_LOCK_OBSERVED",false);return;}
-        dismissMenu();
-        if(!iconFallback && service.getSystemService(KeyguardManager.class).isDeviceSecure() && service.getSystemService(PowerManager.class).isInteractive()
-                && service.getSystemService(KeyguardManager.class).isKeyguardLocked()){
-            iconFallback=true;event(DiagnosticLog.Event.LOCKDOWN_STEP,"POWER_MENU_FAILED_"+reason);
-            event(DiagnosticLog.Event.LOCKDOWN_STEP,"LOCK_ICON_FALLBACK");
-            handler.postDelayed(poll,LockdownPolicy.POLL_MS);return;
-        }
-        finish(reason,true);
+        if(iconStage){powerFallback(reason);return;}
+        dismissMenu();finish(reason,true);
     }
     private int tryLockIcon(){
-        // Only exposed semantic long-clicks are supported. No blind coordinate gestures.
+        // Hold only on a live, unambiguous SystemUI lock icon; no fixed screen coordinate.
         if(!service.getSystemService(KeyguardManager.class).isKeyguardLocked())return -1;
         List<Tree> trees=new ArrayList<>();List<AccessibilityNodeInfo> candidates=new ArrayList<>();
         Set<Integer> seen=new HashSet<>();
@@ -198,8 +236,7 @@ final class LockdownController {
                     if(!"com.android.systemui".equals(string(root.getPackageName()))||!seen.add(root.getWindowId())){root.recycle();continue;}
                     Tree tree=new Tree(root);trees.add(tree);if(!tree.complete)return -1;
                     for(var node:tree.live){
-                        if(LockdownPolicy.lockIcon(string(node.getPackageName()),node.getViewIdResourceName(),node.isVisibleToUser(),node.isEnabled(),
-                            node.getActionList().contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_LONG_CLICK))){
+                        if(LockdownPolicy.lockIcon(string(node.getPackageName()),node.getViewIdResourceName(),node.isVisibleToUser(),node.isEnabled())){
                             Rect bounds=new Rect();node.getBoundsInScreen(bounds);
                             if(!bounds.isEmpty())candidates.add(node);
                         }
@@ -210,25 +247,42 @@ final class LockdownController {
             // State may have changed during tree traversal: do not act on a completed lock.
             if(locked())return 0;
             if(!service.getSystemService(KeyguardManager.class).isKeyguardLocked())return -1;
+            Rect bounds=new Rect();candidates.get(0).getBoundsInScreen(bounds);
+            android.util.DisplayMetrics metrics=new android.util.DisplayMetrics();
+            service.getSystemService(android.view.WindowManager.class).getDefaultDisplay().getRealMetrics(metrics);
+            var hold=LockdownPolicy.iconHold(bounds.left,bounds.top,bounds.right,bounds.bottom,metrics.widthPixels,metrics.heightPixels,metrics.density);
+            if(hold==null)return -1;
             iconClicked=true;
-            event(DiagnosticLog.Event.LOCKDOWN_STEP,"LOCK_ICON_LONG_CLICK_PLANNED");
-            boolean accepted=candidates.get(0).performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK);
-            event(DiagnosticLog.Event.LOCKDOWN_STEP,accepted?"LOCK_ICON_LONG_CLICK_ACCEPTED":"LOCK_ICON_REJECTED");
+            event(DiagnosticLog.Event.LOCKDOWN_STEP,"LOCK_ICON_LONG_PRESS_PLANNED");
+            android.graphics.Path path=new android.graphics.Path();path.moveTo(hold.x(),hold.y());
+            String owner=attempt;long generation=started;
+            boolean accepted=service.dispatchGesture(new GestureDescription.Builder()
+                .addStroke(new GestureDescription.StrokeDescription(path,0,LockdownPolicy.ICON_HOLD_MS)).build(),
+                new AccessibilityService.GestureResultCallback(){
+                    private boolean current(){return active&&iconStage&&generation==started&&owner.equals(attempt);}
+                    @Override public void onCompleted(GestureDescription gesture){
+                        if(current())event(DiagnosticLog.Event.LOCKDOWN_STEP,"LOCK_ICON_LONG_PRESS_COMPLETED");
+                    }
+                    @Override public void onCancelled(GestureDescription gesture){
+                        if(current())powerFallback("LOCK_ICON_LONG_PRESS_CANCELLED");
+                    }
+                },handler);
+            event(DiagnosticLog.Event.LOCKDOWN_STEP,accepted?"LOCK_ICON_LONG_PRESS_ACCEPTED":"LOCK_ICON_REJECTED");
             return accepted?1:-2;
         }finally{for(Tree tree:trees)tree.close();}
     }
     private void finish(String reason,boolean useFallback){
-        if(!active)return;active=false;handler.removeCallbacksAndMessages(null);restoreFlags();event(DiagnosticLog.Event.LOCKDOWN_RESULT,reason);
+        if(!active)return;active=false;handler.removeCallbacksAndMessages(null);releaseIconWake();restoreFlags();event(DiagnosticLog.Event.LOCKDOWN_RESULT,reason);
         remember(reason);Runnable next=useFallback?fallback:complete;complete=null;fallback=null;if(next!=null)next.run();
     }
     private void remember(String reason){new Prefs(service).raw.edit().putString("lockdown_last_result",reason).putLong("lockdown_last_at",System.currentTimeMillis()).putString("lockdown_last_evidence",evidence.toString()).apply();}
     private void event(DiagnosticLog.Event type,String reason){JSONObject d=new JSONObject();try{
         for(Iterator<String> i=evidence.keys();i.hasNext();){String name=i.next();d.put(name,evidence.get(name));}
-        KeyguardManager k=service.getSystemService(KeyguardManager.class);d.put("attempt_id",attempt).put("elapsed_ms",SystemClock.elapsedRealtime()-started).put("click_attempted",clicked).put("lock_method",iconFallback?"LOCK_ICON":"POWER_MENU").put("lock_icon_action_attempted",iconClicked)
+        KeyguardManager k=service.getSystemService(KeyguardManager.class);d.put("attempt_id",attempt).put("elapsed_ms",SystemClock.elapsedRealtime()-started).put("click_attempted",clicked).put("lock_method",iconStage?"LOCK_ICON":"POWER_MENU").put("lock_icon_action_attempted",iconClicked)
             .put("screen_interactive",service.getSystemService(PowerManager.class).isInteractive()).put("device_locked",k.isDeviceLocked()).put("keyguard_locked",k.isKeyguardLocked()).put("device_secure",k.isDeviceSecure());
         }catch(JSONException ignored){}DiagnosticLog.add(service,type,phase,reason,d);}
     void cancel(){
         if(active){dismissMenu();event(DiagnosticLog.Event.LOCKDOWN_RESULT,"LOCKDOWN_CANCELLED");remember("LOCKDOWN_CANCELLED");}
-        active=false;handler.removeCallbacksAndMessages(null);restoreFlags();complete=null;fallback=null;
+        active=false;handler.removeCallbacksAndMessages(null);releaseIconWake();restoreFlags();complete=null;fallback=null;
     }
 }

@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.TURN_SCREEN_ON"/>
     <queries><package android:name="com.android.chrome"/><package android:name="com.android.settings"/><package android:name="com.google.android.gms"/>
         <intent><action android:name="android.service.trust.TrustAgentService"/></intent>
     </queries>
@@ -32,6 +33,7 @@
         <activity android:name=".AttendanceManagementActivity" android:exported="false"/>
         <activity android:name=".AttendanceCalendarActivity" android:exported="false"/>
         <activity android:name=".ChromeLaunchActivity" android:exported="false"/>
+        <activity android:name=".CheckoutUnlockActivity" android:exported="false" android:excludeFromRecents="true"/>
         <activity android:name=".ScheduledUnlockActivity" android:exported="false" android:excludeFromRecents="true"/>
         <activity android:name=".LockLabActivity" android:exported="false" android:enabled="${creatorToolsEnabled}"/>
         <activity android:name=".LogUploadActivity" android:exported="false" android:enabled="${creatorToolsEnabled}"/>

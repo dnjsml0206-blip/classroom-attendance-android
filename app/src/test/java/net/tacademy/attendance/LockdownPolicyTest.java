@@ -12,18 +12,27 @@ public class LockdownPolicyTest {
         assertFalse(LockdownPolicy.authenticatedLock(false,true,true));
         assertFalse(LockdownPolicy.authenticatedLock(true,false,true));
     }
-    @Test public void onlyKnownSystemLockIconWithSemanticActionCanBeFallback(){
+    @Test public void onlyKnownSystemLockIconCanBeHeld(){
         String id="com.android.systemui:id/lock_icon";
-        assertTrue(LockdownPolicy.lockIcon("com.android.systemui",id,true,true,true));
-        assertTrue(LockdownPolicy.lockIcon("com.android.systemui",id+"_view",true,true,true));
-        assertFalse(LockdownPolicy.lockIcon("com.android.chrome",id,true,true,true));
-        assertFalse(LockdownPolicy.lockIcon("com.android.systemui",null,true,true,true));
-        assertFalse(LockdownPolicy.lockIcon("com.android.systemui",id,true,true,false));
-        assertFalse(LockdownPolicy.lockIcon("com.android.systemui",id,false,true,true));
-        assertFalse(LockdownPolicy.lockIcon("com.android.systemui",id,true,false,true));
-        assertFalse(LockdownPolicy.lockIcon("com.android.systemui","com.android.systemui:id/unlock_button",true,true,true));
+        assertTrue(LockdownPolicy.lockIcon("com.android.systemui",id,true,true));
+        assertTrue(LockdownPolicy.lockIcon("com.android.systemui",id+"_view",true,true));
+        assertFalse(LockdownPolicy.lockIcon("com.android.chrome",id,true,true));
+        assertFalse(LockdownPolicy.lockIcon("com.android.systemui",null,true,true));
+        assertFalse(LockdownPolicy.lockIcon("com.android.systemui",id,false,true));
+        assertFalse(LockdownPolicy.lockIcon("com.android.systemui",id,true,false));
+        assertFalse(LockdownPolicy.lockIcon("com.android.systemui","com.android.systemui:id/unlock_button",true,true));
     }
-
+    @Test public void iconHoldStaysAtActualIconCenter(){
+        var hold=LockdownPolicy.iconHold(270,65,320,115,591,1280,2);
+        assertNotNull(hold);assertEquals(295f,hold.x(),0);assertEquals(90f,hold.y(),0);
+        assertEquals(1200,LockdownPolicy.ICON_HOLD_MS);
+    }
+    @Test public void invalidOrNonTopIconGeometryCannotCreateGesture(){
+        assertNull(LockdownPolicy.iconHold(0,0,591,1280,591,1280,2));
+        assertNull(LockdownPolicy.iconHold(270,900,320,950,591,1280,2));
+        assertNull(LockdownPolicy.iconHold(-1,65,320,115,591,1280,2));
+        assertNull(LockdownPolicy.iconHold(270,65,320,115,591,1280,Float.NaN));
+    }
     @Test public void acceptsOnlyExactSystemPackages() {
         assertTrue(LockdownPolicy.systemPackage("com.android.systemui"));
         assertTrue(LockdownPolicy.systemPackage("android"));

@@ -44,7 +44,7 @@ public final class Notices {
         if (phase == Policy.Phase.IDLE || !record.checkedIn() ||
                 (phase == Policy.Phase.CHECKOUT && !record.checkedOut())) return;
         java.time.LocalDate date = java.time.LocalDate.parse(day);
-        if (record.checkedOut()) clearDeparture(context,day);
+        if (record.checkedOut()) {clearDeparture(context,day);checkoutUnlock(context,false);}
         String title = phase == Policy.Phase.ENTRY ? "입실 완료" : AttendanceMetrics.isEarly(record.out(),new Prefs(context).checkoutFor(date)) ? "조퇴 완료" : "퇴실 완료";
         String time = phase == Policy.Phase.ENTRY ? record.in() : record.out();
         if(observed)title=phase==Policy.Phase.ENTRY?"입실 기록 저장됨":"퇴실 기록 저장됨";
@@ -79,6 +79,9 @@ public final class Notices {
     }
     public static void checkoutAttention(Context context, boolean show, String detail) {
         final int id = 14;
+        if(show&&NetworkAccess.inspect(context).allowed()&&context.getSystemService(KeyguardManager.class).isDeviceLocked()){
+            context.getSystemService(NotificationManager.class).cancel(id);checkoutUnlock(context,true);return;
+        }
         if (!show || !new Prefs(context).guidanceNotifications()) { context.getSystemService(NotificationManager.class).cancel(id); return; }
         channels(context);
         Intent settings = new Intent(Build.VERSION.SDK_INT >= 29 ? Settings.Panel.ACTION_WIFI : Settings.ACTION_WIFI_SETTINGS);
@@ -113,6 +116,25 @@ public final class Notices {
     public static void clearDeparture(Context context, String day) {
         context.getSystemService(NotificationManager.class).cancel("departure:" + day, DEPARTURE);
     }
+    static void checkoutUnlock(Context context,boolean show) {
+        final int id=19;NotificationManager nm=context.getSystemService(NotificationManager.class);
+        Prefs p=new Prefs(context);String day=java.time.LocalDate.now(Policy.ZONE).toString();
+        if(!show||!p.guidanceNotifications()||!CheckoutUnlockActivity.eligible(context,day)){
+            nm.cancel(id);p.raw.edit().remove("checkout_unlock_notice_day").apply();return;
+        }
+        channels(context);
+        Intent intent=new Intent(context,CheckoutUnlockActivity.class).putExtra(CheckoutUnlockActivity.DAY,day)
+            .setData(android.net.Uri.parse("attendance://checkout-unlock/"+day));
+        PendingIntent resume=PendingIntent.getActivity(context,19,intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        String detail="휴대폰이 잠겨 자동 퇴실을 진행하지 못했어요. 이 알림을 누르고 잠금을 해제하면 바로 퇴실합니다. 강의실 Wi-Fi 연결이 필요해요.";
+        publish(context,id,new Notification.Builder(context,"attention").setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("자동 퇴실 대기 · 잠금을 해제해 주세요").setContentText(detail)
+            .setStyle(new Notification.BigTextStyle().bigText(detail)).setContentIntent(resume)
+            .setAutoCancel(false).setOnlyAlertOnce(true).setCategory(Notification.CATEGORY_REMINDER)
+            .addAction(new Notification.Action.Builder(null,"잠금 해제하고 퇴실",resume).build()).build());
+        p.raw.edit().putString("checkout_unlock_notice_day",day).apply();
+        DiagnosticLog.add(context,DiagnosticLog.Event.CHECKOUT_UNLOCK_NOTICE,Policy.Phase.CHECKOUT,"UNLOCK_REQUIRED");
+    }
     public static void chromeAction(Context context, boolean show, String detail) {
         final int id = 15;
         if (!show || !new Prefs(context).guidanceNotifications()) { context.getSystemService(NotificationManager.class).cancel(id); return; }
@@ -130,7 +152,7 @@ public final class Notices {
         new Prefs(context).raw.edit().putBoolean("guidance_notifications",enabled).apply();
         if (!enabled) {
             NotificationManager nm=context.getSystemService(NotificationManager.class);
-            for (int id : new int[]{WIFI,RESULT,14,15,ShortDayReminder.ID}) nm.cancel(id);
+            for (int id : new int[]{WIFI,RESULT,14,15,19,ShortDayReminder.ID}) nm.cancel(id);
             for (android.service.notification.StatusBarNotification notice : nm.getActiveNotifications())
                 if (notice.getId()==DEPARTURE && notice.getTag()!=null && notice.getTag().startsWith("departure:"))
                     nm.cancel(notice.getTag(),DEPARTURE);

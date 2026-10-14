@@ -16,6 +16,8 @@ public final class ScheduleController {
     public static void reconcile(Context context) {
         Prefs prefs = new Prefs(context);
         ShortDayReminder.reconcile(context);
+        String noticeDay=prefs.raw.getString("checkout_unlock_notice_day","");
+        if(!noticeDay.isEmpty()&&!CheckoutUnlockActivity.eligible(context,noticeDay))Notices.checkoutUnlock(context,false);
         AlarmScheduler.arm(context, false);
         if(ActivationRun.pending()&&prefs.enabled())return;
         if (!prefs.enabled() || prefs.checkedOutToday()) Notices.clearDeparture(context,java.time.LocalDate.now(Policy.ZONE).toString());

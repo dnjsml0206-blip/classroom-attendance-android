@@ -514,7 +514,7 @@ public final class MainActivity extends Activity {
     private void screenSettings(){
         LinearLayout box=settingsCard("출결 처리 화면", "screen", () -> "자동 처리 중에는 ‘출결 처리 중’ 화면이 보입니다. ‘Chrome 화면 보기’를 누르면 진행 화면을 확인할 수 있습니다. 완료 시각을 확인하면 화면을 끄고, 오류가 나면 진행 화면을 보여줍니다."
             + "\n\nChrome 처리 중에는 화면이 켜지고 잠금이 해제되어 있어야 합니다. 직접 실행하거나 기록만 조회할 때는 Chrome을 보여주며, 이미 완료된 기록만 조회하면 화면을 끄지 않습니다."
-            + "\n\n잠금 모드를 사용하면 전원 메뉴에서 ‘잠금 모드’만 확인해 한 번 누릅니다. 다음 사용 때 지문 대신 PIN·패턴·비밀번호가 필요하며, Wi-Fi 재연결만으로 풀리지 않습니다. PIN 해제 후 신뢰 조건에서 Extend Unlock이 다시 적용될 수 있습니다(최대 4시간). 다음 출석 시각이 되어도 앱이 강한 잠금을 자동 해제할 수는 없습니다. 완료 후에는 다음 예약까지 앱이 화면을 깨우지 않으며, 직접 해제한 휴대폰을 강제로 다시 잠그지 않습니다."
+            + "\n\n출결 완료 후 상단 자물쇠를 먼저 길게 누르고 실제 잠금을 확인합니다. 실패하면 전원 메뉴의 ‘잠금 모드’를 한 번 시도합니다. 이미 인증 잠금 상태이면 추가 동작을 생략합니다. 전원 메뉴 잠금 모드는 다음 사용 때 지문 대신 PIN·패턴·비밀번호가 필요하며, Wi-Fi 재연결만으로 풀리지 않습니다. PIN 해제 후 신뢰 조건에서 Extend Unlock이 다시 적용될 수 있습니다(최대 4시간). 다음 출석 시각이 되어도 앱이 강한 잠금을 자동 해제할 수는 없습니다. 완료 후에는 다음 예약까지 앱이 화면을 깨우지 않으며, 직접 해제한 휴대폰을 강제로 다시 잠그지 않습니다."
             + "\n\n잠금 항목을 찾지 못하면 일반 화면 끄기로 마무리하고 결과를 기록합니다. 휴대폰에서 잠금 모드 표시를 켜야 할 수 있습니다. 완료 후 화면 끄기는 Android 9 이상에서 지원합니다.");
         box.setTag("setup-screen");
         Switch off=new Switch(this);off.setTag("attendance-screen-off");off.setText("입실·퇴실 완료 후 화면 끄기");off.setTextSize(16);off.setTextColor(INK);off.setMinHeight(dp(48));
@@ -525,7 +525,7 @@ public final class MainActivity extends Activity {
         lockdown.setOnCheckedChangeListener((v,yes)->prefs.raw.edit().putBoolean("lockdown_after_attendance",yes).apply());
         off.setOnCheckedChangeListener((v,yes)->{prefs.raw.edit().putBoolean("screen_off_after_attendance",yes).apply();lockdown.setEnabled(yes);});
         action(box,"잠금 모드만 테스트",false,()->new AlertDialog.Builder(this).setTitle("잠금 모드를 시험할까요?")
-            .setMessage("실제 출결 없이 전원 메뉴의 잠금 모드를 실행합니다. 다음에 휴대폰을 열 때 PIN·패턴·비밀번호가 필요합니다.")
+            .setMessage("실제 출결 없이 상단 자물쇠 길게 누르기를 우선 시도합니다. 실패하면 전원 메뉴의 잠금 모드를 실행하며, 이 경우 다음 해제에 PIN·패턴·비밀번호가 필요합니다.")
             .setNegativeButton("취소",null).setPositiveButton("테스트",(d,w)->{if(!ChromeAttendanceService.testLockdown(this))toast("접근성 연결을 확인하고 진행 중인 작업을 마친 뒤 다시 눌러 주세요.");}).show());
         lockdownResult=text(lockdownStatus(),13,MUTED,false);lockdownResult.setTag("lockdown-result");lockdownResult.setPadding(0,dp(10),0,dp(10));box.addView(lockdownResult);
         action(box,"잠금 항목이 안 보여요",false,()->new AlertDialog.Builder(this).setTitle("전원 메뉴에 잠금 모드 표시")

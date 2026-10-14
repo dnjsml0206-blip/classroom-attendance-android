@@ -15,11 +15,17 @@ final class LockdownPolicy {
     static boolean authenticatedLock(boolean secure,boolean keyguard,boolean locked) {
         return secure && keyguard && locked;
     }
-    /** Only a platform lock icon exposing a long-click action is a fallback target.
-     * Never guess a drag direction or select a similarly named app/notification. */
-    static boolean lockIcon(String owner,String id,boolean visible,boolean enabled,boolean longClick) {
-        return id!=null && "com.android.systemui".equals(owner) && visible && enabled && longClick
+    /** Only an identified SystemUI icon is eligible; no gesture action label is required. */
+    static boolean lockIcon(String owner,String id,boolean visible,boolean enabled) {
+        return id!=null && "com.android.systemui".equals(owner) && visible && enabled
             && Set.of("com.android.systemui:id/lock_icon","com.android.systemui:id/lock_icon_view").contains(id);
+    }
+    static final int ICON_HOLD_MS = 1200;
+    record Hold(float x,float y) {}
+    static Hold iconHold(int left,int top,int right,int bottom,int width,int height,float density){
+        if(width<=0||height<=0||!Float.isFinite(density)||density<=0||left<0||top<0||right>width||bottom>height
+            ||right<=left||bottom<=top||right-left>width/3||bottom-top>height/5||bottom>height*0.35f)return null;
+        return new Hold((left+right)/2f,(top+bottom)/2f);
     }
 
     static boolean systemPackage(String packageName) {
@@ -109,7 +115,7 @@ final class LockdownPolicy {
     static String resultText(String reason){
         if(reason==null||reason.isEmpty()||reason.equals("NOT_TESTED"))return "아직 테스트하지 않았어요";
         return switch(reason){
-            case "LOCKDOWN_RUNNING" -> "전원 메뉴의 잠금 버튼 확인 중…";
+            case "LOCKDOWN_RUNNING" -> "자물쇠 우선 · 잠금 상태 확인 중…";
             case "LOCKDOWN_LOCK_OBSERVED" -> "잠금 버튼 클릭 후 인증 잠금 확인";
             case "AUTHENTICATED_LOCK_OBSERVED" -> "이미 인증 잠금 확인 · 추가 잠금 시도 생략";
             case "LOCK_ICON_LOCK_OBSERVED" -> "자물쇠 동작 후 인증 잠금 확인";

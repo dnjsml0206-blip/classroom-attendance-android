@@ -181,7 +181,9 @@ public final class ChromeAttendanceService extends AccessibilityService {
                 context.getSystemService(KeyguardManager.class).isDeviceLocked() || !context.getSystemService(PowerManager.class).isInteractive()) {
             DiagnosticLog.add(context,DiagnosticLog.Event.WAITING,prefs.phase(ZonedDateTime.now(Policy.ZONE)),"SCREEN_LOCKED");
             prefs.status("잠금 해제 후 Chrome에서 확인", "출석 알림을 눌러 화면 잠금을 해제해 주세요");
-            Notices.chromeAction(context, true, "잠금을 해제하고 알림을 누르면 기존 Chrome으로 출석을 확인합니다");
+            if(target==Policy.Phase.CHECKOUT&&context.getSystemService(KeyguardManager.class).isDeviceLocked())
+                Notices.checkoutUnlock(context,true);
+            else Notices.chromeAction(context, true, "잠금을 해제하고 알림을 누르면 기존 Chrome으로 출석을 확인합니다");
             ScheduledUnlock.request(context,prefs.phase(ZonedDateTime.now(Policy.ZONE)));
             if (done != null) done.run(); return;
         }

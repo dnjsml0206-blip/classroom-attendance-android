@@ -84,8 +84,11 @@ final class ScheduledUnlock {
         if(!token.equals(token(c))||!store(c).getBoolean("active",false))return;
         Policy.Phase phase=phase(c);store(c).edit().putBoolean("active",false).putString("result",reason).commit();
         DiagnosticLog.add(c,DiagnosticLog.Event.WAKE_FINISHED,phase,reason,details(c));
-        if(notify&&new Prefs(c).phase(ZonedDateTime.now(Policy.ZONE))==phase)
-            Notices.chromeAction(c,true,"화면 깨우기·잠금 해제를 완료하지 못했습니다. 알림을 눌러 잠금을 해제하고 출결을 확인해 주세요.");
+        if(notify&&new Prefs(c).phase(ZonedDateTime.now(Policy.ZONE))==phase){
+            if(phase==Policy.Phase.CHECKOUT&&c.getSystemService(android.app.KeyguardManager.class).isDeviceLocked())
+                Notices.checkoutUnlock(c,true);
+            else Notices.chromeAction(c,true,"화면 깨우기·잠금 해제를 완료하지 못했습니다. 알림을 눌러 잠금을 해제하고 출결을 확인해 주세요.");
+        }
     }
     static void cancel(Context c,String reason){stop(c,token(c),reason,false);}
     static boolean handoff(Context c,String token){
