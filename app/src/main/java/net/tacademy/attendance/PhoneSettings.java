@@ -12,7 +12,7 @@ import java.util.*;
 
 /** Opens settings only. Permission switches and authentication remain controlled by the user. */
 final class PhoneSettings {
-    enum Target { ACCESSIBILITY, LOCATION_PERMISSION, LOCATION_SERVICE, ALARMS, NOTIFICATIONS, TEST_NOTIFICATIONS, BATTERY, WIFI, EXTEND, SCHEDULE, AUTO_CLICK }
+    enum Target { ACCESSIBILITY, LOCATION_PERMISSION, LOCATION_SERVICE, ALARMS, NOTIFICATIONS, TEST_NOTIFICATIONS, BATTERY, WIFI, EXTEND, SCHEDULE, AUTO_CLICK, CLASSROOM_LOCATION, ATTENDANCE_WIFI }
     static Intent primary(Context c,Target target){
         String pkg=c.getPackageName();Uri app=Uri.parse("package:"+pkg);
         return switch(target){
@@ -23,6 +23,8 @@ final class PhoneSettings {
             case NOTIFICATIONS, TEST_NOTIFICATIONS -> new Intent(c,NotificationSettingsActivity.class);
             case WIFI -> new Intent(Settings.ACTION_WIFI_SETTINGS);
             case EXTEND -> new Intent(Build.MANUFACTURER.equalsIgnoreCase("samsung")?Settings.ACTION_SETTINGS:Settings.ACTION_SECURITY_SETTINGS);
+            case ATTENDANCE_WIFI -> new Intent(c,MainActivity.class).putExtra("open_tab",2).putExtra("focus_setting","setup-wifi");
+            case CLASSROOM_LOCATION -> new Intent(c,MainActivity.class).putExtra("open_tab",2).putExtra("focus_setting","setup-location");
             case SCHEDULE -> new Intent(c,MainActivity.class).putExtra("open_tab",1).putExtra("focus_setting","automation");
             case AUTO_CLICK -> new Intent(c,MainActivity.class).putExtra("open_tab",2).putExtra("focus_setting","setup-readiness");
         };
@@ -35,6 +37,11 @@ final class PhoneSettings {
             .putExtra(":settings:show_fragment_args",args);
     }
     static void open(Activity activity,Target target){
+        if(target==Target.ACCESSIBILITY){AccessibilityDisclosure.show(activity,()->openAfterDisclosure(activity,target));return;}
+        if(target==Target.LOCATION_PERMISSION){LocationDisclosure.show(activity,()->openAfterDisclosure(activity,target));return;}
+        openAfterDisclosure(activity,target);
+    }
+    private static void openAfterDisclosure(Activity activity,Target target){
         ChromeAttendanceService.cancelSettingsMenu();
         if(target==Target.NOTIFICATIONS||target==Target.TEST_NOTIFICATIONS){
             // Keep every notification shortcut inside the app, including blocked permissions.
@@ -56,7 +63,7 @@ final class PhoneSettings {
         case ACCESSIBILITY -> "접근성 → 설치된 앱 → 출석 메이트 · Chrome 출석을 선택하세요";
         case LOCATION_PERMISSION -> "출석 메이트 앱 정보 → 권한 → 위치 → 항상 허용, 정확한 위치를 확인하세요";
         case BATTERY -> "출석 메이트 앱 정보 → 배터리에서 제한 상태를 확인하세요";
-        case EXTEND -> "휴대폰 설정 → 잠금화면 및 AOD(또는 보안) → Extend Unlock을 선택하세요";
+        case EXTEND -> "설정 → 잠금화면 및 AOD → 잠금 해제 유지 → 신뢰할 수 있는 장소를 선택하세요";
         default -> "";
     };}
     private static boolean launch(Activity a,Intent intent){try{a.startActivity(intent);return true;}catch(ActivityNotFoundException|SecurityException e){return false;}}

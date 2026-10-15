@@ -84,6 +84,7 @@ public final class SetupGuideActivity extends Activity {
         }else{
             LinearLayout current=card(quickTitle(action),quickPending==action?"확인 중 · 미허용이면 다시 눌러 주세요":action==SetupGuidePolicy.QuickAction.CHROME||action==SetupGuidePolicy.QuickAction.EXTEND?"직접 확인 필요":"지금 필요한 설정",false);
             note(current,quickDescription(action));
+            if(action==SetupGuidePolicy.QuickAction.EXTEND)ExtendUnlockSetupHelp.addSteps(this,current);
             if(action==SetupGuidePolicy.QuickAction.CHROME||action==SetupGuidePolicy.QuickAction.EXTEND){
                 if(action==SetupGuidePolicy.QuickAction.CHROME?!chromeOpened:!extendOpened)add(current,"이미 설정했어요 · 직접 확인",false,()->confirmQuickManual(action),"setup-quick-already");
                 if(action==SetupGuidePolicy.QuickAction.CHROME&&chromeOpened)add(current,"Chrome 다시 열기",false,()->openQuickChrome(),"setup-quick-reopen");
@@ -149,6 +150,10 @@ public final class SetupGuideActivity extends Activity {
         }
     }
     private void requestQuickPermissions(boolean location){
+        if(location){LocationDisclosure.show(this,()->requestQuickPermissionsAfterDisclosure(true));return;}
+        requestQuickPermissionsAfterDisclosure(false);
+    }
+    private void requestQuickPermissionsAfterDisclosure(boolean location){
         List<String> wanted=new ArrayList<>();
         if(location){
             if(prefs.raw.getBoolean("setup_location_requested",false)&&!shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)){open(PhoneSettings.Target.LOCATION_PERMISSION);return;}
@@ -205,6 +210,7 @@ public final class SetupGuideActivity extends Activity {
         body.addView(new ExtendUnlockSettings(this,()->render(false)));
         if(!prefs.useExtendUnlock())return;
         LinearLayout box=card("Extend Unlock · 예전 Smart Lock",s.extendConfirmed()?"직접 확인함":"직접 설정 필요",s.extendConfirmed());
+        add(box,"그림으로 설정하는 법 보기",false,()->ExtendUnlockSetupHelp.show(this),"setup-extend-howto");
         note(box,"1  PIN·패턴·비밀번호 잠금을 설정하세요.\n2  Extend Unlock에서 강의실을 ‘신뢰할 수 있는 장소’로 등록하세요.\n3  PIN 등으로 한 번 해제한 뒤 신뢰 장소에서 시험하세요.");
         note(box,"신뢰하는 Bluetooth 기기를 사용할 수도 있어요. Wi-Fi 등록과 신뢰 장소 등록은 별개예요.");
         add(box,"Extend Unlock 설정 열기",true,()->open(PhoneSettings.Target.EXTEND),"setup-extend-open");
@@ -212,7 +218,7 @@ public final class SetupGuideActivity extends Activity {
         if(ScheduledUnlock.mode(this)!=UnlockPolicy.Mode.TRUST)add(box,"앱 처리 방식도 Extend Unlock으로 선택",false,()->{if(busy())return;ScheduledUnlock.cancel(this,"SETUP_MODE_CHANGED");prefs.raw.edit().putString("scheduled_lock_mode","TRUST").apply();render(true);},"setup-trust-mode");else note(box,"✓ 앱 처리 방식: Extend Unlock · 신뢰 상태");
         check(box,"신뢰 장소·기기를 등록하고 한 번 잠금 해제했어요",EXTEND,s.secureLock()&&ScheduledUnlock.mode(this)==UnlockPolicy.Mode.TRUST);
         note(box,"이 표시는 사용자 확인이에요. 앱이 Extend Unlock의 실제 활성 여부를 읽을 수는 없어요.");
-        add(box,"메뉴를 못 찾겠어요",false,()->help("Extend Unlock 찾기","갤럭시: 설정 → 잠금화면 및 AOD(또는 잠금화면) → Extend Unlock. 다른 Android: 보안 및 개인 정보 보호 → 보안 설정 더보기 → Extend Unlock. 설정 검색에서 ‘Extend Unlock’ 또는 ‘Smart Lock’을 찾아보세요. 제조사·Android 버전별로 메뉴가 다를 수 있어요."),null);
+        add(box,"메뉴를 못 찾겠어요",false,()->help("Extend Unlock 찾기","갤럭시: 설정 → 잠금화면 및 AOD(또는 잠금화면) → 잠금 해제 유지 → 신뢰할 수 있는 장소. 다른 Android: 보안 및 개인 정보 보호 → 보안 설정 더보기 → Extend Unlock. 설정 검색에서 ‘Extend Unlock’ 또는 ‘Smart Lock’을 찾아보세요. 제조사·Android 버전별로 메뉴가 다를 수 있어요."),null);
         LinearLayout lock=card("이 두 가지는 기억해 주세요","사용 전 확인",false);
         note(lock,"신뢰 상태는 최대 4시간 유지돼요. PIN 재인증이 필요하면 자동출석을 이어갈 수 없어요.");
         note(lock,prefs.screenOffAfterAttendance()&&prefs.lockdownAfterAttendance()?"완료 후 잠금 모드가 켜져 있어요. 출결 완료 뒤에는 PIN 등으로 한 번 해제해야 하며 Wi-Fi 재연결만으로 풀리지 않아요.":"완료 후 화면·잠금 방식은 자동출석 탭에서 변경할 수 있어요.");
@@ -240,6 +246,10 @@ public final class SetupGuideActivity extends Activity {
     private void open(PhoneSettings.Target target){if(!busy())PhoneSettings.open(this,target);}
     private void setting(String tag){if(!busy())startActivity(new Intent(this,MainActivity.class).putExtra("open_tab",tag.equals("setup-schedule")||tag.equals("setup-days")||tag.equals("automation")?1:2).putExtra("focus_setting",tag));}
     private void requestLocation(){
+        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED){open(PhoneSettings.Target.LOCATION_PERMISSION);return;}
+        LocationDisclosure.show(this,this::requestLocationAfterDisclosure);
+    }
+    private void requestLocationAfterDisclosure(){
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED){open(PhoneSettings.Target.LOCATION_PERMISSION);return;}
         if(prefs.raw.getBoolean("setup_location_requested",false)&&!shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)){open(PhoneSettings.Target.LOCATION_PERMISSION);return;}
         prefs.raw.edit().putBoolean("setup_location_requested",true).apply();requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION},41);

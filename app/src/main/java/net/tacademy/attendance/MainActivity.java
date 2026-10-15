@@ -595,7 +595,7 @@ public final class MainActivity extends Activity {
 
     private void setupGuideCard(){
         LinearLayout guide=card("자동출석 준비 확인");guide.setTag("setup-readiness");
-        guide.addView(text("필요한 설정만 자동으로 안내해요",19,INK,true));
+        guide.addView(text("원하는 수준으로 순차적으로 설정해요",19,INK,true));
         setupStatus=new SetupStatusView(this,true);guide.addView(setupStatus);
         Button start=button("빠른 설정 "+(prefs.raw.getBoolean("setup_visited",false)?"이어하기":"시작하기")+"  ›",true,()->SetupGuideActivity.open(this));start.setTag("setup-guide-open");gap(guide,10);guide.addView(start,new LinearLayout.LayoutParams(-1,-2));
     }
@@ -921,6 +921,12 @@ public final class MainActivity extends Activity {
     }
 
     private void permissions() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            LocationDisclosure.show(this, this::requestPermissionsAfterDisclosure); return;
+        }
+        requestPermissionsAfterDisclosure();
+    }
+    private void requestPermissionsAfterDisclosure() {
         java.util.ArrayList<String> wanted = new java.util.ArrayList<>();
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             wanted.add(Manifest.permission.ACCESS_COARSE_LOCATION); wanted.add(Manifest.permission.ACCESS_FINE_LOCATION);

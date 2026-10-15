@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:isAccessibilityTool="false"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:packageNames="com.android.chrome,com.android.settings,com.android.permissioncontroller,com.google.android.permissioncontroller"
     android:accessibilityFeedbackType="feedbackGeneric"

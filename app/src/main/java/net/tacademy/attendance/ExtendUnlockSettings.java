@@ -20,6 +20,7 @@ final class ExtendUnlockSettings extends LinearLayout {
         Switch choice=new Switch(a);choice.setText("Extended Unlock 사용");choice.setTextSize(16);choice.setMinHeight(pad*3);choice.setChecked(p.useExtendUnlock());addView(choice);
         TextView state=new TextView(a);state.setTextSize(13);state.setTextColor(0xFF536963);addView(state);
         Button open=new Button(a);open.setText("휴대폰 Extend Unlock 설정");addView(open);open.setOnClickListener(v->PhoneSettings.open(a,PhoneSettings.Target.EXTEND));
+        Button howto=new Button(a);howto.setText("그림으로 설정하는 법 보기");howto.setTag("extend-unlock-howto");addView(howto);howto.setOnClickListener(v->ExtendUnlockSetupHelp.show(a));
         Runnable refresh=()->state.setText(p.useExtendUnlock()?"선택됨 · 휴대폰 신뢰 설정을 확인해 주세요":"기본 방식 · 화면 깨우기, 잠금이 풀린 경우 자동출석");refresh.run();
         choice.setOnCheckedChangeListener((v,on)->{
             ScheduledUnlock.cancel(a,"EXTEND_PREFERENCE_CHANGED");
