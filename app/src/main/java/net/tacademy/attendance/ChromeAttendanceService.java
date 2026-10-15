@@ -80,7 +80,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
     }
     private final Runnable tick = new Runnable() {
         @Override public void run() {
-            if (working) { inspect(); if (working) handler.postDelayed(this, 700); }
+            if (working) { inspect(); if (working) handler.postDelayed(this, manualSession ? 120 : 700); }
         }
     };
     public static boolean available() { return instance != null; }
@@ -217,7 +217,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if (!launchChrome(launch,SiteProtocol.PAGE,kind,service.phase)) { service.fail("Chrome 실행 실패", "Google Chrome 사용 설정을 확인해 주세요"); return; }
         service.resultDeadline=service.started+AttendanceAttemptPolicy.PAGE_WAIT_MS;
         service.handler.postDelayed(service.timeout, AttendanceAttemptPolicy.PAGE_WAIT_MS);
-        service.handler.postDelayed(service.tick, 1200);
+        service.handler.postDelayed(service.tick, manual ? 0 : 1200);
     }
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
         if(!working&&"com.android.chrome".equals(string(event.getPackageName())))queuePassiveRead();
@@ -225,7 +225,7 @@ public final class ChromeAttendanceService extends AccessibilityService {
         if (navigatingWifi && "com.android.settings".equals(string(event.getPackageName()))) { navigateWifi(); return; }
         if (working && "com.android.chrome".equals(string(event.getPackageName()))) {
             lastChromeEventAt=SystemClock.elapsedRealtime();
-            if(!eventReadQueued){eventReadQueued=true;handler.postDelayed(eventInspect,80);}
+            if(!eventReadQueued){eventReadQueued=true;handler.postDelayed(eventInspect,manualSession ? 16 : 80);}
         }
     }
     private void queuePassiveRead(){
@@ -344,12 +344,19 @@ public final class ChromeAttendanceService extends AccessibilityService {
                 Notices.attendanceCompleted(this, day, phase, record);
                 Notices.chromeAction(this, false, "");
                 if (record.checkedOut()) Notices.checkoutAttention(this, false, "");
-                screen.confirmed(!manualReadOnly&&(clicked||!manualSession));
-                finishWork(); ScheduleController.reconcile(this); return;
+                boolean returnToApp=manualSession;
+                // Manual requests return to the app; scheduled runs retain the configured lock behavior.
+                screen.confirmed(!returnToApp&&!manualReadOnly&&(clicked||!manualSession));
+                finishWork(); ScheduleController.reconcile(this);
+                if(returnToApp){
+                    try{startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("open_tab",0));}
+                    catch(RuntimeException e){DiagnosticLog.add(this,DiagnosticLog.Event.MANUAL_FINISHED,phase,"RETURN_TO_APP_"+DiagnosticLog.failureCode(e));}
+                }
+                return;
             }
         }
         // Existing confirmed records can be read immediately. Only a NEW click needs settling.
-        if (SystemClock.elapsedRealtime() - pageSeen < 1800) {stage("PAGE_SETTLING");return;}
+        if ((!manualSession || manualReadOnly) && SystemClock.elapsedRealtime() - pageSeen < 1800) {stage("PAGE_SETTLING");return;}
         if(manualSession&&manualReadOnly){
             if(record.checkedIn()){
                 if((day+":ENTRY").equals(prefs.raw.getString("chrome_pending","")))prefs.raw.edit().remove("chrome_pending").remove("chrome_pending_at").apply();
@@ -429,9 +436,12 @@ public final class ChromeAttendanceService extends AccessibilityService {
         }
         if(confirmationSeenAt==0)confirmationSeenAt=now;
         dialogState("CONFIRM_VISIBLE");
-        if(now-confirmationSeenAt<600){stage("CONFIRM_SETTLING");return true;}
+        if(!manualSession&&now-confirmationSeenAt<600){stage("CONFIRM_SETTLING");return true;}
         if(positive==null){stage("CONFIRM_BUTTON_UNAVAILABLE");return true;}
         if((!manualSession&&!prefs.auto())||!observationAllowed(prefs)){finishWork();return true;}
+        if(manualSession&&AttendanceAttemptPolicy.checkoutSafetyWindow(ZonedDateTime.now(Policy.ZONE),prefs.checkout())){
+            fail("퇴실 시작 시각 대기","조기 퇴실 방지를 위해 확인 버튼을 누르지 않았습니다. 예정 시각 이후 다시 확인해 주세요.","CHECKOUT_SAFETY_WINDOW");return true;
+        }
         confirmationClicked=true;confirmationActionAt=now;
         evidence.operation="CONFIRM_CLICK";
         DiagnosticLog.add(this,DiagnosticLog.Event.CLICK_PLANNED,phase,"CHECKOUT_CONFIRMATION",attemptDetails());

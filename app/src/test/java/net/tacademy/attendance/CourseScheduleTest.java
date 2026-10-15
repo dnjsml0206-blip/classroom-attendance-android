@@ -14,24 +14,24 @@ public final class CourseScheduleTest {
             assertEquals(Policy.Phase.CHECKOUT,phase(date,"15:50:02"));
             assertEquals(Policy.Phase.CHECKOUT,phase(date,"15:59:59"));
             assertEquals(Policy.Phase.IDLE,phase(date,"16:00:00"));
-            assertEquals(Policy.Phase.IDLE,phase(date,"17:50:05"));
+            assertEquals(Policy.Phase.IDLE,phase(date,"17:50:02"));
         }
     }
-    @Test public void normalDaysKeepConfiguredTimeAndFiveSeconds(){
-        assertEquals(LocalTime.of(17,50,5),Policy.checkoutStartTime(LocalDate.of(2026,10,8),"17:50"));
-        assertEquals(LocalTime.of(16,20,5),Policy.checkoutStartTime(LocalDate.of(2026,10,8),"16:20"));
+    @Test public void normalDaysKeepConfiguredTimeAndTwoSeconds(){
+        assertEquals(LocalTime.of(17,50,2),Policy.checkoutStartTime(LocalDate.of(2026,10,8),"17:50"));
+        assertEquals(LocalTime.of(16,20,2),Policy.checkoutStartTime(LocalDate.of(2026,10,8),"16:20"));
         assertEquals(LocalTime.of(15,50,2),Policy.checkoutStartTime(LocalDate.of(2026,10,6),"18:10"));
     }
     @Test public void nextAlarmUsesEachCandidateDateAndReturnsToNormalAfterShortDays(){
         assertEquals(at("2026-10-06","15:50:02"),Policy.nextWake(at("2026-10-06","09:01"),DAYS,Set.of(),"08:30","09:30","17:50",10,true,false));
         assertEquals(at("2026-10-06","16:00"),Policy.nextWake(at("2026-10-06","15:50:02"),DAYS,Set.of(),"08:30","09:30","17:50",10,true,false));
         assertEquals(at("2026-10-07","08:30"),Policy.nextWake(at("2026-10-06","16:00"),DAYS,Set.of(),"08:30","09:30","17:50",10,true,false));
-        assertEquals(at("2026-10-08","17:50:05"),Policy.nextWake(at("2026-10-08","10:00"),DAYS,Set.of(),"08:30","09:30","17:50",10,true,false));
+        assertEquals(at("2026-10-08","17:50:02"),Policy.nextWake(at("2026-10-08","10:00"),DAYS,Set.of(),"08:30","09:30","17:50",10,true,false));
     }
     @Test public void holidaysNeverStartEntryOrCheckoutEvenWithoutUserExclusions(){
         for(String date:List.of("2026-09-23","2026-09-24","2026-10-05","2027-02-05")){
             assertEquals(Policy.Phase.IDLE,Policy.phase(at(date,"08:45"),DAYS,Set.of(),"08:30","09:30","17:50",10,false,false));
-            assertEquals(Policy.Phase.IDLE,phase(date,"17:50:05"));
+            assertEquals(Policy.Phase.IDLE,phase(date,"17:50:02"));
             assertEquals(Policy.Phase.IDLE,AttendanceAttemptPolicy.activationPhase(at(date,"17:51"),DAYS,Set.of(),"08:30","09:30","17:50",true,false));
         }
         assertEquals(at("2026-09-28","08:30"),Policy.nextWake(at("2026-09-22","18:00"),DAYS,Set.of(),"08:30","09:30","17:50",10,true,true));

@@ -279,7 +279,14 @@ public final class MainActivity extends Activity {
         readAttendance=compactHomeButton("출결 기록 확인 ↻",()->ChromeAttendanceService.beginManual(this,Policy.Phase.CHECKOUT,true,false));
         readAttendance.setTag("attendance-read-record");statusRow.addView(readAttendance,new LinearLayout.LayoutParams(-2,dp(48)));
         state.addView(statusRow);gap(state,6);state.addView(detail);
-        passiveStatus=text("",12,homeTheme.muted,false);passiveStatus.setTag("today-passive-status");state.addView(passiveStatus);gap(state,18);
+        passiveStatus=text("",12,homeTheme.muted,false);passiveStatus.setTag("today-passive-status");
+        passiveStatus.setMinHeight(dp(48));passiveStatus.setGravity(Gravity.CENTER_VERTICAL);passiveStatus.setFocusable(true);passiveStatus.setBackgroundResource(android.R.drawable.list_selector_background);
+        passiveStatus.setOnClickListener(v->{
+            if(!ChromeAttendanceService.available()){AccessibilitySetupHelp.show(this);return;}
+            new AlertDialog.Builder(this).setTitle("Chrome 출결 기록 자동 저장")
+                .setMessage("평소처럼 Chrome에서 직접 입실·퇴실해도 출결 페이지의 날짜와 완료 시각을 읽어 앱에 저장해요. 완료 시각이 화면에 표시될 때까지 기다려 주세요.\n\n자동출석을 끄면 버튼은 누르지 않고 기록만 읽어요. 기록 연결에는 자동출석 예약이나 Extend Unlock 설정이 필요하지 않아요.")
+                .setPositiveButton("확인",null).show();
+        });state.addView(passiveStatus);gap(state,18);
         LinearLayout times = new LinearLayout(this);
         LinearLayout left = new LinearLayout(this); left.setOrientation(LinearLayout.VERTICAL);
         left.addView(text("입실", 12, homeTheme.muted, false)); gap(left, 3);
@@ -366,6 +373,9 @@ public final class MainActivity extends Activity {
         Policy.Record confirmed=prefs.history(LocalDate.now(Policy.ZONE));
         if(confirmed!=null&&(phase==Policy.Phase.ENTRY?confirmed.checkedIn():confirmed.checkedOut())){updateHome();return;}
         if(ChromeAttendanceService.busy()){toast("출결 결과를 확인하고 있어요. 잠시 기다려 주세요.");return;}
+        if(phase==Policy.Phase.CHECKOUT&&AttendanceAttemptPolicy.checkoutSafetyWindow(ZonedDateTime.now(Policy.ZONE),prefs.checkout())){
+            toast("조기 퇴실 방지 · "+Policy.checkoutStartTime(LocalDate.now(Policy.ZONE),prefs.checkout())+"부터 퇴실할 수 있어요.");return;
+        }
         if(phase==Policy.Phase.CHECKOUT&&LocalTime.now(Policy.ZONE).isBefore(LocalTime.parse(prefs.checkoutToday()))){
             new AlertDialog.Builder(this).setTitle("지금 조퇴하시겠어요?")
                 .setMessage("예정 퇴실 시각은 "+prefs.checkoutToday()+"입니다. 확인하면 Chrome에서 퇴실을 진행하고, 사이트의 퇴실 시각을 확인한 뒤 조퇴로 기록해요.")
@@ -405,7 +415,13 @@ public final class MainActivity extends Activity {
         boolean reservationEnabled=prefs.enabled();
         reservationScene.setLit(reservationEnabled);
         setIfChanged(reservationState,reservationEnabled?"출석 예약 켜짐":"출석 예약 꺼짐");
-        if(passiveStatus!=null){passiveStatus.setVisibility(prefs.passiveRecords()?View.VISIBLE:View.GONE);setIfChanged(passiveStatus,passiveRecordMessage());}
+        if(passiveStatus!=null){
+            boolean connected=ChromeAttendanceService.available();
+            passiveStatus.setVisibility(View.VISIBLE);
+            setIfChanged(passiveStatus,connected?"✓ Chrome 출결 기록 자동 저장  ⓘ":"Chrome 출결 기록 연결하기  ›");
+            passiveStatus.setTextColor(connected?homeTheme.muted:homeTheme.accent);
+            passiveStatus.setContentDescription(connected?"Chrome 출결 기록 연결됨. 자동 저장 설명 보기":"Chrome 출결 기록 미연결. 접근성 설정하는 법 보기");
+        }
         reservationState.setTextColor(reservationEnabled?(homeTheme==HomeTheme.NIGHT?0xFFF5D294:0xFF875024):homeTheme.muted);
         Policy.Record record = prefs.history(now.toLocalDate());
         String entry = record == null ? "" : record.in(), exit = record == null ? "" : record.out();
@@ -596,6 +612,12 @@ public final class MainActivity extends Activity {
     private void setupGuideCard(){
         LinearLayout guide=card("자동출석 준비 확인");guide.setTag("setup-readiness");
         guide.addView(text("원하는 수준으로 순차적으로 설정해요",19,INK,true));
+        TextView recordHelp=text("Chrome에서 직접 출석해도 기록돼요. 접근성만 연결하면 돼요.  ⓘ",12,MUTED,false);
+        recordHelp.setTag("automation-passive-help");recordHelp.setMinHeight(dp(48));recordHelp.setGravity(Gravity.CENTER_VERTICAL);recordHelp.setFocusable(true);recordHelp.setBackgroundResource(android.R.drawable.list_selector_background);
+        recordHelp.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("직접 출석한 기록도 자동 저장")
+            .setMessage("Chrome 접근성을 연결하면 출결 페이지의 날짜와 완료 시각을 읽어 앱에 저장해요. 완료 시각이 화면에 표시될 때까지 기다려 주세요.\n\n자동출석을 끄면 버튼은 누르지 않고 기록만 읽어요. 예약·Extend Unlock 설정은 필요하지 않아요.")
+            .setPositiveButton("확인",null).setNeutralButton("접근성 연결 방법",(d,w)->AccessibilitySetupHelp.show(this)).show());
+        guide.addView(recordHelp);
         setupStatus=new SetupStatusView(this,true);guide.addView(setupStatus);
         Button start=button("빠른 설정 "+(prefs.raw.getBoolean("setup_visited",false)?"이어하기":"시작하기")+"  ›",true,()->SetupGuideActivity.open(this));start.setTag("setup-guide-open");gap(guide,10);guide.addView(start,new LinearLayout.LayoutParams(-1,-2));
     }
@@ -683,13 +705,14 @@ public final class MainActivity extends Activity {
     private void showUsageGuide() {
         LinearLayout body=form();
         body.addView(text("자동출석은 선택이에요",18,TEAL,true));
-        note(body,"편한 방법으로 출석 메이트를 사용하세요.");
+        note(body,"Chrome에서 평소처럼 직접 출석해도 기록돼요. Chrome 접근성을 연결하면 완료 시각을 읽어 앱에 저장해요. 자동출석을 켤 필요는 없어요.");
+        note(body,"입실·퇴실 완료 시각이 Chrome 화면에 표시될 때까지 기다려 주세요.");
         gap(body,16);body.addView(text("① Extended Unlock으로 자동출석",16,INK,true));
         note(body,"예약 시간·출석 Wi-Fi에서 신뢰 상태로 잠금 해제가 가능하면 앱이 출석해요. PIN 재인증이 필요하면 직접 풀어 주세요.");
         gap(body,14);body.addView(text("② 직접 잠금해제 후 자동출석",16,INK,true));
         note(body,"Extended Unlock 없이도, 예약 시간·출석 Wi-Fi에서 직접 잠금을 풀면 앱이 출석해요.");
         gap(body,14);body.addView(text("③ 평소처럼 Chrome에서 직접 출석",16,INK,true));
-        note(body,"자동출석 설정 없이 기존 바로가기로 입실·퇴실하세요. 앱에도 기록을 저장하려면 Chrome 접근성만 연결해 주세요.");
+        note(body,"기존 바로가기로 직접 입실·퇴실하세요. Chrome 접근성을 연결하고 자동출석을 끄면, 앱은 버튼을 누르지 않고 기록만 저장해요.");
         ScrollView scroll=new ScrollView(this);scroll.addView(body);
         firstUseDialog=new AlertDialog.Builder(this).setTitle("출석 방법, 세 가지만 알아두세요")
             .setView(scroll).setPositiveButton("알겠어요",(d,w)->prefs.raw.edit().putBoolean("first_use_guide_pending",false).apply())

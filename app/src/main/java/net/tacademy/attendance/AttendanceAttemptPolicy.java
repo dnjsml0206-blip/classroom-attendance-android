@@ -19,6 +19,12 @@ final class AttendanceAttemptPolicy {
         if(!now.withZoneSameInstant(Policy.ZONE).toLocalTime().isBefore(Policy.checkoutStartTime(now.withZoneSameInstant(Policy.ZONE).toLocalDate(),checkout)))return Policy.Phase.CHECKOUT;
         return !checkedIn&&Policy.inWindow(now,start,end)?Policy.Phase.ENTRY:Policy.Phase.IDLE;
     }
+    // Reserve the minute before scheduled checkout, including its seconds buffer, even for early approval.
+    static boolean checkoutSafetyWindow(ZonedDateTime now,String checkout){
+        ZonedDateTime local=now.withZoneSameInstant(Policy.ZONE);
+        ZonedDateTime opens=local.toLocalDate().atTime(Policy.checkoutStartTime(local.toLocalDate(),checkout)).atZone(Policy.ZONE);
+        return !local.isBefore(opens.withSecond(0).withNano(0).minusMinutes(1))&&local.isBefore(opens);
+    }
     record ManualGate(String code,String problem){}
     static String manualProblem(Policy.Phase phase,ZonedDateTime now,Set<Integer> days,Set<String> excluded,String start,String checkout,boolean readOnly){
         return manualGate(phase,now,days,excluded,start,checkout,readOnly).problem();
@@ -31,6 +37,7 @@ final class AttendanceAttemptPolicy {
         if(readOnly)return new ManualGate("ALLOWED","");
         if(!Policy.isClassDay(now,days,excluded))return new ManualGate("NON_CLASS_DAY","오늘은 등록된 수업일이 아니에요. 수업 요일과 휴강일을 확인해 주세요.");
         LocalTime t=now.withZoneSameInstant(Policy.ZONE).toLocalTime();
+        if(phase==Policy.Phase.CHECKOUT&&checkoutSafetyWindow(now,checkout))return new ManualGate("CHECKOUT_SAFETY_WINDOW","조기 퇴실 기록 방지를 위해 "+Policy.checkoutStartTime(now.withZoneSameInstant(Policy.ZONE).toLocalDate(),checkout)+"부터 퇴실할 수 있어요.");
         if(phase==Policy.Phase.CHECKOUT&&!earlyApproved&&t.isBefore(Policy.checkoutStartTime(now.withZoneSameInstant(Policy.ZONE).toLocalDate(),checkout)))return new ManualGate("CHECKOUT_NOT_OPEN","퇴실은 "+Policy.checkoutStartTime(now.withZoneSameInstant(Policy.ZONE).toLocalDate(),checkout)+"부터 할 수 있어요.");
         if(phase==Policy.Phase.ENTRY&&t.isBefore(LocalTime.parse(start)))return new ManualGate("ENTRY_NOT_OPEN","입실은 "+start+"부터 할 수 있어요.");
         return new ManualGate("ALLOWED","");
