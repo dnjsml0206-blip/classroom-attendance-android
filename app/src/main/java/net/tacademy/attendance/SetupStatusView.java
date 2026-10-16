@@ -24,26 +24,33 @@ final class SetupStatusView extends LinearLayout {
         if(extras){TextView hint=label("항목을 누르면 해당 설정으로 이동합니다. 돌아오면 다시 확인합니다.",12);hint.setTextColor(0xFF687D77);addView(hint);}
         initial=read();
         for(Row item:initial){
-            if(item.target==PhoneSettings.Target.ACCESSIBILITY)section("01  앱이 Chrome에 접속해 출결처리","오늘 탭에서 입실하기·퇴실하기를 누르면 앱이 처리해요.",false);
-            if(item.target==PhoneSettings.Target.LOCATION_PERMISSION)section("02  잠금해제 해주면 앱이 출결처리","예약 시간에 잠금을 풀어 주세요. ①·② 설정과 아래 자동 클릭을 켜 주세요.",true);
-            if(item.target==PhoneSettings.Target.AUTO_CLICK)section("03  시간되면 앱이 알아서 자동출결","①·② 설정 후 자동 클릭과 Extend Unlock을 설정해요. 잠금해제 유지 상태와 출석 Wi-Fi 연결이 필요해요.",true);
+            if(item.target==PhoneSettings.Target.ACCESSIBILITY)section("00  앱이 크롬출석을 기록","접근성을 연결하고 자동출석을 끄면, 직접 연 Chrome의 완료 시각을 저장해요. 기록 감지에는 출석 시간 설정이 필요 없어요.",false);
+            if(item.target==PhoneSettings.Target.NOTIFICATIONS)section("01  앱이 Chrome에 접속해 출결처리","00 설정 후 오늘 탭에서 입실하기·퇴실하기를 누르면 앱이 처리해요.",true);
+            if(item.target==PhoneSettings.Target.LOCATION_PERMISSION)section("02  잠금해제 해주면 앱이 출결처리","예약 시간에 잠금을 풀어 주세요. 00~02 설정과 아래 자동 클릭을 켜 주세요.",true);
+            if(item.target==PhoneSettings.Target.AUTO_CLICK)section("03  시간되면 앱이 알아서 자동출결","00~02 설정 후 자동 클릭과 Extend Unlock을 설정해요. 잠금해제 유지 상태와 출석 Wi-Fi 연결이 필요해요.",true);
             LinearLayout row=new LinearLayout(activity);row.setGravity(android.view.Gravity.CENTER_VERTICAL);row.setMinimumHeight(dp(49));row.setPadding(0,dp(6),0,dp(6));
+            boolean accessibility=item.target==PhoneSettings.Target.ACCESSIBILITY;
             TextView title=label(item.label,14);
-            if(item.target==PhoneSettings.Target.ACCESSIBILITY){
-                row.setOrientation(VERTICAL);row.setGravity(android.view.Gravity.START);
-                LinearLayout heading=new LinearLayout(activity);heading.setGravity(android.view.Gravity.CENTER_VERTICAL);
-                heading.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-                Button help=new Button(activity);help.setText("설정하는 법 보기");help.setTextSize(12);help.setAllCaps(false);help.setTag("accessibility-howto");
-                help.setOnClickListener(v->AccessibilitySetupHelp.show(activity));heading.addView(help,new LinearLayout.LayoutParams(-2,dp(48)));row.addView(heading,new LinearLayout.LayoutParams(-1,-2));
+            if(accessibility){
+                title.setSingleLine(true);title.setAutoSizeTextTypeUniformWithConfiguration(10,14,1,android.util.TypedValue.COMPLEX_UNIT_SP);
+                row.addView(title,new LinearLayout.LayoutParams(0,dp(48),.38f));title.setGravity(android.view.Gravity.CENTER_VERTICAL);
+                Button help=new Button(activity);help.setText("설정하는 법 보기");help.setAllCaps(false);help.setTag("accessibility-howto");
+                help.setSingleLine(true);help.setAutoSizeTextTypeUniformWithConfiguration(10,12,1,android.util.TypedValue.COMPLEX_UNIT_SP);
+                help.setMinWidth(0);help.setMinimumWidth(0);help.setPadding(dp(3),0,dp(3),0);
+                help.setOnClickListener(v->AccessibilitySetupHelp.show(activity));row.addView(help,new LinearLayout.LayoutParams(0,dp(48),.36f));
             }else row.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-            TextView state=label("",12);state.setGravity(android.view.Gravity.END);states.add(state);row.addView(state,new LinearLayout.LayoutParams(dp(125),-2));
+            TextView state=label("",12);state.setGravity(android.view.Gravity.END|android.view.Gravity.CENTER_VERTICAL);states.add(state);
+            if(accessibility){
+                state.setSingleLine(true);state.setAutoSizeTextTypeUniformWithConfiguration(10,12,1,android.util.TypedValue.COMPLEX_UNIT_SP);
+                row.addView(state,new LinearLayout.LayoutParams(0,dp(48),.26f));
+            }else row.addView(state,new LinearLayout.LayoutParams(dp(125),-2));
             row.setBackgroundResource(android.R.drawable.list_selector_background);row.setFocusable(true);row.setClickable(true);
             row.setTag("setup-row-"+item.target.name());
             row.setOnClickListener(v->{if(item.target==PhoneSettings.Target.AUTO_CLICK)ChromeClickSettings.show(activity,this::refresh);else PhoneSettings.open(activity,item.target);});row.setContentDescription(item.label+" 설정 열기");addView(row);
             if(item.target==PhoneSettings.Target.WIFI){
-                TextView intelligent=label("인텔리전트 Wi-Fi 설정  ›",14);intelligent.setMinHeight(dp(49));intelligent.setGravity(android.view.Gravity.CENTER_VERTICAL);
+                TextView intelligent=label("wi-fi 자동설정 ON  ›",14);intelligent.setMinHeight(dp(49));intelligent.setGravity(android.view.Gravity.CENTER_VERTICAL);
                 intelligent.setBackgroundResource(android.R.drawable.list_selector_background);intelligent.setFocusable(true);intelligent.setClickable(true);
-                intelligent.setTag("setup-intelligent-wifi");intelligent.setContentDescription("인텔리전트 Wi-Fi 설정 열기");
+                intelligent.setTag("setup-intelligent-wifi");intelligent.setContentDescription("wi-fi 자동설정 ON 열기");
                 intelligent.setOnClickListener(v->ChromeAttendanceService.intelligentWifi(activity));addView(intelligent);
             }
         }
@@ -83,6 +90,6 @@ final class SetupStatusView extends LinearLayout {
             TextView state=states.get(i);state.setText(activity.getString(R.string.setup_state,r.ready?"✓":r.required?"!":"·",r.state));state.setTextColor(r.ready?0xFF007C78:r.required?0xFF9A5800:0xFF687D77);
             state.setContentDescription(r.label+": "+r.state);((android.view.View)state.getParent()).setContentDescription(r.label+": "+r.state+" 설정 열기");
         }
-        summary.setText("자동 처리 준비 "+ready+" / "+required+" · 버튼으로 출결은 ①부터");summary.setTextColor(ready==required?0xFF007C78:0xFF9A5800);
+        summary.setText("자동 처리 준비 "+ready+" / "+required+" · 기록만 저장하려면 00");summary.setTextColor(ready==required?0xFF007C78:0xFF9A5800);
     }
 }

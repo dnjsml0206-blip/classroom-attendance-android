@@ -43,6 +43,7 @@ public final class MainActivity extends Activity {
     private String homeCheckout, homeEntryEnd;
     private Clock homeClock = Clock.system(Policy.ZONE);
     private ScrollView homeScroll;
+    private final int[] tabScrollPositions = new int[4];
     private LocationManager locationManager;
     private LocationListener oneLocation;
     private final Runnable refresh = new Runnable() {
@@ -67,10 +68,11 @@ public final class MainActivity extends Activity {
         });
         setContentView(root);
         if(Build.VERSION.SDK_INT>=33)getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,()->{if(selected==3)render(1);else finish();});
+        if(state!=null){int[] saved=state.getIntArray("tab_scroll_positions");if(saved!=null)System.arraycopy(saved,0,tabScrollPositions,0,Math.min(saved.length,tabScrollPositions.length));}
         render(state!=null?state.getInt("page",0):Math.max(0,Math.min(3,getIntent().getIntExtra("open_tab",0))));
         if(prefs.raw.getBoolean("first_use_guide_pending",false))showUsageGuide();
     }
-    @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);state.putInt("page",selected);}
+    @Override protected void onSaveInstanceState(Bundle state){rememberScrollPosition();super.onSaveInstanceState(state);state.putInt("page",selected);state.putIntArray("tab_scroll_positions",tabScrollPositions);}
     @android.annotation.SuppressLint("GestureBackNavigation") // API 26–32 fallback; API 33+ uses OnBackInvokedDispatcher above.
     @Override public void onBackPressed(){if(selected==3)render(1);else super.onBackPressed();}
     @Override protected void onActivityResult(int request,int result,Intent data){
@@ -165,7 +167,13 @@ public final class MainActivity extends Activity {
         try { startActivity(new Intent(action)); } catch (RuntimeException e) { toast("휴대폰 설정에서 확인해 주세요"); }
     }
 
+    private void rememberScrollPosition() {
+        // A freshly rebuilt view has not restored its position until its first layout.
+        if(homeScroll!=null&&homeScroll.isLaidOut())tabScrollPositions[selected]=homeScroll.getScrollY();
+    }
+
     private void render(int tab) {
+        rememberScrollPosition();
         if(tab!=selected)closeCreatorPanel();
         creatorBody=null;creatorToggle=null;
         selected = tab; setupStatus=null; lockdownResult=null; root.removeAllViews();
@@ -221,6 +229,13 @@ public final class MainActivity extends Activity {
             tabs.addView(item, p);
         }
         root.addView(tabs);
+        final int restoredY=tabScrollPositions[tab];
+        scroll.addOnLayoutChangeListener(new View.OnLayoutChangeListener(){
+            @Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){
+                scroll.removeOnLayoutChangeListener(this);
+                if(homeScroll==scroll)scroll.scrollTo(0,restoredY);
+            }
+        });
         if(tab!=0&&getIntent().hasExtra("focus_setting")){
             View focus=content.findViewWithTag(getIntent().getStringExtra("focus_setting"));if(focus!=null)scroll.post(()->{if(homeScroll==scroll){getIntent().removeExtra("focus_setting");scroll.smoothScrollTo(0,Math.max(0,focus.getTop()-dp(16)));}});
         }
@@ -666,7 +681,7 @@ public final class MainActivity extends Activity {
         if (prefs.hasLocation()) action(location, "강의실 위치 삭제", false, () -> {
             prefs.raw.edit().remove("latitude").remove("longitude").apply(); Notices.wifi(this, false, ""); render(selected);
         });
-        action(wifi, "인텔리전트 Wi-Fi 설정", false, () -> ChromeAttendanceService.intelligentWifi(this));
+        action(wifi, "wi-fi 자동설정 ON", false, () -> ChromeAttendanceService.intelligentWifi(this));
     }
 
     private void attendanceAddressSettings(){
@@ -922,8 +937,9 @@ public final class MainActivity extends Activity {
     private void connection() {
         setupGuideCard();
         automationEnvironmentSettings();
-        LinearLayout chrome = settingsCard("Chrome 인증", "chrome-auth", () -> "휴대폰 Chrome에 저장된 인증을 그대로 사용합니다. 이미 출결 화면이 열리면 다시 인증하지 않아도 됩니다.");chrome.setTag("setup-chrome");
-        chrome.addView(text(ChromeAttendanceService.available() ? "Chrome 접근성 연결됨" : "Chrome 접근성을 켜 주세요",18,INK,true));
+        LinearLayout chrome = settingsCard("chrome 접근성 테스트", "chrome-auth", () -> "휴대폰 Chrome에 저장된 인증을 그대로 사용합니다. 이미 출결 화면이 열리면 다시 인증하지 않아도 됩니다.");chrome.setTag("setup-chrome");
+        boolean chromeConnected = ChromeAttendanceService.available();
+        chrome.addView(text(chromeConnected ? "Chrome 접근성 연결됨" : "Chrome 접근성을 켜 주세요",14,chromeConnected ? 0xFF9AA3A0 : 0xFFD98989,true));
         action(chrome,"Chrome 출결 화면 열기",true,() -> ChromeAttendanceService.openChrome(this,SiteProtocol.PAGE));
         action(chrome,"Chrome 인증 페이지 열기",false,() -> ChromeAttendanceService.openChrome(this,SiteProtocol.AUTH_PAGE));
         long next=prefs.raw.getLong("next_alarm",0);

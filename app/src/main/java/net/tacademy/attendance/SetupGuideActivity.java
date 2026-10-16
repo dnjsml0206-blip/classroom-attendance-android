@@ -183,7 +183,7 @@ public final class SetupGuideActivity extends Activity {
         note(wifi,prefs.ssids().isEmpty()?"사용할 Wi-Fi를 등록해 주세요.":String.join(" · ",prefs.ssids()));
         note(wifi,"집에서는 연결하지 않아도 준비할 수 있어요. 강의실에서는 휴대폰에도 이 Wi-Fi를 저장하고 자동 연결을 켜 주세요.");
         add(wifi,"Wi-Fi 등록 · 변경",false,()->setting("setup-wifi"),"setup-wifi");
-        add(wifi,"인텔리전트 Wi-Fi 설정",false,()->{if(!busy())ChromeAttendanceService.intelligentWifi(this);},null);
+        add(wifi,"wi-fi 자동설정 ON",false,()->{if(!busy())ChromeAttendanceService.intelligentWifi(this);},null);
         LinearLayout schedule=card("수업 시간",s.scheduleValid()?"일정 확인됨":"일정 필요",s.scheduleValid());note(schedule,"입실 "+prefs.start()+"–"+prefs.end()+" · 기본 퇴실 "+Policy.checkoutStartTime(prefs.checkout()));note(schedule,"휴강·공휴일은 쉬고 단축수업일에는 시간표의 퇴실 시각을 사용해요.");add(schedule,"시간 · 수업일 확인",false,()->setting("setup-schedule"),null);
     }
     private void access(SetupGuidePolicy.Snapshot s){
